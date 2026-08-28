@@ -21,15 +21,15 @@ Tools:
 Target command:
 
 ```bash
-make check
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -v
 ```
 
-hoặc:
+hoặc dùng Makefile:
 
 ```bash
-ruff check src tests
-mypy src
-pytest -q
+make check
 ```
 
 ---

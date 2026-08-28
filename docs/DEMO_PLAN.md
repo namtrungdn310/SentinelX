@@ -1,56 +1,110 @@
 # SentinelX — PBL Demo Plan
 
-## Demo 1 — Monitoring
+## 1. Demo Environment Strategy
+
+SentinelX có hai profile demo:
+
+### Development / Fallback Profile
+Docker Compose trên một máy.
+
+Dùng cho:
+- integration;
+- repeatability;
+- automated tests;
+- fallback nếu network lab gặp sự cố.
+
+### Final Network Profile
+Multi-host qua LAN/IP network.
+
+Khuyến nghị:
 
 ```text
-Backend01/02/03
- -> Agent
- -> Controller
- -> PostgreSQL
- -> WebSocket
- -> Dashboard
+Machine A
+├── Controller
+├── Dashboard
+└── Load Balancer
+
+Machine B
+├── Backend01
+└── Agent01
+
+Machine C (recommended)
+├── Backend02
+└── Agent02
+```
+
+---
+
+## Demo 1 — Multi-Host Monitoring
+
+```text
+Remote Node
+   ↓
+Agent
+   ↓ LAN / HTTP
+Controller
+   ↓
+PostgreSQL
+   ↓ WebSocket
+Dashboard
 ```
 
 Show:
-- CPU
-- RAM
-- RX/TX
-- connections
-- last_seen
-- online/offline
+- node identity;
+- CPU;
+- RAM;
+- load;
+- RX/TX;
+- connections;
+- last_seen;
+- online/offline.
+
+Acceptance:
+- remote Agent không chạy cùng máy Controller;
+- không sửa source code để chuyển local → LAN.
 
 ---
 
 ## Demo 2 — CPU Overload
 
 ```text
-CPU load
- -> metric
+Generate CPU load on remote Node
+ -> Agent metric
+ -> Controller
  -> Resource Detector
  -> DetectionEvent
- -> Incident/Alert
+ -> Alert/Incident
  -> Dashboard
 ```
 
-Foundation chỉ chuẩn bị pipeline; detection thật sau Foundation Freeze.
+Foundation chỉ chuẩn bị pipeline; real detector triển khai sau Foundation Freeze.
 
 ---
 
-## Demo 3 — Backend Failure
+## Demo 3 — Backend Failure + LB Failover
 
 ```text
-stop backend02
- -> health check failures
+Client
+  ↓
+LB on Machine A
+  ↓
+Remote Backend B/C
+```
+
+Stop one backend:
+
+```text
+health check failures
  -> UNHEALTHY
  -> EJECTED
- -> traffic continues to 01/03
+ -> traffic continues to healthy backend
 ```
 
 Recovery:
 
 ```text
-start backend02
- -> health success threshold
+backend starts again
+ -> successful probes
  -> RECOVERING
  -> HEALTHY
  -> ENABLED
@@ -62,6 +116,7 @@ start backend02
 
 ```text
 Attack Simulator
+ -> Target Linux Node
  -> Network Collection
  -> NetworkFeature
  -> Detection
@@ -72,24 +127,27 @@ Attack Simulator
  -> Dashboard
 ```
 
-Attack only isolated PBL lab.
+Attack chỉ chạy trong controlled PBL lab/private network.
 
 ---
 
 ## Demo 5 — Recovery
 
 IP:
+
 ```text
 temporary block
  -> expiry/cooldown
- -> unblock
+ -> automatic unblock
  -> audit/recovery event
 ```
 
 Backend:
+
 ```text
 unhealthy
  -> recover
+ -> health verification
  -> re-add
 ```
 
@@ -97,9 +155,11 @@ unhealthy
 
 ## Demo Reliability Rules
 
-- `demo-reset.sh`
-- deterministic sample backends
-- no dependency on Internet
-- safe/noop defense fallback
-- known-good config committed
-- one command startup target by final phase
+- có `demo-reset.sh`;
+- không phụ thuộc Internet;
+- có Docker fallback;
+- có known-good config;
+- remote IP/port configurable;
+- defense có safe/no-op fallback;
+- attack target chỉ private/controlled host;
+- trước bảo vệ phải chạy full rehearsal ít nhất một lần trên topology multi-host.

@@ -76,6 +76,7 @@ sentinelx/
 - **F11 — Docker PBL Lab**
 - **F12 — Load Balancer Skeleton**
 - **F13 — Health Check**
+- **F14 — Multi-Host Acceptance**
 - **FOUNDATION FREEZE**
 
 ### Core Business Logic Milestones (Sau Foundation Freeze)
@@ -95,6 +96,7 @@ sentinelx/
 
 Mời đọc các tài liệu tại thư mục [`docs/`](docs/):
 - [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md)
+- [`docs/PBL4_ALIGNMENT.md`](docs/PBL4_ALIGNMENT.md)
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/TECH_STACK.md`](docs/TECH_STACK.md)
 - [`docs/REPOSITORY_STRUCTURE.md`](docs/REPOSITORY_STRUCTURE.md)
@@ -106,5 +108,7 @@ Mời đọc các tài liệu tại thư mục [`docs/`](docs/):
 - [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md)
 - [`docs/DEFINITION_OF_DONE.md`](docs/DEFINITION_OF_DONE.md)
 - [`docs/DEMO_PLAN.md`](docs/DEMO_PLAN.md)
+- [`docs/DEV_SETUP.md`](docs/DEV_SETUP.md)
+- [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md)
 - [`docs/AI_WORKFLOW.md`](docs/AI_WORKFLOW.md)
 - [`docs/adr/`](docs/adr/) (ADR 0001 -> 0006)

@@ -30,6 +30,7 @@
 | Lint/format | Ruff |
 | Type checking | mypy |
 | Version control | Git + GitHub |
+| Package & Environment Manager | **`uv`** (`uv.lock`, `uv run`, `uv sync`) |
 
 ---
 
