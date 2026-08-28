@@ -52,9 +52,9 @@ tests/
 Mọi milestone:
 
 ```bash
-ruff check src tests
-mypy src
-pytest -q
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -v
 ```
 
 Milestone DB:
@@ -63,6 +63,9 @@ Milestone DB:
 
 Milestone Docker/LB:
 - smoke test.
+
+Milestone Multi-Host:
+- multi-host acceptance evidence across LAN.
 
 ---
 
@@ -126,6 +129,12 @@ F13:
 - ejection;
 - recovery threshold;
 - re-add.
+
+F14:
+- remote Agent enrollment across LAN;
+- remote telemetry delivery;
+- remote LB routing;
+- remote backend health check & failover.
 
 ---
 

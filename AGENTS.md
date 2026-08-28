@@ -1,316 +1,179 @@
-# SentinelX — AI Coding Instructions
+# SentinelX — AI Coding Instructions & System Prompt
 
-## 1. Mục đích của file này
+## 1. Smart Session Bootstrap & Selective Reading (Tối ưu Token)
 
-Đây là **entry point bắt buộc** cho mọi AI coding assistant làm việc với repository SentinelX.
+Để **tiết kiệm token tối đa** nhưng vẫn **đảm bảo chất lượng và độ chính xác 100%**, AI **KHÔNG ĐƯỢC đọc tràn lan toàn bộ tài liệu**. Thay vào đó, AI phân loại task và đọc chọn lọc theo ma trận sau:
 
-Trước khi sửa hoặc sinh code, AI PHẢI đọc theo thứ tự:
+### 1.1 Luôn đọc (Base Context - Siêu ngắn)
+1. `AGENTS.md` (File này — nắm vững locked stack, ranh giới và multi-host rule).
+2. Mục milestone tương ứng trong `docs/FOUNDATION_ROADMAP.md`.
 
-1. `AGENTS.md`
-2. `docs/PROJECT_OVERVIEW.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/TECH_STACK.md`
-5. `docs/REPOSITORY_STRUCTURE.md`
-6. `docs/DOMAIN_BOUNDARIES.md`
-7. `docs/FOUNDATION_ROADMAP.md`
-8. `docs/CODING_STANDARDS.md`
-9. `docs/TESTING_STRATEGY.md`
-10. `docs/SECURITY_SAFETY.md`
-11. `docs/DEFINITION_OF_DONE.md`
-12. ADR liên quan trong `docs/adr/`
+### 1.2 Đọc theo chuyên môn của từng Task (Task-Specific Routing)
 
-Không được code dựa trên suy đoán nếu các file trên đã quy định.
+| Phân loại Task | Tài liệu cần đọc bổ sung |
+|---|---|
+| **API, Wire Contracts, DTO, Enums** | `docs/API_CONTRACTS.md`, `docs/DOMAIN_BOUNDARIES.md` |
+| **Database, ORM, Migrations, Repositories** | `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0004-postgresql-core-storage.md` |
+| **Agent Daemon, Metric Collection, Linux OS** | `docs/ARCHITECTURE.md`, `docs/SECURITY_SAFETY.md`, `docs/PBL4_ALIGNMENT.md` |
+| **Load Balancer, Reverse Proxy, Health Check** | `docs/ARCHITECTURE.md`, `docs/adr/0005-http-load-balancer.md` |
+| **Detection, Policy, Defense Pipeline, Firewall** | `docs/SECURITY_SAFETY.md`, `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0006-*.md` |
+| **Frontend Dashboard (React/Vite)** | `docs/API_CONTRACTS.md`, `docs/TECH_STACK.md` |
+| **Testing, Quality Gate, CI** | `docs/TESTING_STRATEGY.md`, `docs/DEV_SETUP.md` |
+| **Git, Phân nhánh, Đồng bộ môi trường** | `docs/GIT_WORKFLOW.md`, `docs/DEV_SETUP.md` |
+| **Multi-Host Setup, Demo, Acceptance** | `docs/PBL4_ALIGNMENT.md`, `docs/DEMO_PLAN.md` |
 
 ---
 
-## 2. SentinelX là gì?
+## 2. SentinelX Product Definition
 
 SentinelX là:
 
-> Nền tảng quản trị, giám sát, phát hiện bất thường và tự động bảo vệ hạ tầng Linux server/backend tập trung.
+> **Nền tảng quản trị, giám sát, phát hiện bất thường và tự động bảo vệ hạ tầng Linux server/backend tập trung.**
 
-SentinelX KHÔNG phải:
+SentinelX **KHÔNG PHẢI**:
+- Task Manager cho desktop;
+- Ứng dụng theo dõi PC cho end-user;
+- Website thông thường;
+- SDK nhúng vào source code ứng dụng của khách hàng;
+- Một IDS đơn lẻ hay Load Balancer đơn lẻ;
+- Hệ thống microservices enterprise phức tạp.
 
-- desktop Task Manager;
-- website thông thường;
-- SDK nhúng vào source code của website khách hàng;
-- một IDS đơn lẻ;
-- một load balancer đơn lẻ;
-- hệ thống microservices enterprise.
-
-Các runtime chính:
-
-- `sentinelx_controller`: control plane trung tâm;
-- `sentinelx_agent`: daemon/service chạy trên từng Linux node;
-- `sentinelx_lb`: custom HTTP reverse proxy/load balancer;
-- `dashboard`: Web Management Dashboard.
+**Người dùng chính**: System Administrator, DevOps Engineer, Infrastructure Operator.  
+**Hạ tầng quản lý**: Linux physical server, Linux VM, Cloud VM, VPS, Docker lab node.
 
 ---
 
-## 3. Quyết định kỹ thuật đã khóa
+## 3. Quyết định kỹ thuật đã khóa (Locked Stack)
 
-Không tự ý thay đổi các quyết định sau:
+| Thành phần | Quyết định kỹ thuật |
+|---|---|
+| Ngôn ngữ CORE | **Python 3.12** |
+| Package & Env Manager | **`uv`** (sử dụng `uv.lock`, `uv run`, `uv sync`) |
+| Controller Architecture | **Modular Monolith** (Package-by-feature) |
+| Controller Framework | **FastAPI + asyncio** |
+| Agent | **Python Linux background daemon/service** |
+| Frontend Dashboard | **React + Vite + TypeScript** (Authenticated SPA) |
+| Agent → Controller | **REST/JSON Push Model + Batched Telemetry** |
+| Controller → Dashboard | **REST (query) + WebSocket (realtime)** |
+| Database Storage | **PostgreSQL** (SQLAlchemy 2.x async, asyncpg, Alembic) |
+| Resource Monitoring | **psutil + `/proc`, `/sys`** |
+| Network Collection | **Scapy/libpcap → Aggregated `NetworkFeature`** (không lưu raw PCAP) |
+| Custom Load Balancer | **Python + aiohttp HTTP Reverse Proxy** (Round Robin + Least In-Flight) |
+| Health Check | **Active HTTP health check** (Ejection & Re-add) |
+| Firewall & Defense | **nftables** (Controller ra quyết định $\rightarrow$ Agent thực thi cục bộ) |
+| PBL Environment | **Docker + Docker Compose** |
+| Quality Gate | **Ruff + mypy (strict) + pytest** |
 
-- Primary CORE language: **Python 3.12**
-- Controller architecture: **Modular Monolith**
-- Agent: **Python Linux background daemon/service**
-- Controller: **FastAPI + asyncio**
-- Frontend: **React + Vite + TypeScript**
-- Agent → Controller: **REST/JSON, Push, Batched Telemetry**
-- Controller → Dashboard: **REST + WebSocket**
-- Database: **PostgreSQL**
-- Network collection CORE: **Scapy/libpcap → aggregated NetworkFeature**
-- Custom Load Balancer: **Python + aiohttp, HTTP reverse proxy**
-- LB algorithms CORE: **Round Robin + Least In-Flight**
-- Health check: **Active HTTP health check**
-- Defense firewall: **nftables**
-- Defense boundary: **Controller decides, Agent executes**
-- PBL environment: **Docker + Docker Compose**
-- Internal communication: **direct interfaces + bounded in-process async events**
-- CORE không dùng Kafka/RabbitMQ/Redis broker
-- CORE không dùng microservices
-- CORE không dùng specialized TSDB
-- CORE không dùng ML/eBPF/Adaptive LB trước khi baseline hoàn thành
-
-Nếu cần thay đổi một quyết định đã khóa, phải:
-1. dừng implementation;
-2. giải thích lý do;
-3. tạo ADR mới hoặc cập nhật ADR;
-4. chờ con người phê duyệt.
+> **CẤM TỰ Ý THÊM**: Microservices, Kafka, RabbitMQ, Redis, Kubernetes, TimescaleDB, InfluxDB, eBPF, Isolation Forest, Adaptive LB trước khi có ADR và phê duyệt chính thức.
 
 ---
 
-## 4. Nguyên tắc phát triển
+## 4. Ràng buộc Multi-Host bắt buộc (Mandatory Multi-Host Rule)
 
-### 4.1 Làm theo milestone, không big-bang
+SentinelX là một networked multi-host system.
 
-Chỉ code milestone hiện tại trong `docs/FOUNDATION_ROADMAP.md`.
+AI **TUYỆT ĐỐI KHÔNG ĐƯỢC GIẢ ĐỊNH**:
+```text
+Controller Host == Agent Host
+LB Host == Backend Host
+All services == localhost
+All nodes == one Docker host
+```
 
-Không tự động triển khai milestone kế tiếp dù đã "tiện tay".
-
-### 4.2 Foundation trước business logic
-
-Trước `FOUNDATION FREEZE`, KHÔNG triển khai thật:
-
-- CPU anomaly rules;
-- Port Scan algorithm;
-- SYN Flood algorithm;
-- Isolation Forest;
-- Adaptive Load Balancing;
-- firewall blocking thật;
-- self-healing restart thật;
-- advanced traffic shaping;
-- eBPF.
-
-### 4.3 Không over-engineer
-
-Không thêm:
-- microservices;
-- CQRS framework;
-- Kafka;
-- RabbitMQ;
-- Redis Streams;
-- service mesh;
-- Kubernetes;
-- TimescaleDB/InfluxDB;
-- generic plugin framework;
-- generic dependency injection container;
-
-trừ khi có ADR được duyệt.
-
-### 4.4 Không hard-code policy/rule
-
-Không hard-code các giá trị như:
-- CPU > 90;
-- PORT_COUNT > 20;
-- BLOCK = 60s.
-
-Các rule/runtime tunables phải đi qua config khi đến đúng milestone.
-
-### 4.5 Không phá module boundary
-
-Controller là Modular Monolith package-by-feature.
-
-Một module không được import trực tiếp:
-- repository implementation;
-- ORM internals;
-- private service;
-- database table;
-
-của module khác.
-
-Giao tiếp module qua:
-- public interface;
-- application service được expose;
-- domain/application event khi phù hợp.
-
-### 4.6 `sentinelx_common` không phải thùng rác
-
-Chỉ đặt ở `sentinelx_common`:
-- wire/API contracts;
-- common IDs/enums;
-- generic config utilities;
-- observability primitives;
-- truly shared utilities.
-
-Không đặt:
-- SQLAlchemy ORM model;
-- Controller repository;
-- Detection logic;
-- Agent collector;
-- LB algorithm.
+**Nguyên tắc**:
+- Mọi địa chỉ mạng (Controller bind host/port, Agent Controller URL, LB listen host/port, backend IP/port) **phải cấu hình được qua YAML / biến môi trường**.
+- `localhost` chỉ là default lúc dev. Không được hard-code `localhost` trong code logic.
+- Code phải chuyển từ chạy local sang chạy mạng LAN nhiều máy **chỉ bằng config, không sửa source code**.
 
 ---
 
-## 5. Quy tắc output của AI khi coding
+## 5. Kỷ luật phân tầng & Ranh giới (Modular Boundaries)
 
-Mỗi lần được yêu cầu triển khai một bước, AI phải trả theo cấu trúc:
-
-### A. Mục tiêu milestone
-Nêu chính xác milestone đang làm và điều gì KHÔNG làm.
-
-### B. Files thay đổi
-Liệt kê:
-- file tạo mới;
-- file sửa;
-- file không đụng tới.
-
-### C. Code
-Đưa code đầy đủ từng file hoặc patch rõ ràng.
-
-### D. Giải thích kiến trúc
-Giải thích ngắn:
-- trách nhiệm file;
-- dependency direction;
-- vì sao đặt ở folder đó.
-
-### E. Commands
-Đưa lệnh:
-- install/update dependencies nếu có;
-- format;
-- lint;
-- type check;
-- tests;
-- run.
-
-### F. Expected result
-Nêu kết quả mong đợi.
-
-### G. Checkpoint
-Chỉ khi checkpoint PASS mới đề xuất bước tiếp theo.
+1. **Controller Package-by-Feature**:
+   - `modules/`: `system`, `projects`, `nodes`, `telemetry`, `detection`, `incidents`, `policy`, `defense`, `recovery`.
+   - Một module **không được import trực tiếp** repository/ORM/private service của module khác. Giao tiếp qua public interface hoặc domain/application event.
+2. **`sentinelx_common` không phải thùng rác**:
+   - Chỉ chứa: wire contracts, common IDs/enums, config primitives, logging primitives, shared helpers.
+   - Không chứa: ORM models, repositories, detection logic, collector, LB algorithms.
+3. **Phân biệt Contract vs Domain vs ORM**:
+   - Pydantic Wire Contract $\neq$ Domain Entity $\neq$ SQLAlchemy ORM Model.
+   - Agent **tuyệt đối không import** ORM model của Controller.
+4. **Luồng phòng thủ an toàn (Defense Pipeline)**:
+   - Detector phát hiện $\rightarrow$ phát `DetectionEvent`.
+   - Detector **không được gọi trực tiếp firewall**. Controller ra quyết định ủy quyền $\rightarrow$ Agent xác thực an toàn cục bộ $\rightarrow$ thực thi nftables.
 
 ---
 
-## 6. Quality Gate bắt buộc
+## 6. Lộ trình phát triển & Kỷ luật Milestone (Strict Scope)
+
+Mỗi lần chỉ triển khai **đúng một milestone**. Không làm trước milestone kế tiếp.
+
+```text
+F0  Architecture Freeze (DONE)
+F1  Repository Bootstrap (DONE)
+F2  Config + Logging + Controller Skeleton (DONE)
+F3  Shared Contracts + IDs + Time (HIỆN TẠI)
+F4  PostgreSQL Foundation
+F5  Project + Node Registry
+F6  Agent Enrollment
+F7  Mock Agent + Heartbeat
+F8  Fake Metrics Vertical Slice
+F9  Realtime WebSocket
+F10 Dashboard Skeleton
+F11 Docker PBL Lab
+F12 Load Balancer Skeleton
+F13 Health Check
+F14 Multi-Host Acceptance
+FOUNDATION FREEZE
+
+M1 Real Resource Monitoring
+M2 Network Collection
+M3 Resource Detection
+M4 Network Detection
+M5 Incident + Policy
+M6 Defense Command Pipeline
+M7 nftables
+M8 Recovery
+CORE FREEZE
+```
+
+---
+
+## 7. Quy chuẩn Git & Phân nhánh (Git Workflow with `uv`)
+
+1. **Nhánh `main`**: Chỉ nhận PR từ `dev`. Không commit trực tiếp.
+2. **Nhánh `dev`**: Nhánh tích hợp chính. Không commit trực tiếp.
+3. **Nhánh làm việc**: Luôn tạo nhánh riêng từ `dev` (ví dụ `milestone/f3-shared-contracts` hoặc `feat/...`).
+4. **Môi trường**: Luôn dùng `uv sync --all-extras` và `uv run <command>`.
+
+---
+
+## 8. Cấu trúc phản hồi bắt buộc cho mỗi Coding Task
+
+Mỗi lần triển khai, AI phải trả lời đầy đủ 12 mục:
+
+1. **## 1. Milestone**: Tên & mục tiêu.
+2. **## 2. Scope**: In scope / Out of scope rõ ràng.
+3. **## 3. Repository inspection**: File/folder hiện có liên quan.
+4. **## 4. Files to create/modify**: Bảng (File | Action | Responsibility).
+5. **## 5. Architecture notes**: Phân tích ranh giới & phụ thuộc.
+6. **## 6. Implementation**: Code hoàn chỉnh, không pseudo-code.
+7. **## 7. Commands**: Lệnh chạy và test bằng `uv`.
+8. **## 8. Expected result**: Output mong đợi.
+9. **## 9. Troubleshooting**: Dự phòng lỗi thực tế.
+10. **## 10. Checkpoint**: Checklist PASS/FAIL.
+11. **## 11. Stop**: Dừng lại, không tự làm milestone tiếp theo.
+
+---
+
+## 9. Quality Gate bắt buộc
 
 Trước khi coi một milestone hoàn thành:
 
 ```bash
-ruff check src tests
-mypy src
-pytest -q
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -v
 ```
 
-Tất cả phải PASS.
-
-Nếu milestone có integration/docker:
-- integration tests phải PASS;
-- smoke test phải PASS;
-- startup/shutdown phải sạch.
-
-Không "fix" test bằng cách xóa assertion hợp lệ.
-
----
-
-## 7. Security/Safety
-
-Không bao giờ:
-- chạy destructive firewall command mặc định;
-- block localhost;
-- block Controller IP;
-- block management IP;
-- block node's own IP;
-- block whitelist/protected CIDR;
-- chạy attack simulation ra Internet;
-- yêu cầu Controller chạy root nếu không cần;
-- nhúng secrets vào source code;
-- commit `.env`.
-
-Firewall/self-healing thật chỉ triển khai đúng milestone và phải có safe/no-op mode.
-
----
-
-## 8. Nguyên tắc repository
-
-Repository là monorepo.
-
-Các runtime Python:
-- `src/sentinelx_controller`
-- `src/sentinelx_agent`
-- `src/sentinelx_lb`
-
-Shared:
-- `src/sentinelx_common`
-
-Frontend:
-- `dashboard`
-
-PBL lab:
-- `lab`
-
-Deployment artifacts:
-- `deploy`
-
-Architecture docs:
-- `docs`
-
-Tests:
-- `tests/unit`
-- `tests/integration`
-- `tests/e2e`
-
----
-
-## 9. Khi thiếu thông tin
-
-Nếu chi tiết implementation chưa được khóa:
-- chọn giải pháp đơn giản nhất phù hợp với architecture;
-- không tự thay đổi tech stack;
-- ghi assumption rõ ràng;
-- nếu assumption ảnh hưởng architecture/public contract/database schema/security, hỏi con người trước khi code.
-
----
-
-## 10. Mục tiêu cuối Foundation
-
-Foundation hoàn thành khi có vertical slice:
-
-```text
-Mock Agent
-   ↓
-Controller
-   ↓
-Validation
-   ↓
-PostgreSQL
-   ↓
-REST query
-   ↓
-WebSocket realtime
-   ↓
-Dashboard
-```
-
-và:
-
-```text
-Client
-   ↓
-SentinelX LB
-   ↓
-Backend01/02/03
-```
-
-kèm basic health check, tests và Docker lab ổn định.
-
-Sau đó mới bước vào business logic.
+Tất cả phải **PASS 100%** (0 errors, 0 linter warnings).

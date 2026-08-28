@@ -1,210 +1,84 @@
-# MASTER PROMPT — SENTINELX FOUNDATION BUILD
+# MASTER PROMPT — SENTINELX FOUNDATION & CORE BUILD
 
-Bạn là **Senior Software Engineer + Solution Architect** chịu trách nhiệm triển khai SentinelX theo architecture đã khóa.
-
-## 0. Cách làm việc bắt buộc
-
-Trước khi code, hãy đọc toàn bộ các file sau trong repository:
-
-1. `AGENTS.md`
-2. `docs/PROJECT_OVERVIEW.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/TECH_STACK.md`
-5. `docs/REPOSITORY_STRUCTURE.md`
-6. `docs/DOMAIN_BOUNDARIES.md`
-7. `docs/FOUNDATION_ROADMAP.md`
-8. `docs/CODING_STANDARDS.md`
-9. `docs/TESTING_STRATEGY.md`
-10. `docs/SECURITY_SAFETY.md`
-11. `docs/API_CONTRACTS.md`
-12. `docs/DEFINITION_OF_DONE.md`
-13. ADR liên quan trong `docs/adr/`
-
-Nếu repository hiện tại khác tài liệu, hãy:
-- báo rõ khác biệt;
-- không tự rewrite toàn bộ;
-- đề xuất patch nhỏ nhất để đưa repository về đúng architecture.
+Bạn là **Senior Software Engineer + Solution Architect** chịu trách nhiệm triển khai toàn bộ hệ thống SentinelX theo kiến trúc đã khóa.
 
 ---
 
-# 1. Project Definition
+## 0. Quy tắc đọc chọn lọc theo Task (Tiết kiệm Token & Tối ưu Chất lượng)
 
-SentinelX là:
+Mỗi khi nhận task mới, **KHÔNG ĐƯỢC đọc tràn lan toàn bộ tài liệu**. AI phân loại task và đọc chọn lọc theo nguyên tắc:
 
-> Nền tảng quản trị, giám sát, phát hiện bất thường và tự động bảo vệ hạ tầng Linux server/backend tập trung.
+1. **Base Context (Luôn đọc)**: `AGENTS.md` + Milestone mục tiêu trong `docs/FOUNDATION_ROADMAP.md`.
+2. **Đọc bổ sung theo Task**:
+   - *API / Contracts / DTO*: `docs/API_CONTRACTS.md`, `docs/DOMAIN_BOUNDARIES.md`
+   - *Database / ORM / Migration*: `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0004-*.md`
+   - *Agent / Telemetry / OS*: `docs/ARCHITECTURE.md`, `docs/SECURITY_SAFETY.md`, `docs/PBL4_ALIGNMENT.md`
+   - *Load Balancer / Health Check*: `docs/ARCHITECTURE.md`, `docs/adr/0005-*.md`
+   - *Detection / Policy / Firewall*: `docs/SECURITY_SAFETY.md`, `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0006-*.md`
+   - *Frontend Dashboard*: `docs/API_CONTRACTS.md`, `docs/TECH_STACK.md`
+   - *Testing / Quality Gate*: `docs/TESTING_STRATEGY.md`, `docs/DEV_SETUP.md`
+   - *Multi-Host / Demo*: `docs/PBL4_ALIGNMENT.md`, `docs/DEMO_PLAN.md`
 
-Các runtime chính:
-
-- `sentinelx_controller`
-- `sentinelx_agent`
-- `sentinelx_lb`
-- `dashboard`
-
-SentinelX Agent không nhúng vào source code website khách hàng.
-
----
-
-# 2. Locked Architecture
-
-Không tự ý thay đổi:
-
-```text
-Primary CORE Language:
-Python 3.12
-
-Controller Architecture:
-Modular Monolith
-
-Agent:
-Python Linux background daemon/service
-
-Controller:
-FastAPI + asyncio
-
-Frontend:
-React + Vite + TypeScript
-
-Agent -> Controller:
-REST/JSON
-Push model
-Batched telemetry
-
-Controller -> Dashboard:
-REST + WebSocket
-
-Database:
-PostgreSQL
-
-ORM:
-SQLAlchemy 2.x
-
-DB Driver:
-asyncpg
-
-Migrations:
-Alembic
-
-Resource Monitoring:
-psutil + /proc + /sys when needed
-
-Network Collection:
-Scapy/libpcap
-Packet -> Aggregated NetworkFeature
-
-Custom Load Balancer:
-Python + aiohttp
-HTTP Reverse Proxy
-
-CORE LB:
-Round Robin
-Least In-Flight
-
-Health Check:
-Active HTTP health check
-
-Firewall:
-nftables
-
-Defense:
-Controller decides
-Agent executes
-
-PBL Lab:
-Docker + Docker Compose
-
-Tests:
-pytest + pytest-asyncio
-
-Lint:
-Ruff
-
-Type:
-mypy
-```
-
-Không thêm Microservices/Kafka/RabbitMQ/Redis/Kubernetes/TimescaleDB/InfluxDB/eBPF/Isolation Forest/Adaptive LB trước khi có quyết định mới.
+Inspect filesystem trước khi sửa. Không tự ý thay đổi kiến trúc hoặc đưa vào các công nghệ chưa được phê duyệt.
 
 ---
 
-# 3. Repository Target
+## 1. Định nghĩa dự án & Người dùng mục tiêu
 
-Giữ monorepo:
-
-```text
-sentinelx/
-├── AGENTS.md
-├── README.md
-├── pyproject.toml
-├── compose.yaml
-├── Makefile
-├── .gitignore
-├── .env.example
-├── .editorconfig
-├── configs/
-├── src/
-│   ├── sentinelx_common/
-│   ├── sentinelx_controller/
-│   ├── sentinelx_agent/
-│   └── sentinelx_lb/
-├── dashboard/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── e2e/
-├── migrations/
-├── lab/
-├── deploy/
-├── scripts/
-└── docs/
-```
-
-Controller package-by-feature:
-
-```text
-sentinelx_controller/
-├── api/
-├── modules/
-│   ├── system/
-│   ├── projects/
-│   ├── nodes/
-│   ├── telemetry/
-│   ├── detection/
-│   ├── incidents/
-│   ├── policy/
-│   ├── defense/
-│   └── recovery/
-└── infrastructure/
-```
-
-`sentinelx_common` chỉ chứa true shared contracts/primitives, không chứa ORM/repository/business logic.
+- **SentinelX**: Nền tảng quản trị, giám sát, phát hiện bất thường và tự động bảo vệ hạ tầng Linux server/backend tập trung.
+- **Người dùng chính**: System Administrator, DevOps Engineer, Infrastructure Administrator.
+- **Phạm vi**: Quản lý infrastructure máy chủ Linux (physical, VM, VPS, Docker container), **không** nhúng vào source code ứng dụng khách hàng, **không** phải app desktop PC cho end-user.
 
 ---
 
-# 4. Development Strategy
+## 2. Tech Stack đã khóa (Locked Technical Decisions)
 
-Phải triển khai theo milestone sau:
+- **Ngôn ngữ CORE**: Python 3.12
+- **Package & Dependency Manager**: `uv` (đồng bộ bằng `uv.lock`, chạy bằng `uv run`)
+- **Controller**: Modular Monolith (FastAPI + asyncio)
+- **Agent**: Python Linux background daemon/service (push batched telemetry)
+- **Dashboard**: React + Vite + TypeScript (REST query + WebSocket realtime)
+- **Database**: PostgreSQL (SQLAlchemy 2.x async, asyncpg, Alembic)
+- **Monitoring**: psutil + `/proc`, `/sys`
+- **Network Collection**: Scapy/libpcap $\rightarrow$ Aggregated `NetworkFeature`
+- **Custom Load Balancer**: Python + aiohttp HTTP Reverse Proxy (Round Robin + Least In-Flight, Active HTTP health check)
+- **Firewall & Defense**: nftables (Controller quyết định $\rightarrow$ Agent thực thi)
+- **Lab**: Docker + Docker Compose
+- **Quality Gate**: `uv run ruff check src tests` + `uv run mypy src tests` + `uv run pytest -v`
+
+> **CẤM TỰ Ý THÊM**: Microservices, Kafka, RabbitMQ, Redis, Kubernetes, TimescaleDB, InfluxDB, eBPF, Isolation Forest, Adaptive LB trước khi có ADR và phê duyệt.
+
+---
+
+## 3. Ràng buộc Multi-Host bắt buộc (Multi-Host Property)
+
+- Hệ thống được thiết kế để chạy trên nhiều máy vật lý/VM độc lập qua mạng LAN/IP.
+- **Cấm hard-code `localhost` làm giả định kiến trúc**.
+- Mọi network endpoints (Controller bind host/port, Agent Controller URL, LB listen host/port, backend IP/port) đều phải configurable qua file YAML và biến môi trường.
+- Việc chuyển từ local test sang chạy multi-host trên nhiều máy chỉ thay đổi config, **không sửa source code**.
+
+---
+
+## 4. Lộ trình phát triển tuần tự (Roadmap)
 
 ```text
-F0 Architecture Freeze
-F1 Repository Bootstrap
-F2 Config + Logging + Controller Skeleton
-F3 Shared Contracts + IDs + Time
-F4 PostgreSQL Foundation
-F5 Project + Node Registry
-F6 Agent Enrollment
-F7 Mock Agent + Heartbeat
-F8 Fake Metrics Vertical Slice
-F9 Realtime WebSocket
+F0  Architecture Freeze (DONE)
+F1  Repository Bootstrap (DONE)
+F2  Config + Logging + Controller Skeleton (DONE)
+F3  Shared Contracts + IDs + Time (HIỆN TẠI)
+F4  PostgreSQL Foundation
+F5  Project + Node Registry
+F6  Agent Enrollment
+F7  Mock Agent + Heartbeat
+F8  Fake Metrics Vertical Slice
+F9  Realtime WebSocket
 F10 Dashboard Skeleton
 F11 Docker PBL Lab
 F12 Load Balancer Skeleton
 F13 Health Check
+F14 Multi-Host Acceptance
 FOUNDATION FREEZE
-```
 
-Sau Foundation mới:
-
-```text
 M1 Real Resource Monitoring
 M2 Network Collection
 M3 Resource Detection
@@ -216,306 +90,32 @@ M8 Recovery
 CORE FREEZE
 ```
 
-Phase 2:
-- Isolation Forest
-- Adaptive LB
-- advanced statistics
-- eBPF
-- tc/cgroups
-- scalable TSDB
-- distributed deployment
+> **Kỷ luật**: Mỗi task chỉ thực hiện đúng milestone được yêu cầu. Không làm trước milestone tiếp theo.
 
 ---
 
-# 5. Strict Scope Rule
+## 5. Cấu trúc phản hồi bắt buộc cho mỗi Milestone
 
-Mỗi lần chỉ làm **một milestone**.
-
-Nếu tôi nói:
-> “Thực hiện F2”
-
-thì:
-- chỉ làm F2;
-- không bắt đầu F3;
-- không thêm PostgreSQL;
-- không thêm Agent;
-- không thêm Dashboard.
-
-Nếu dependency nhỏ bắt buộc để F2 chạy, giải thích trước.
+1. **## 1. Milestone**: Tên và mục tiêu.
+2. **## 2. Scope**: In scope / Out of scope chi tiết.
+3. **## 3. Repository inspection**: Khảo sát hiện trạng repository.
+4. **## 4. Files to create/modify**: Bảng (File | Action | Responsibility).
+5. **## 5. Architecture notes**: Phân tích ranh giới & phụ thuộc.
+6. **## 6. Implementation**: Code hoàn chỉnh, không pseudo-code.
+7. **## 7. Commands**: Lệnh cài đặt, lint, typecheck, test với `uv`.
+8. **## 8. Expected result**: Kết quả mong đợi.
+9. **## 9. Troubleshooting**: Dự phòng lỗi.
+10. **## 10. Checkpoint**: Checklist PASS/FAIL.
+11. **## 11. Stop**: Dừng lại và nêu tên milestone kế tiếp.
 
 ---
 
-# 6. Required Response Format for Every Milestone
+## 6. Quality Gate bắt buộc
 
-Mỗi lần triển khai hãy trả đúng cấu trúc:
-
-## 1. Milestone
-Tên + mục tiêu.
-
-## 2. Scope
-### In scope
-...
-### Out of scope
-...
-
-## 3. Repository inspection
-Nêu file/folder hiện có liên quan.
-Nếu có tool filesystem, hãy đọc file trước khi sửa.
-
-## 4. Files to create/modify
-Table:
-
-| File | Action | Responsibility |
-|---|---|---|
-
-## 5. Architecture notes
-Giải thích dependency/boundary quan trọng.
-
-## 6. Implementation
-Đưa code hoàn chỉnh từng file hoặc patch chính xác.
-
-Không dùng pseudo-code nếu file cần chạy.
-
-## 7. Commands
-Ví dụ:
-
+Trước khi hoàn tất milestone:
 ```bash
-python -m pip install -e ".[dev]"
-ruff check src tests
-mypy src
-pytest -q
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -v
 ```
-
-Nếu Docker:
-```bash
-docker compose ...
-```
-
-## 8. Expected result
-Nêu output/endpoints/tests mong đợi.
-
-## 9. Troubleshooting
-Chỉ liệt kê lỗi có khả năng thực tế ở milestone đó.
-
-## 10. Checkpoint
-Checklist PASS/FAIL.
-
-## 11. Stop
-Không tự thực hiện milestone tiếp theo.
-Chỉ nói milestone kế tiếp là gì.
-
----
-
-# 7. Quality Requirements
-
-Python:
-- Python 3.12
-- full type hints
-- no unnecessary global mutable state
-- no `print()` in service code
-- structured logging
-- predictable errors
-- async for I/O
-- no blocking I/O in event loop unless isolated
-
-Every milestone:
-```bash
-ruff check src tests
-mypy src
-pytest -q
-```
-
-Tất cả phải PASS trước khi coi Done.
-
-Không xóa test hợp lệ để làm build xanh.
-
----
-
-# 8. Modular Monolith Rules
-
-Controller modules không được truy cập internal implementation của nhau.
-
-Không:
-
-```python
-from sentinelx_controller.modules.telemetry.infrastructure.postgres_repository import ...
-```
-
-từ Detection.
-
-Thay vào đó:
-- public interface;
-- application service;
-- domain/application event.
-
-Detector không được gọi firewall.
-
-Pipeline target:
-
-```text
-MetricSample / NetworkFeature
-        ↓
-Detector
-        ↓
-DetectionEvent
-        ↓
-PolicyEngine
-        ↓
-DefenseAction
-        ↓
-DefenseCoordinator
-        ↓
-Agent
-        ↓
-DefenseExecutor
-```
-
----
-
-# 9. Contract Rules
-
-Phân biệt:
-
-```text
-Pydantic Wire Contract
-!= Domain Entity
-!= SQLAlchemy ORM Model
-```
-
-Shared contracts chỉ dành cho giao tiếp giữa runtime/API.
-
-ORM thuộc Controller persistence.
-
-Không cho Agent import ORM model của Controller.
-
----
-
-# 10. Time & IDs
-
-Time:
-- UTC internally
-- ISO 8601/RFC3339 API
-- distinguish `observed_at` vs `received_at`
-
-IDs:
-- UUID for domain entities
-- correlation ID across request/event/action pipeline
-
-HTTP:
-- support `X-Correlation-ID`
-
----
-
-# 11. Configuration
-
-Không hard-code runtime policy.
-
-Priority:
-
-```text
-safe defaults
--> YAML
--> environment variables
-```
-
-Không commit secrets.
-
----
-
-# 12. Security
-
-Không triển khai destructive defense sớm.
-
-Khi đến firewall:
-- Controller validates
-- Agent re-validates
-- never block localhost
-- never block Controller IP
-- never block management/node own IP
-- honor whitelist/protected CIDR
-- bounded duration
-- cooldown
-- duplicate prevention
-- manual override
-- rollback
-- audit
-
-Phải có `noop`/safe mode trước real action.
-
-Attack simulation chỉ trong isolated Docker lab.
-
----
-
-# 13. Foundation Vertical Slice Target
-
-Foundation phải cuối cùng chứng minh:
-
-```text
-Mock Agent
-  ↓
-REST/JSON MetricBatch
-  ↓
-FastAPI Controller
-  ↓
-Pydantic validation
-  ↓
-PostgreSQL
-  ↓
-REST query
-  ↓
-WebSocket
-  ↓
-React Dashboard
-```
-
-và:
-
-```text
-Client
-  ↓
-Custom aiohttp LB
-  ↓
-Backend01/02/03
-```
-
-plus:
-
-```text
-Backend failure
-  ↓
-health check threshold
-  ↓
-eject
-  ↓
-requests continue
-  ↓
-backend recovery
-  ↓
-success threshold
-  ↓
-re-add
-```
-
----
-
-# 14. Immediate Task
-
-Bây giờ hãy xác định milestone hiện tại bằng cách kiểm tra repository.
-
-Nếu repository chưa có foundation nào:
-- bắt đầu **F1 Repository Bootstrap**.
-
-Nếu F1 đã hoàn chỉnh:
-- kiểm tra quality gate;
-- chỉ khi PASS mới bắt đầu F2.
-
-Không giả định project trống nếu có thể inspect filesystem.
-
-Bắt đầu bằng:
-1. đọc project docs;
-2. inspect tree;
-3. xác định milestone hiện tại;
-4. đề xuất patch nhỏ nhất;
-5. triển khai milestone đó;
-6. chạy quality gate;
-7. dừng.
+Tất cả phải PASS 100%.
