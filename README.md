@@ -62,7 +62,7 @@ sentinelx/
 ## 4. Lộ trình phát triển (Roadmap)
 
 ### Foundation Milestones
-- **F0 — Architecture Freeze** *(Hiện tại)*
+- **F0 — Architecture Freeze**
 - **F1 — Repository Bootstrap**
 - **F2 — Config + Logging + Controller Skeleton**
 - **F3 — Shared Contracts + IDs + Time**
