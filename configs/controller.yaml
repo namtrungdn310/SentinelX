@@ -1,0 +1,12 @@
+# SentinelX Controller Configuration
+environment: development
+service_name: sentinelx-controller
+version: "0.1.0"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+logging:
+  level: "INFO"
+  json_format: true
