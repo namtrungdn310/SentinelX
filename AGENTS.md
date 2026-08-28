@@ -1,29 +1,29 @@
 # SentinelX — AI Coding Instructions
 
-## 1. Mục đích của file này
-
-Đây là **entry point bắt buộc** cho mọi AI coding assistant làm việc với repository SentinelX.
+## 1. Mandatory Reading Order
 
 Trước khi sửa hoặc sinh code, AI PHẢI đọc theo thứ tự:
 
 1. `AGENTS.md`
 2. `docs/PROJECT_OVERVIEW.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/TECH_STACK.md`
-5. `docs/REPOSITORY_STRUCTURE.md`
-6. `docs/DOMAIN_BOUNDARIES.md`
-7. `docs/FOUNDATION_ROADMAP.md`
-8. `docs/CODING_STANDARDS.md`
-9. `docs/TESTING_STRATEGY.md`
-10. `docs/SECURITY_SAFETY.md`
-11. `docs/DEFINITION_OF_DONE.md`
-12. ADR liên quan trong `docs/adr/`
+3. `docs/PBL4_ALIGNMENT.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/TECH_STACK.md`
+6. `docs/REPOSITORY_STRUCTURE.md`
+7. `docs/DOMAIN_BOUNDARIES.md`
+8. `docs/FOUNDATION_ROADMAP.md`
+9. `docs/CODING_STANDARDS.md`
+10. `docs/TESTING_STRATEGY.md`
+11. `docs/SECURITY_SAFETY.md`
+12. `docs/API_CONTRACTS.md`
+13. `docs/DEFINITION_OF_DONE.md`
+14. ADR liên quan trong `docs/adr/`
 
-Không được code dựa trên suy đoán nếu các file trên đã quy định.
+Không được code dựa trên suy đoán nếu documentation đã quy định.
 
 ---
 
-## 2. SentinelX là gì?
+## 2. SentinelX Definition
 
 SentinelX là:
 
@@ -32,178 +32,251 @@ SentinelX là:
 SentinelX KHÔNG phải:
 
 - desktop Task Manager;
+- PC monitoring product cho end-user;
 - website thông thường;
-- SDK nhúng vào source code của website khách hàng;
+- SDK nhúng vào source code khách hàng;
 - một IDS đơn lẻ;
-- một load balancer đơn lẻ;
+- một Load Balancer đơn lẻ;
 - hệ thống microservices enterprise.
 
-Các runtime chính:
+Primary user:
+- System Administrator;
+- DevOps Engineer;
+- Infrastructure Administrator;
+- Developer/Owner tự quản lý Linux infrastructure.
 
-- `sentinelx_controller`: control plane trung tâm;
-- `sentinelx_agent`: daemon/service chạy trên từng Linux node;
-- `sentinelx_lb`: custom HTTP reverse proxy/load balancer;
-- `dashboard`: Web Management Dashboard.
+Managed target:
+- Linux physical server;
+- Linux VM/cloud VM/VPS;
+- Linux PC/laptop đang đóng vai server;
+- Docker/container lab node.
 
 ---
 
-## 3. Quyết định kỹ thuật đã khóa
+## 3. Locked Technical Decisions
 
-Không tự ý thay đổi các quyết định sau:
+Không tự ý thay đổi:
 
 - Primary CORE language: **Python 3.12**
-- Controller architecture: **Modular Monolith**
-- Agent: **Python Linux background daemon/service**
-- Controller: **FastAPI + asyncio**
+- Controller: **Modular Monolith**
+- Agent: **Python Linux daemon/service**
+- Controller framework: **FastAPI + asyncio**
 - Frontend: **React + Vite + TypeScript**
-- Agent → Controller: **REST/JSON, Push, Batched Telemetry**
+- Agent → Controller: **REST/JSON Push + Batched Telemetry**
 - Controller → Dashboard: **REST + WebSocket**
 - Database: **PostgreSQL**
-- Network collection CORE: **Scapy/libpcap → aggregated NetworkFeature**
-- Custom Load Balancer: **Python + aiohttp, HTTP reverse proxy**
-- LB algorithms CORE: **Round Robin + Least In-Flight**
+- ORM: **SQLAlchemy 2.x**
+- DB driver: **asyncpg**
+- Migrations: **Alembic**
+- Resource monitoring: **psutil + /proc + /sys when needed**
+- Network collection: **Scapy/libpcap → aggregated NetworkFeature**
+- Custom LB: **Python + aiohttp HTTP reverse proxy**
+- CORE algorithms: **Round Robin + Least In-Flight**
 - Health check: **Active HTTP health check**
-- Defense firewall: **nftables**
+- Firewall: **nftables**
 - Defense boundary: **Controller decides, Agent executes**
 - PBL environment: **Docker + Docker Compose**
-- Internal communication: **direct interfaces + bounded in-process async events**
-- CORE không dùng Kafka/RabbitMQ/Redis broker
-- CORE không dùng microservices
-- CORE không dùng specialized TSDB
-- CORE không dùng ML/eBPF/Adaptive LB trước khi baseline hoàn thành
+- Internal Controller communication: **public interfaces/direct calls + bounded in-process async events**
+- Testing: **pytest + pytest-asyncio**
+- Lint/format: **Ruff**
+- Type checking: **mypy**
 
-Nếu cần thay đổi một quyết định đã khóa, phải:
-1. dừng implementation;
-2. giải thích lý do;
-3. tạo ADR mới hoặc cập nhật ADR;
-4. chờ con người phê duyệt.
+Không thêm Microservices/Kafka/RabbitMQ/Redis/Kubernetes/TimescaleDB/InfluxDB/eBPF/Isolation Forest/Adaptive LB trước khi có ADR và approval.
 
 ---
 
-## 4. Nguyên tắc phát triển
+## 4. Mandatory Multi-Host Rule
 
-### 4.1 Làm theo milestone, không big-bang
+SentinelX là một networked multi-host system.
 
-Chỉ code milestone hiện tại trong `docs/FOUNDATION_ROADMAP.md`.
+AI KHÔNG ĐƯỢC giả định:
 
-Không tự động triển khai milestone kế tiếp dù đã "tiện tay".
+```text
+Controller == Agent Host
+LB == Backend Host
+All services == localhost
+All nodes == one Docker host
+```
 
-### 4.2 Foundation trước business logic
+Các network values phải configurable:
 
-Trước `FOUNDATION FREEZE`, KHÔNG triển khai thật:
+- Controller bind host;
+- Controller port;
+- Agent Controller URL;
+- LB listen host/port;
+- backend host/IP;
+- backend port.
 
-- CPU anomaly rules;
-- Port Scan algorithm;
-- SYN Flood algorithm;
+`localhost` chỉ được dùng như development default.
+
+Không được hard-code:
+
+```python
+CONTROLLER_URL = "http://localhost:8000"
+```
+
+nếu giá trị đó là runtime architecture setting.
+
+Code phải có khả năng chuyển từ local development sang LAN/multi-host bằng config, không sửa source code.
+
+---
+
+## 5. Architecture Principles
+
+### Foundation before business logic
+
+Trước `FOUNDATION FREEZE`, không triển khai thật:
+
+- resource anomaly rules;
+- Port Scan detector;
+- SYN Flood detector;
 - Isolation Forest;
-- Adaptive Load Balancing;
-- firewall blocking thật;
-- self-healing restart thật;
-- advanced traffic shaping;
+- Adaptive LB;
+- real destructive firewall actions;
+- advanced self-healing;
 - eBPF.
 
-### 4.3 Không over-engineer
+### No over-engineering
 
-Không thêm:
+Không tự thêm:
 - microservices;
 - CQRS framework;
-- Kafka;
-- RabbitMQ;
-- Redis Streams;
-- service mesh;
+- external message broker;
 - Kubernetes;
-- TimescaleDB/InfluxDB;
-- generic plugin framework;
-- generic dependency injection container;
+- generic plugin system;
+- enterprise DI container.
 
-trừ khi có ADR được duyệt.
+### Module boundary
 
-### 4.4 Không hard-code policy/rule
+Controller dùng package-by-feature.
 
-Không hard-code các giá trị như:
-- CPU > 90;
-- PORT_COUNT > 20;
-- BLOCK = 60s.
+Một module không import internal repository/ORM/private service của module khác.
 
-Các rule/runtime tunables phải đi qua config khi đến đúng milestone.
-
-### 4.5 Không phá module boundary
-
-Controller là Modular Monolith package-by-feature.
-
-Một module không được import trực tiếp:
-- repository implementation;
-- ORM internals;
-- private service;
-- database table;
-
-của module khác.
-
-Giao tiếp module qua:
-- public interface;
-- application service được expose;
+Cross-module communication qua:
+- public/application interface;
 - domain/application event khi phù hợp.
 
-### 4.6 `sentinelx_common` không phải thùng rác
+### `sentinelx_common` is not a dumping ground
 
-Chỉ đặt ở `sentinelx_common`:
-- wire/API contracts;
+Allowed:
+- wire contracts;
 - common IDs/enums;
-- generic config utilities;
+- config primitives;
 - observability primitives;
-- truly shared utilities.
+- truly shared helpers.
 
-Không đặt:
-- SQLAlchemy ORM model;
-- Controller repository;
+Forbidden:
+- ORM;
+- repositories;
 - Detection logic;
-- Agent collector;
+- Agent collectors;
 - LB algorithm.
 
 ---
 
-## 5. Quy tắc output của AI khi coding
+## 6. PBL4 Technical Priority
 
-Mỗi lần được yêu cầu triển khai một bước, AI phải trả theo cấu trúc:
+Implementation và demo phải thể hiện rõ:
 
-### A. Mục tiêu milestone
-Nêu chính xác milestone đang làm và điều gì KHÔNG làm.
+### Operating Systems
+- Linux resources;
+- process/service;
+- concurrency;
+- daemon/service;
+- OS/network interfaces;
+- local execution/privilege.
 
-### B. Files thay đổi
-Liệt kê:
-- file tạo mới;
-- file sửa;
-- file không đụng tới.
+### Computer Networks
+- IP;
+- ports;
+- TCP/HTTP;
+- connections;
+- traffic;
+- health checks;
+- reverse proxy;
+- load balancing.
 
-### C. Code
-Đưa code đầy đủ từng file hoặc patch rõ ràng.
+### Network Programming
+- remote Agent ↔ Controller;
+- REST/HTTP;
+- WebSocket;
+- retry/reconnect;
+- concurrent network I/O;
+- remote backend health check;
+- custom proxy.
 
-### D. Giải thích kiến trúc
-Giải thích ngắn:
-- trách nhiệm file;
-- dependency direction;
-- vì sao đặt ở folder đó.
-
-### E. Commands
-Đưa lệnh:
-- install/update dependencies nếu có;
-- format;
-- lint;
-- type check;
-- tests;
-- run.
-
-### F. Expected result
-Nêu kết quả mong đợi.
-
-### G. Checkpoint
-Chỉ khi checkpoint PASS mới đề xuất bước tiếp theo.
+Dashboard/UI không được lấn át phần OS/network.
 
 ---
 
-## 6. Quality Gate bắt buộc
+## 7. Development Milestones
 
-Trước khi coi một milestone hoàn thành:
+Chỉ code milestone hiện tại:
+
+```text
+F0 Architecture Freeze
+F1 Repository Bootstrap
+F2 Config + Logging + Controller Skeleton
+F3 Shared Contracts + IDs + Time
+F4 PostgreSQL Foundation
+F5 Project + Node Registry
+F6 Agent Enrollment
+F7 Mock Agent + Heartbeat
+F8 Fake Metrics Vertical Slice
+F9 Realtime WebSocket
+F10 Dashboard Skeleton
+F11 Docker PBL Lab
+F12 Load Balancer Skeleton
+F13 Health Check
+F14 Multi-Host Acceptance
+FOUNDATION FREEZE
+```
+
+Không tự làm milestone kế tiếp.
+
+---
+
+## 8. Required AI Output per Coding Task
+
+Mỗi lần triển khai:
+
+### A. Milestone
+Tên + mục tiêu.
+
+### B. Scope
+- In scope
+- Out of scope
+
+### C. Repository Inspection
+Đọc tree/file hiện có trước khi sửa.
+
+### D. Files
+Table:
+| File | Action | Responsibility |
+
+### E. Architecture Notes
+Giải thích boundary/dependency.
+
+### F. Implementation
+Code chạy được, không pseudo-code nếu file cần thực thi.
+
+### G. Commands
+Install/run/lint/typecheck/tests.
+
+### H. Expected Result
+Endpoint/output/test mong đợi.
+
+### I. Checkpoint
+PASS/FAIL.
+
+### J. Stop
+Không làm milestone kế tiếp.
+
+---
+
+## 9. Quality Gate
+
+Mỗi milestone:
 
 ```bash
 ruff check src tests
@@ -211,93 +284,67 @@ mypy src
 pytest -q
 ```
 
-Tất cả phải PASS.
+Nếu milestone có DB/Docker/LB:
+- integration test tương ứng;
+- smoke test tương ứng.
 
-Nếu milestone có integration/docker:
-- integration tests phải PASS;
-- smoke test phải PASS;
-- startup/shutdown phải sạch.
-
-Không "fix" test bằng cách xóa assertion hợp lệ.
+Không xóa assertion hợp lệ để làm test xanh.
 
 ---
 
-## 7. Security/Safety
+## 10. Security/Safety
 
-Không bao giờ:
-- chạy destructive firewall command mặc định;
+Không:
+- chạy destructive firewall mặc định;
 - block localhost;
 - block Controller IP;
 - block management IP;
-- block node's own IP;
+- block node own IP;
 - block whitelist/protected CIDR;
-- chạy attack simulation ra Internet;
-- yêu cầu Controller chạy root nếu không cần;
-- nhúng secrets vào source code;
-- commit `.env`.
+- attack public Internet;
+- commit secret;
+- log credential;
+- yêu cầu Controller chạy root nếu không cần.
 
-Firewall/self-healing thật chỉ triển khai đúng milestone và phải có safe/no-op mode.
-
----
-
-## 8. Nguyên tắc repository
-
-Repository là monorepo.
-
-Các runtime Python:
-- `src/sentinelx_controller`
-- `src/sentinelx_agent`
-- `src/sentinelx_lb`
-
-Shared:
-- `src/sentinelx_common`
-
-Frontend:
-- `dashboard`
-
-PBL lab:
-- `lab`
-
-Deployment artifacts:
-- `deploy`
-
-Architecture docs:
-- `docs`
-
-Tests:
-- `tests/unit`
-- `tests/integration`
-- `tests/e2e`
+Defense thật phải có safe/no-op mode trước.
 
 ---
 
-## 9. Khi thiếu thông tin
+## 11. When Information Is Missing
 
-Nếu chi tiết implementation chưa được khóa:
-- chọn giải pháp đơn giản nhất phù hợp với architecture;
-- không tự thay đổi tech stack;
-- ghi assumption rõ ràng;
-- nếu assumption ảnh hưởng architecture/public contract/database schema/security, hỏi con người trước khi code.
+Nếu uncertainty chỉ là local implementation detail:
+- chọn giải pháp đơn giản;
+- ghi assumption.
+
+Nếu ảnh hưởng:
+- public contract;
+- DB schema;
+- security;
+- architecture;
+- deployment;
+- tech stack;
+
+AI phải dừng và xin quyết định.
 
 ---
 
-## 10. Mục tiêu cuối Foundation
+## 12. Foundation End State
 
-Foundation hoàn thành khi có vertical slice:
+Foundation phải chứng minh:
 
 ```text
-Mock Agent
-   ↓
+Remote/Mock Agent
+      ↓
+REST/JSON MetricBatch
+      ↓
 Controller
-   ↓
+      ↓
 Validation
-   ↓
+      ↓
 PostgreSQL
-   ↓
-REST query
-   ↓
-WebSocket realtime
-   ↓
+      ↓
+REST + WebSocket
+      ↓
 Dashboard
 ```
 
@@ -305,12 +352,12 @@ và:
 
 ```text
 Client
-   ↓
+  ↓
 SentinelX LB
-   ↓
-Backend01/02/03
+  ↓
+Remote Backend01/02/03
 ```
 
-kèm basic health check, tests và Docker lab ổn định.
+plus backend health ejection/re-add.
 
-Sau đó mới bước vào business logic.
+Foundation cuối cùng phải PASS multi-host acceptance test.
