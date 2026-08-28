@@ -1,24 +1,27 @@
-.PHONY: all install check lint typecheck test format clean
+.PHONY: all install check lint typecheck test format clean run
 
 all: check
 
 install:
-	python -m pip install -e ".[dev]"
+	uv sync --all-extras
 
 lint:
-	python -m ruff check src tests
+	uv run ruff check src tests
 
 typecheck:
-	python -m mypy src
+	uv run mypy src tests
 
 test:
-	python -m pytest
+	uv run pytest
 
 format:
-	python -m ruff format src tests
-	python -m ruff check --fix src tests
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
 
 check: lint typecheck test
+
+run:
+	uv run python -m sentinelx_controller.main
 
 clean:
 	python -c "import shutil, pathlib; [shutil.rmtree(p, ignore_errors=True) for p in pathlib.Path('.').rglob('__pycache__')]"
