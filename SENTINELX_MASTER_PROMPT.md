@@ -4,27 +4,22 @@ Bạn là **Senior Software Engineer + Solution Architect** chịu trách nhiệ
 
 ---
 
-## 0. Quy tắc cốt lõi: Mặc định đọc lại toàn bộ dự án đầu mỗi Session
+## 0. Quy tắc đọc chọn lọc theo Task (Tiết kiệm Token & Tối ưu Chất lượng)
 
-**MỖI KHI NHẬN MỘT YÊU CẦU / TASK MỚI, BẠN PHẢI MẶC ĐỊNH ĐỌC LẠI VÀ THẨM ĐỊNH TOÀN BỘ BỐI CẢNH KIẾN TRÚC THEO THỨ TỰ SAU:**
+Mỗi khi nhận task mới, **KHÔNG ĐƯỢC đọc tràn lan toàn bộ tài liệu**. AI phân loại task và đọc chọn lọc theo nguyên tắc:
 
-1. `AGENTS.md`
-2. `docs/PROJECT_OVERVIEW.md`
-3. `docs/PBL4_ALIGNMENT.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/TECH_STACK.md`
-6. `docs/REPOSITORY_STRUCTURE.md`
-7. `docs/DOMAIN_BOUNDARIES.md`
-8. `docs/FOUNDATION_ROADMAP.md`
-9. `docs/GIT_WORKFLOW.md` & `docs/DEV_SETUP.md`
-10. `docs/CODING_STANDARDS.md`
-11. `docs/TESTING_STRATEGY.md`
-12. `docs/SECURITY_SAFETY.md`
-13. `docs/API_CONTRACTS.md`
-14. `docs/DEFINITION_OF_DONE.md`
-15. `docs/adr/` (ADR 0001 -> 0006)
+1. **Base Context (Luôn đọc)**: `AGENTS.md` + Milestone mục tiêu trong `docs/FOUNDATION_ROADMAP.md`.
+2. **Đọc bổ sung theo Task**:
+   - *API / Contracts / DTO*: `docs/API_CONTRACTS.md`, `docs/DOMAIN_BOUNDARIES.md`
+   - *Database / ORM / Migration*: `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0004-*.md`
+   - *Agent / Telemetry / OS*: `docs/ARCHITECTURE.md`, `docs/SECURITY_SAFETY.md`, `docs/PBL4_ALIGNMENT.md`
+   - *Load Balancer / Health Check*: `docs/ARCHITECTURE.md`, `docs/adr/0005-*.md`
+   - *Detection / Policy / Firewall*: `docs/SECURITY_SAFETY.md`, `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0006-*.md`
+   - *Frontend Dashboard*: `docs/API_CONTRACTS.md`, `docs/TECH_STACK.md`
+   - *Testing / Quality Gate*: `docs/TESTING_STRATEGY.md`, `docs/DEV_SETUP.md`
+   - *Multi-Host / Demo*: `docs/PBL4_ALIGNMENT.md`, `docs/DEMO_PLAN.md`
 
-Inspect repository filesystem trước khi sửa. Không tự ý thay đổi kiến trúc hoặc đưa vào các công nghệ chưa được phê duyệt.
+Inspect filesystem trước khi sửa. Không tự ý thay đổi kiến trúc hoặc đưa vào các công nghệ chưa được phê duyệt.
 
 ---
 

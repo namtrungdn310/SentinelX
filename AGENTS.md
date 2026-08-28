@@ -1,26 +1,26 @@
 # SentinelX — AI Coding Instructions & System Prompt
 
-## 1. Mandatory Session Bootstrap (Bắt buộc chạy đầu mỗi session/task)
+## 1. Smart Session Bootstrap & Selective Reading (Tối ưu Token)
 
-Mỗi khi nhận một task mới, AI **PHẢI TỰ ĐỘNG ĐỌC VÀ HIỂU LẠI TOÀN BỘ THÔNG TIN DỰ ÁN** theo đúng thứ tự sau trước khi sinh code:
+Để **tiết kiệm token tối đa** nhưng vẫn **đảm bảo chất lượng và độ chính xác 100%**, AI **KHÔNG ĐƯỢC đọc tràn lan toàn bộ tài liệu**. Thay vào đó, AI phân loại task và đọc chọn lọc theo ma trận sau:
 
-1. `AGENTS.md` (File này)
-2. `docs/PROJECT_OVERVIEW.md` (Bản chất sản phẩm, phạm vi hạ tầng Linux)
-3. `docs/PBL4_ALIGNMENT.md` (3 trụ cột PBL4: Hệ điều hành, Mạng máy tính, Lập trình mạng)
-4. `docs/ARCHITECTURE.md` (Modular Monolith Controller, 4 runtimes, data flow, multi-host)
-5. `docs/TECH_STACK.md` (Tech stack đã khóa, cấm microservices/Kafka/Redis/ML)
-6. `docs/REPOSITORY_STRUCTURE.md` (Layout Monorepo, trách nhiệm từng thư mục)
-7. `docs/DOMAIN_BOUNDARIES.md` (Ranh giới module, Contract vs Domain vs ORM)
-8. `docs/FOUNDATION_ROADMAP.md` (Lộ trình chi tiết F0 -> F14 -> M1 -> M8)
-9. `docs/GIT_WORKFLOW.md` & `docs/DEV_SETUP.md` (Quy chuẩn phân nhánh Git & `uv`)
-10. `docs/CODING_STANDARDS.md` (Tiêu chuẩn code Python 3.12, typing, logging, async)
-11. `docs/TESTING_STRATEGY.md` (Chiến lược kiểm thử và Quality Gate)
-12. `docs/SECURITY_SAFETY.md` (Nguyên tắc an toàn phòng thủ, whitelist, noop mode)
-13. `docs/API_CONTRACTS.md` (Quy ước REST API, correlation ID, time UTC, UUID)
-14. `docs/DEFINITION_OF_DONE.md` (Checklist hoàn thành milestone)
-15. `docs/adr/` (Các quyết định kiến trúc đã khóa ADR 0001 -> 0006)
+### 1.1 Luôn đọc (Base Context - Siêu ngắn)
+1. `AGENTS.md` (File này — nắm vững locked stack, ranh giới và multi-host rule).
+2. Mục milestone tương ứng trong `docs/FOUNDATION_ROADMAP.md`.
 
-> **CẤM**: Không suy đoán, không code dựa trên trí nhớ mơ hồ nếu tài liệu đã quy định rõ.
+### 1.2 Đọc theo chuyên môn của từng Task (Task-Specific Routing)
+
+| Phân loại Task | Tài liệu cần đọc bổ sung |
+|---|---|
+| **API, Wire Contracts, DTO, Enums** | `docs/API_CONTRACTS.md`, `docs/DOMAIN_BOUNDARIES.md` |
+| **Database, ORM, Migrations, Repositories** | `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0004-postgresql-core-storage.md` |
+| **Agent Daemon, Metric Collection, Linux OS** | `docs/ARCHITECTURE.md`, `docs/SECURITY_SAFETY.md`, `docs/PBL4_ALIGNMENT.md` |
+| **Load Balancer, Reverse Proxy, Health Check** | `docs/ARCHITECTURE.md`, `docs/adr/0005-http-load-balancer.md` |
+| **Detection, Policy, Defense Pipeline, Firewall** | `docs/SECURITY_SAFETY.md`, `docs/DOMAIN_BOUNDARIES.md`, `docs/adr/0006-*.md` |
+| **Frontend Dashboard (React/Vite)** | `docs/API_CONTRACTS.md`, `docs/TECH_STACK.md` |
+| **Testing, Quality Gate, CI** | `docs/TESTING_STRATEGY.md`, `docs/DEV_SETUP.md` |
+| **Git, Phân nhánh, Đồng bộ môi trường** | `docs/GIT_WORKFLOW.md`, `docs/DEV_SETUP.md` |
+| **Multi-Host Setup, Demo, Acceptance** | `docs/PBL4_ALIGNMENT.md`, `docs/DEMO_PLAN.md` |
 
 ---
 
@@ -38,11 +38,8 @@ SentinelX **KHÔNG PHẢI**:
 - Một IDS đơn lẻ hay Load Balancer đơn lẻ;
 - Hệ thống microservices enterprise phức tạp.
 
-**Người dùng chính (Primary User)**:
-- System Administrator, DevOps Engineer, Infrastructure Operator.
-
-**Hạ tầng quản lý (Managed Target)**:
-- Linux physical server, Linux VM, Cloud VM, VPS, Docker lab node.
+**Người dùng chính**: System Administrator, DevOps Engineer, Infrastructure Operator.  
+**Hạ tầng quản lý**: Linux physical server, Linux VM, Cloud VM, VPS, Docker lab node.
 
 ---
 

@@ -37,8 +37,8 @@ Tài liệu này quy định quy trình làm việc chuẩn cho AI coding assist
 [Step 8: Stop & Await Review]
 ```
 
-### Step 1 — Re-read & Ground Context (Tái định vị bối cảnh)
-Đầu mỗi task, AI phải tự động đọc và thẩm định lại toàn bộ tài liệu theo thứ tự quy định trong `AGENTS.md`.
+### Step 1 — Classify Task & Selective Reading (Đọc chọn lọc theo Task)
+Đầu mỗi task, AI phân loại nghiệp vụ và chỉ đọc chọn lọc các tài liệu liên quan theo bảng ma trận trong `AGENTS.md` (kèm base context) để tiết kiệm token tối đa mà vẫn nắm chính xác 100% ranh giới kỹ thuật.
 
 ### Step 2 — State Milestone & Scope
 Xác định chính xác milestone đang làm:
