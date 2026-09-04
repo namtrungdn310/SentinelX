@@ -67,9 +67,8 @@ sentinelx/
 ├── deploy/
 ├── scripts/
 └── docs/
-    ├── adr/
-    ├── architecture/
-    └── demo/
+    ├── *.md                    # Toàn bộ tài liệu kiến trúc, quy chuẩn & roadmap
+    └── adr/                    # Architecture Decision Records (0001 -> 0006)
 ```
 
 ---

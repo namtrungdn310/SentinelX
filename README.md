@@ -62,10 +62,10 @@ sentinelx/
 ## 4. Lộ trình phát triển (Roadmap)
 
 ### Foundation Milestones
-- **F0 — Architecture Freeze**
-- **F1 — Repository Bootstrap**
-- **F2 — Config + Logging + Controller Skeleton**
-- **F3 — Shared Contracts + IDs + Time**
+- **F0 — Architecture Freeze** `(DONE)`
+- **F1 — Repository Bootstrap** `(DONE)`
+- **F2 — Config + Logging + Controller Skeleton** `(DONE)`
+- **F3 — Shared Contracts + IDs + Time** `(HIỆN TẠI)`
 - **F4 — PostgreSQL Foundation**
 - **F5 — Project + Node Registry**
 - **F6 — Agent Enrollment**

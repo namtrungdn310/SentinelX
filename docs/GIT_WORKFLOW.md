@@ -59,9 +59,9 @@ git checkout -b feat/ten-tinh-nang-moi
 ### Bước 3: Code và kiểm tra Quality Gate cục bộ
 Trước khi commit và push, luôn đảm bảo Quality Gate PASS:
 ```bash
-python -m ruff check src tests
-python -m mypy src
-python -m pytest -q
+uv run ruff check src tests
+uv run mypy src tests
+uv run pytest -v
 ```
 
 ### Bước 4: Commit và Push nhánh làm việc lên GitHub
