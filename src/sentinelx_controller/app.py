@@ -1,4 +1,4 @@
-"""FastAPI Application Factory for SentinelX Controller."""
+"""Create and setup FastAPI app for SentinelX Controller."""
 
 import logging
 from collections.abc import AsyncGenerator
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Lifespan context manager managing startup and shutdown lifecycles."""
+    """Handle actions when the app starts and stops."""
     settings: ControllerSettings = app.state.settings
     logger.info(
         "Starting SentinelX Controller",
@@ -32,18 +32,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app(settings: ControllerSettings | None = None) -> FastAPI:
-    """Create and configure a new FastAPI application instance.
+    """Create and setup the FastAPI app.
 
     Args:
-        settings: Optional ControllerSettings instance. If None, loads defaults/YAML/env.
+        settings: Controller settings. If None, loads from file and environment.
 
     Returns:
-        Configured FastAPI application.
+        Ready-to-run FastAPI app.
     """
     if settings is None:
         settings = ControllerSettings.load()
 
-    # Configure structured logging
+    # Setup logging
     setup_logging(
         level=settings.logging.level,
         json_format=settings.logging.json_format,
@@ -57,13 +57,13 @@ def create_app(settings: ControllerSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Store settings in application state
+    # Save settings into app state
     app.state.settings = settings
 
-    # Add middlewares
+    # Add middleware
     app.add_middleware(CorrelationIdMiddleware)
 
-    # Mount API routers
+    # Add API routes
     app.include_router(api_v1_router)
 
     return app

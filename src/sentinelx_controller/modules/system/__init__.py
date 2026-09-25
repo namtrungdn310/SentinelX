@@ -1,4 +1,4 @@
-"""System module for health checks and version metadata."""
+"""System module for health check and version info."""
 
 from sentinelx_controller.modules.system.router import router as system_router
 

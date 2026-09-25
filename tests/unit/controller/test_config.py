@@ -1,4 +1,4 @@
-"""Unit tests for Controller settings loading and hierarchy."""
+"""Tests for loading Controller settings."""
 
 from pathlib import Path
 
@@ -8,7 +8,7 @@ from sentinelx_controller.config import ControllerSettings
 
 
 def test_default_settings() -> None:
-    """Test default values of ControllerSettings."""
+    """Test default values for Controller settings."""
     settings = ControllerSettings()
     assert settings.environment == "development"
     assert settings.service_name == "sentinelx-controller"
@@ -19,7 +19,7 @@ def test_default_settings() -> None:
 
 
 def test_load_from_yaml_file(tmp_path: Path) -> None:
-    """Test loading settings from a custom YAML file."""
+    """Test loading settings from a YAML file."""
     yaml_file = tmp_path / "test_controller.yaml"
     yaml_file.write_text(
         """
@@ -45,7 +45,7 @@ logging:
 
 
 def test_env_var_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that environment variables override both defaults and YAML settings."""
+    """Test that environment variables replace YAML and default settings."""
     yaml_file = tmp_path / "test_controller.yaml"
     yaml_file.write_text("environment: staging\nserver:\n  port: 8000\n", encoding="utf-8")
 

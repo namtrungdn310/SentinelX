@@ -1,4 +1,4 @@
-"""Unit tests for System Health API endpoint."""
+"""Tests for System Health API endpoint."""
 
 from fastapi.testclient import TestClient
 
@@ -7,7 +7,7 @@ from sentinelx_controller.config import ControllerSettings
 
 
 def test_get_system_health() -> None:
-    """Test GET /api/v1/system/health returns 200 OK and valid health payload."""
+    """Test that GET /api/v1/system/health returns 200 and correct status."""
     settings = ControllerSettings(
         environment="testing",
         service_name="test-sentinelx-controller",

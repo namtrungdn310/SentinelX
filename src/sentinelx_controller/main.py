@@ -1,4 +1,4 @@
-"""Main entry point for SentinelX Controller application."""
+"""Entry point to start SentinelX Controller."""
 
 import uvicorn
 
@@ -7,7 +7,7 @@ from sentinelx_controller.config import ControllerSettings
 
 
 def run() -> None:
-    """Load settings and run the Uvicorn server."""
+    """Load config and start the server with Uvicorn."""
     settings = ControllerSettings.load()
     app = create_app(settings=settings)
 
@@ -15,7 +15,7 @@ def run() -> None:
         app,
         host=settings.server.host,
         port=settings.server.port,
-        log_config=None,  # We manage logging via structured logging setup
+        log_config=None,  # Use custom logger instead of Uvicorn default logger
     )
 
 

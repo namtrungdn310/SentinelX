@@ -1,4 +1,4 @@
-"""YAML configuration loader utility."""
+"""Helper to read YAML config files."""
 
 from pathlib import Path
 from typing import Any
@@ -7,20 +7,20 @@ import yaml
 
 
 class ConfigLoadError(Exception):
-    """Raised when configuration file cannot be loaded or parsed."""
+    """Error raised when the config file cannot be read."""
 
 
 def load_yaml_config(file_path: str | Path) -> dict[str, Any]:
-    """Load and parse a YAML configuration file.
+    """Read and parse a YAML file into a Python dictionary.
 
     Args:
         file_path: Path to the YAML file.
 
     Returns:
-        Dictionary containing configuration keys and values.
+        Dictionary with config data.
 
     Raises:
-        ConfigLoadError: If the file does not exist or contains invalid YAML.
+        ConfigLoadError: If file is missing or has bad YAML syntax.
     """
     path = Path(file_path)
     if not path.exists():
