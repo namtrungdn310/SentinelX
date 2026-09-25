@@ -1,4 +1,4 @@
-"""Controller settings and configuration management."""
+"""Settings and configuration for Controller."""
 
 import os
 from pathlib import Path
@@ -14,27 +14,27 @@ from pydantic_settings import (
 
 
 class ServerSettings(BaseModel):
-    """HTTP server settings."""
+    """Settings for HTTP server host and port."""
 
     host: str = Field(default="0.0.0.0", description="Bind host address")
     port: int = Field(default=8000, ge=1, le=65535, description="Bind port number")
 
 
 class LoggingSettings(BaseModel):
-    """Logging settings."""
+    """Settings for logging level and format."""
 
     level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
     json_format: bool = Field(default=True, description="Output logs in structured JSON format")
 
 
 class ControllerSettings(BaseSettings):
-    """Global Controller configuration.
+    """Main settings for Controller.
 
-    Priority hierarchy:
-    1. Safe Default values
-    2. YAML Configuration file
-    3. Environment Variables (e.g. SENTINELX_ENVIRONMENT, SENTINELX_SERVER__PORT)
-    4. Explicit instantiation arguments
+    Settings order (higher replaces lower):
+    1. Default values
+    2. YAML config file
+    3. Environment variables (e.g. SENTINELX_SERVER__PORT)
+    4. Code arguments
     """
 
     model_config = SettingsConfigDict(
@@ -62,7 +62,7 @@ class ControllerSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Customise settings sources to ensure YAML is loaded before environment variables."""
+        """Set order of config sources: defaults -> YAML -> environment variables."""
         yaml_file = cls._yaml_path if cls._yaml_path and cls._yaml_path.exists() else None
         return (
             init_settings,
@@ -74,13 +74,13 @@ class ControllerSettings(BaseSettings):
 
     @classmethod
     def load(cls, config_path: str | Path | None = None) -> "ControllerSettings":
-        """Load settings respecting the priority order.
+        """Load settings from YAML and environment variables.
 
         Args:
-            config_path: Optional path to YAML configuration file.
+            config_path: Optional path to YAML file.
 
         Returns:
-            Instantiated ControllerSettings.
+            ControllerSettings object.
         """
         resolved_path: Path | None = None
         if config_path is not None:

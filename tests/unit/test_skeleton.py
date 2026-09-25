@@ -1,4 +1,4 @@
-"""Bootstrap and package skeleton unit tests."""
+"""Tests to check package setup."""
 
 import sentinelx_agent
 import sentinelx_common
@@ -7,7 +7,7 @@ import sentinelx_lb
 
 
 def test_packages_importable() -> None:
-    """Verify that all 4 runtime/shared packages are importable and have version strings."""
+    """Check that all packages can be imported and have versions."""
     assert sentinelx_common.__version__ == "0.1.0"
     assert sentinelx_controller.__version__ == "0.1.0"
     assert sentinelx_agent.__version__ == "0.1.0"
@@ -15,5 +15,5 @@ def test_packages_importable() -> None:
 
 
 def test_fixture_injection(sample_version: str) -> None:
-    """Verify that pytest fixture injection functions correctly."""
+    """Check that pytest fixtures work."""
     assert sample_version == "0.1.0"

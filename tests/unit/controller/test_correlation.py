@@ -1,4 +1,4 @@
-"""Unit tests for Correlation ID middleware."""
+"""Tests for correlation ID middleware."""
 
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
@@ -9,7 +9,7 @@ from sentinelx_controller.config import ControllerSettings
 
 
 def test_auto_generate_correlation_id() -> None:
-    """Test that requests without X-Correlation-ID header receive a generated UUID."""
+    """Test that requests without correlation ID get a new UUID."""
     app = create_app(settings=ControllerSettings())
     client = TestClient(app)
 
@@ -21,7 +21,7 @@ def test_auto_generate_correlation_id() -> None:
 
 
 def test_preserve_incoming_correlation_id() -> None:
-    """Test that incoming X-Correlation-ID header is preserved in the response."""
+    """Test that existing correlation ID is kept in the response."""
     app = create_app(settings=ControllerSettings())
     client = TestClient(app)
 
@@ -35,7 +35,7 @@ def test_preserve_incoming_correlation_id() -> None:
 
 
 def test_correlation_id_accessible_in_context() -> None:
-    """Test that correlation ID is accessible inside request handlers via context."""
+    """Test that endpoint handlers can access the correlation ID."""
     app = create_app(settings=ControllerSettings())
     test_router = APIRouter()
 

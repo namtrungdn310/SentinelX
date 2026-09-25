@@ -1,4 +1,4 @@
-"""Unit tests for YAML configuration loader."""
+"""Tests for YAML loader helper."""
 
 from pathlib import Path
 
@@ -8,7 +8,7 @@ from sentinelx_common.config.yaml_loader import ConfigLoadError, load_yaml_confi
 
 
 def test_load_yaml_valid(tmp_path: Path) -> None:
-    """Test loading a valid YAML dictionary."""
+    """Test reading a valid YAML file."""
     yaml_file = tmp_path / "config.yaml"
     yaml_file.write_text("environment: test\nserver:\n  port: 9000\n", encoding="utf-8")
 
@@ -18,7 +18,7 @@ def test_load_yaml_valid(tmp_path: Path) -> None:
 
 
 def test_load_yaml_empty(tmp_path: Path) -> None:
-    """Test loading an empty YAML file returns an empty dictionary."""
+    """Test that an empty YAML file returns empty dict."""
     yaml_file = tmp_path / "empty.yaml"
     yaml_file.write_text("", encoding="utf-8")
 
@@ -27,13 +27,13 @@ def test_load_yaml_empty(tmp_path: Path) -> None:
 
 
 def test_load_yaml_nonexistent() -> None:
-    """Test that loading a non-existent file raises ConfigLoadError."""
+    """Test that missing file raises ConfigLoadError."""
     with pytest.raises(ConfigLoadError, match="Configuration file not found"):
         load_yaml_config("nonexistent_file_xyz.yaml")
 
 
 def test_load_yaml_invalid_syntax(tmp_path: Path) -> None:
-    """Test that loading invalid YAML syntax raises ConfigLoadError."""
+    """Test that bad YAML syntax raises ConfigLoadError."""
     yaml_file = tmp_path / "invalid.yaml"
     yaml_file.write_text("key: [unclosed list\n", encoding="utf-8")
 
@@ -42,7 +42,7 @@ def test_load_yaml_invalid_syntax(tmp_path: Path) -> None:
 
 
 def test_load_yaml_non_dict(tmp_path: Path) -> None:
-    """Test that loading a YAML file containing a list instead of a dict raises ConfigLoadError."""
+    """Test that a list YAML raises ConfigLoadError."""
     yaml_file = tmp_path / "list.yaml"
     yaml_file.write_text("- item1\n- item2\n", encoding="utf-8")
 

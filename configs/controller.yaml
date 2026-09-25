@@ -1,4 +1,4 @@
-# SentinelX Controller Configuration
+# Settings for SentinelX Controller
 environment: development
 service_name: sentinelx-controller
 version: "0.1.0"

@@ -1,1 +1,1 @@
-"""Controller business capability modules."""
+"""Controller feature modules."""

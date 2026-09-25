@@ -1,4 +1,4 @@
-"""Unit tests for structured logging and correlation ID utilities."""
+"""Tests for logging and correlation ID."""
 
 import json
 import logging
@@ -12,7 +12,7 @@ from sentinelx_common.observability.logging import (
 
 
 def test_correlation_id_context() -> None:
-    """Test setting, getting, and clearing correlation ID in context."""
+    """Test setting, getting, and resetting correlation ID."""
     assert get_correlation_id() is None
 
     set_correlation_id("test-corr-123")
@@ -23,7 +23,7 @@ def test_correlation_id_context() -> None:
 
 
 def test_json_formatter_structure() -> None:
-    """Test that JSONFormatter outputs all required structured fields."""
+    """Test that JSONFormatter outputs correct JSON fields."""
     formatter = JSONFormatter(service_name="test-service")
     record = logging.LogRecord(
         name="test_logger",
@@ -53,7 +53,7 @@ def test_json_formatter_structure() -> None:
 
 
 def test_setup_logging() -> None:
-    """Test setup_logging configuration without errors."""
+    """Test setting up logger with debug level."""
     setup_logging(level="DEBUG", json_format=True, service_name="test-sentinelx")
     root_logger = logging.getLogger()
     assert root_logger.level == logging.DEBUG

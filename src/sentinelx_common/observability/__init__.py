@@ -1,4 +1,4 @@
-"""Observability and logging primitives."""
+"""Logging and tracing tools."""
 
 from sentinelx_common.observability.logging import (
     JSONFormatter,

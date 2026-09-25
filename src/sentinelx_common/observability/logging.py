@@ -1,4 +1,4 @@
-"""Structured logging utilities with JSON formatting and correlation ID support."""
+"""Logging tools to format logs as JSON with correlation ID."""
 
 import json
 import logging
@@ -7,29 +7,29 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-# ContextVar storing the current request/pipeline correlation ID
+# Store correlation ID for the current request
 _CORRELATION_ID_CTX: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
 def get_correlation_id() -> str | None:
-    """Retrieve the current correlation ID from context."""
+    """Get the current correlation ID."""
     return _CORRELATION_ID_CTX.get()
 
 
 def set_correlation_id(correlation_id: str | None) -> None:
-    """Set or clear the correlation ID in context."""
+    """Set or clear the correlation ID."""
     _CORRELATION_ID_CTX.set(correlation_id)
 
 
 class JSONFormatter(logging.Formatter):
-    """Formatter that outputs structured JSON log entries."""
+    """Format log messages into JSON strings."""
 
     def __init__(self, service_name: str = "sentinelx") -> None:
         super().__init__()
         self.service_name = service_name
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format the log record as a structured JSON object."""
+        """Convert a log record into a JSON string."""
         log_entry: dict[str, Any] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
@@ -42,7 +42,7 @@ class JSONFormatter(logging.Formatter):
         if correlation_id:
             log_entry["correlation_id"] = correlation_id
 
-        # Include custom extra fields if attached to the record
+        # Add extra custom fields if present
         standard_attrs = {
             "name",
             "msg",
@@ -85,18 +85,18 @@ def setup_logging(
     json_format: bool = True,
     service_name: str = "sentinelx",
 ) -> None:
-    """Configure the root logger with either structured JSON or standard formatting.
+    """Setup application logging with JSON or text format.
 
     Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-        json_format: If True, uses JSONFormatter; otherwise standard stream formatting.
-        service_name: Name of the service producing logs.
+        level: Log level (DEBUG, INFO, WARNING, ERROR).
+        json_format: If True, log as JSON. If False, log as text.
+        service_name: Name of the current service.
     """
     root_logger = logging.getLogger()
     numeric_level = getattr(logging, level.upper(), logging.INFO)
     root_logger.setLevel(numeric_level)
 
-    # Remove existing handlers to avoid duplicates
+    # Remove old handlers to prevent duplicate log lines
     for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
 
