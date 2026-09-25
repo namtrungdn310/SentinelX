@@ -112,8 +112,8 @@ Mỗi lần chỉ triển khai **đúng một milestone**. Không làm trước 
 F0  Architecture Freeze (DONE)
 F1  Repository Bootstrap (DONE)
 F2  Config + Logging + Controller Skeleton (DONE)
-F3  Shared Contracts + IDs + Time (HIỆN TẠI)
-F4  PostgreSQL Foundation
+F3  Shared Contracts + IDs + Time (DONE)
+F4  PostgreSQL Foundation (HIỆN TẠI)
 F5  Project + Node Registry
 F6  Agent Enrollment
 F7  Mock Agent + Heartbeat
