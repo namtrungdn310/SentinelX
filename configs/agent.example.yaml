@@ -1,0 +1,27 @@
+# SentinelX Agent Configuration Template
+service_name: sentinelx-agent
+version: "0.1.0"
+
+controller:
+  url: "http://controller:8000"
+  enrollment_token: "sentinelx-lab-default-token"
+  timeout_seconds: 5
+
+agent:
+  node_name: "node-auto"
+  heartbeat_interval_seconds: 5
+  telemetry_interval_seconds: 5
+  batch_size: 50
+
+collectors:
+  system_resources:
+    enabled: true
+    interval_seconds: 2
+  network_traffic:
+    enabled: true
+    interface: "eth0"
+    pcap_aggregation_window_seconds: 5
+
+logging:
+  level: "INFO"
+  json_format: true

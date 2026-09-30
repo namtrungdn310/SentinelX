@@ -1,0 +1,32 @@
+# SentinelX Load Balancer Configuration Template
+service_name: sentinelx-lb
+version: "0.1.0"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+algorithm: "round_robin"  # Options: round_robin, least_in_flight
+
+health_check:
+  enabled: true
+  interval_seconds: 5
+  timeout_seconds: 2
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+  path: "/health"
+
+# Static backend list for Lab environment (will be dynamically synced from Controller in M12)
+backends:
+  - id: "backend01"
+    host: "backend01"
+    port: 8080
+    weight: 1
+  - id: "backend02"
+    host: "backend02"
+    port: 8080
+    weight: 1
+
+logging:
+  level: "INFO"
+  json_format: true

@@ -1,0 +1,205 @@
+name: sentinelx
+
+# ==============================================================================
+# SentinelX — Docker Compose Lab Environment
+# Fulfills Milestone F11 (Docker PBL Lab) & PBL4 multi-node simulation.
+#
+# Profiles available:
+#   1. core   -> Controller + PostgreSQL (Dev control plane)
+#   2. lab    -> core + Load Balancer + 2 Backend Nodes + 2 Agents
+#   3. attack -> lab + Traffic Generator / Attacker container
+# ==============================================================================
+
+networks:
+  sentinelx_public:
+    name: sentinelx_public
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.1.0/24
+
+  sentinelx_internal:
+    name: sentinelx_internal
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.2.0/24
+
+volumes:
+  sentinelx_pgdata:
+    name: sentinelx_pgdata
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PostgreSQL Core Database
+  # ----------------------------------------------------------------------------
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: sentinelx_postgres
+    restart: unless-stopped
+    profiles: [core, lab, attack]
+    environment:
+      POSTGRES_USER: ${SENTINELX_DB_USER:-sentinelx}
+      POSTGRES_PASSWORD: ${SENTINELX_DB_PASSWORD:-sentinelx_password}
+      POSTGRES_DB: ${SENTINELX_DB_NAME:-sentinelx}
+    volumes:
+      - sentinelx_pgdata:/var/lib/postgresql/data
+    networks:
+      sentinelx_internal:
+        ipv4_address: 172.28.2.10
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SENTINELX_DB_USER:-sentinelx} -d ${SENTINELX_DB_NAME:-sentinelx}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 2. SentinelX Central Controller (FastAPI Modular Monolith)
+  # ----------------------------------------------------------------------------
+  sentinelx_controller:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.controller
+    image: sentinelx-controller:latest
+    container_name: sentinelx_controller
+    restart: unless-stopped
+    profiles: [core, lab, attack]
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    ports:
+      - "${SENTINELX_CONTROLLER_PORT:-8000}:8000"
+    environment:
+      SENTINELX_ENVIRONMENT: ${SENTINELX_ENV:-development}
+      SENTINELX_SERVER__HOST: 0.0.0.0
+      SENTINELX_SERVER__PORT: 8000
+      SENTINELX_DB_HOST: postgres_db
+      SENTINELX_DB_PORT: 5432
+      SENTINELX_DB_USER: ${SENTINELX_DB_USER:-sentinelx}
+      SENTINELX_DB_PASSWORD: ${SENTINELX_DB_PASSWORD:-sentinelx_password}
+      SENTINELX_DB_NAME: ${SENTINELX_DB_NAME:-sentinelx}
+      SENTINELX_LOGGING__LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
+      SENTINELX_LOGGING__JSON_FORMAT: "true"
+    networks:
+      sentinelx_public:
+      sentinelx_internal:
+        ipv4_address: 172.28.2.20
+
+  # ----------------------------------------------------------------------------
+  # 3. SentinelX Custom HTTP Load Balancer (aiohttp Reverse Proxy)
+  # ----------------------------------------------------------------------------
+  sentinelx_lb:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.lb
+    image: sentinelx-lb:latest
+    container_name: sentinelx_lb
+    restart: unless-stopped
+    profiles: [lab, attack]
+    ports:
+      - "${SENTINELX_LB_PORT:-8080}:8080"
+    environment:
+      SENTINELX_LB_HOST: 0.0.0.0
+      SENTINELX_LB_PORT: 8080
+      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
+    networks:
+      sentinelx_public:
+        ipv4_address: 172.28.1.100
+      sentinelx_internal:
+
+  # ----------------------------------------------------------------------------
+  # 4. Backend Workload Nodes (Node A & Node B)
+  # ----------------------------------------------------------------------------
+  backend01:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.backend
+    image: sentinelx-backend:latest
+    container_name: sentinelx_backend01
+    restart: unless-stopped
+    profiles: [lab, attack]
+    environment:
+      NODE_NAME: backend01
+      PORT: 8080
+    networks:
+      sentinelx_internal:
+        ipv4_address: 172.28.2.31
+
+  backend02:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.backend
+    image: sentinelx-backend:latest
+    container_name: sentinelx_backend02
+    restart: unless-stopped
+    profiles: [lab, attack]
+    environment:
+      NODE_NAME: backend02
+      PORT: 8080
+    networks:
+      sentinelx_internal:
+        ipv4_address: 172.28.2.32
+
+  # ----------------------------------------------------------------------------
+  # 5. SentinelX Agents (Node A & Node B Daemons)
+  # ----------------------------------------------------------------------------
+  agent01:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.agent
+    image: sentinelx-agent:latest
+    container_name: sentinelx_agent01
+    restart: unless-stopped
+    profiles: [lab, attack]
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - sentinelx_controller
+    environment:
+      SENTINELX_NODE_ID: node-backend01
+      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
+      SENTINELX_ENROLLMENT_TOKEN: ${SENTINELX_LAB_DEFAULT_TOKEN:-sentinelx-lab-default-token}
+      SENTINELX_HEARTBEAT_INTERVAL: 5
+    networks:
+      sentinelx_internal:
+
+  agent02:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.agent
+    image: sentinelx-agent:latest
+    container_name: sentinelx_agent02
+    restart: unless-stopped
+    profiles: [lab, attack]
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - sentinelx_controller
+    environment:
+      SENTINELX_NODE_ID: node-backend02
+      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
+      SENTINELX_ENROLLMENT_TOKEN: ${SENTINELX_LAB_DEFAULT_TOKEN:-sentinelx-lab-default-token}
+      SENTINELX_HEARTBEAT_INTERVAL: 5
+    networks:
+      sentinelx_internal:
+
+  # ----------------------------------------------------------------------------
+  # 6. Attacker & Traffic Generator
+  # ----------------------------------------------------------------------------
+  traffic_sim:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.attacker
+    image: sentinelx-attacker:latest
+    container_name: sentinelx_attacker
+    profiles: [attack]
+    depends_on:
+      - sentinelx_lb
+    networks:
+      sentinelx_public:
+        ipv4_address: 172.28.1.200
