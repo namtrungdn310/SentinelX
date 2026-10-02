@@ -15,7 +15,11 @@ logger = logging.getLogger("sentinelx_agent")
 
 async def heartbeat_loop(controller_url: str, node_id: str, interval: int) -> None:
     """Send periodic mock heartbeat to the Controller."""
-    logger.info("Starting Agent heartbeat loop. Controller: %s, Node ID: %s", controller_url, node_id)
+    logger.info(
+        "Starting Agent heartbeat loop. Controller: %s, Node ID: %s",
+        controller_url,
+        node_id,
+    )
     while True:
         logger.debug("Heartbeat ping -> %s for node %s", controller_url, node_id)
         await asyncio.sleep(interval)
