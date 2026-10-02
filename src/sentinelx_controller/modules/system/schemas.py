@@ -16,3 +16,16 @@ class SystemHealthResponse(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="Current UTC time",
     )
+
+
+class SystemReadinessResponse(BaseModel):
+    """Response data for GET /ready."""
+
+    status: str = Field(description="Current readiness status: 'ready' or 'not_ready'")
+    database: str = Field(description="Database connection status: 'connected' or 'disconnected'")
+    detail: str | None = Field(default=None, description="Extra information or error message")
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="Current UTC time",
+    )
+

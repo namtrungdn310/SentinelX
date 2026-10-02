@@ -27,6 +27,21 @@ class LoggingSettings(BaseModel):
     json_format: bool = Field(default=True, description="Output logs in structured JSON format")
 
 
+class DatabaseSettings(BaseModel):
+    """Settings for PostgreSQL database connection and pool."""
+
+    url: str = Field(
+        default="postgresql+asyncpg://sentinelx:sentinelx_password@localhost:5432/sentinelx",
+        description="Async SQLAlchemy database connection URL",
+    )
+    pool_size: int = Field(default=5, ge=1, le=50, description="Connection pool size")
+    max_overflow: int = Field(default=10, ge=0, le=50, description="Max overflow connections")
+    pool_timeout: float = Field(
+        default=30.0, ge=1.0, description="Pool checkout timeout in seconds"
+    )
+    echo: bool = Field(default=False, description="Log SQL statements")
+
+
 class ControllerSettings(BaseSettings):
     """Main settings for Controller.
 
@@ -52,6 +67,7 @@ class ControllerSettings(BaseSettings):
 
     server: ServerSettings = Field(default_factory=ServerSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
 
     @classmethod
     def settings_customise_sources(
