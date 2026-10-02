@@ -66,14 +66,14 @@ F0  Architecture Freeze (DONE)
 F1  Repository Bootstrap (DONE)
 F2  Config + Logging + Controller Skeleton (DONE)
 F3  Shared Contracts + IDs + Time (DONE)
-F4  PostgreSQL Foundation (HIỆN TẠI)
-F5  Project + Node Registry
+F4  PostgreSQL Foundation (DONE)
+F5  Project + Node Registry (HIỆN TẠI)
 F6  Agent Enrollment
 F7  Mock Agent + Heartbeat
 F8  Fake Metrics Vertical Slice
 F9  Realtime WebSocket
 F10 Dashboard Skeleton
-F11 Docker PBL Lab
+F11 Docker PBL Lab (DONE)
 F12 Load Balancer Skeleton
 F13 Health Check
 F14 Multi-Host Acceptance

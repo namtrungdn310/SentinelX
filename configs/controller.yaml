@@ -10,3 +10,10 @@ server:
 logging:
   level: "INFO"
   json_format: true
+
+database:
+  url: "postgresql+asyncpg://sentinelx:sentinelx_password@localhost:5432/sentinelx"
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30.0
+  echo: false

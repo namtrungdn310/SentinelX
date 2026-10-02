@@ -10,6 +10,10 @@ from sentinelx_common.observability.logging import setup_logging
 from sentinelx_controller.api.middleware.correlation import CorrelationIdMiddleware
 from sentinelx_controller.api.v1.router import api_v1_router
 from sentinelx_controller.config import ControllerSettings
+from sentinelx_controller.infrastructure.database.session import (
+    close_db_engine,
+    init_db_engine,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +31,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "port": settings.server.port,
         },
     )
-    yield
-    logger.info("Stopping SentinelX Controller")
+    init_db_engine(settings.database)
+    try:
+        yield
+    finally:
+        await close_db_engine()
+        logger.info("Stopping SentinelX Controller")
+
 
 
 def create_app(settings: ControllerSettings | None = None) -> FastAPI:
