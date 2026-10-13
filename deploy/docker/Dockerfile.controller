@@ -14,12 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python project dependencies
-COPY pyproject.toml /app/
+COPY pyproject.toml README.md /app/
+COPY src/ /app/src/
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
-# Copy application source and configurations
-COPY src/ /app/src/
 COPY configs/ /app/configs/
 
 EXPOSE 8000
