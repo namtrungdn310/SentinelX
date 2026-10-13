@@ -10,13 +10,13 @@ from sentinelx_controller.modules.projects.repository import ProjectRepository
 
 
 class ProjectService:
-    """Nghiệp vụ quản lý Project."""
+    """Business logic for Project management."""
 
     def __init__(self, repository: ProjectRepository) -> None:
         self._repo = repository
 
     async def create_project(self, request: ProjectCreateRequest) -> ProjectResponse:
-        """Tạo project mới, xác thực trùng tên."""
+        """Create a new project and check for duplicate name."""
         existing = await self._repo.get_by_name(request.name)
         if existing is not None:
             raise HTTPException(
@@ -31,7 +31,7 @@ class ProjectService:
         return self._to_response(model)
 
     async def get_project(self, project_id_str: str) -> ProjectResponse:
-        """Lấy chi tiết project bằng ID."""
+        """Get project details by project ID."""
         try:
             p_uuid = uuid.UUID(project_id_str)
         except ValueError as err:
@@ -49,7 +49,7 @@ class ProjectService:
         return self._to_response(model)
 
     async def list_projects(self) -> list[ProjectResponse]:
-        """Liệt kê toàn bộ projects."""
+        """List all projects."""
         projects = await self._repo.list_all()
         return [self._to_response(p) for p in projects]
 

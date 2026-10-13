@@ -15,7 +15,7 @@ from sentinelx_controller.infrastructure.database.session import get_db_session
 
 @pytest.fixture
 async def test_app() -> AsyncGenerator[FastAPI, None]:
-    """Tạo isolated test database in-memory SQLite cho integration test."""
+    """Create isolated in-memory SQLite database for integration tests."""
     test_db_url = "sqlite+aiosqlite:///:memory:"
     engine = create_async_engine(test_db_url, echo=False)
     async with engine.begin() as conn:
@@ -48,10 +48,10 @@ async def test_app() -> AsyncGenerator[FastAPI, None]:
 
 @pytest.mark.asyncio
 async def test_projects_and_nodes_flow(test_app: FastAPI) -> None:
-    """Kiểm thử luồng tạo Project -> Đăng ký Node -> Truy vấn danh sách."""
+    """Test flow: create project -> register node -> query lists."""
     transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # 1. Tạo project
+        # 1. Create project
         create_p_res = await client.post(
             "/api/v1/projects",
             json={"name": "Production-Alpha", "description": "Primary DC"},
@@ -62,7 +62,7 @@ async def test_projects_and_nodes_flow(test_app: FastAPI) -> None:
         assert "project_id" in p_data
         project_id = p_data["project_id"]
 
-        # 2. Đăng ký node vào project vừa tạo
+        # 2. Register node into created project
         create_n_res = await client.post(
             "/api/v1/nodes",
             json={
@@ -78,7 +78,7 @@ async def test_projects_and_nodes_flow(test_app: FastAPI) -> None:
         assert n_data["status"] == "unenrolled"
         node_id = n_data["node_id"]
 
-        # 3. Trùng IP trong cùng project -> 409 Conflict
+        # 3. Duplicate IP in same project -> 409 Conflict
         dup_n_res = await client.post(
             "/api/v1/nodes",
             json={
@@ -89,12 +89,12 @@ async def test_projects_and_nodes_flow(test_app: FastAPI) -> None:
         )
         assert dup_n_res.status_code == 409
 
-        # 4. Lấy chi tiết node
+        # 4. Get node details
         get_n_res = await client.get(f"/api/v1/nodes/{node_id}")
         assert get_n_res.status_code == 200
         assert get_n_res.json()["ip_address"] == "192.168.1.100"
 
-        # 5. Liệt kê nodes lọc theo project
+        # 5. List nodes filtered by project
         list_n_res = await client.get(f"/api/v1/nodes?project_id={project_id}")
         assert list_n_res.status_code == 200
         assert len(list_n_res.json()) == 1

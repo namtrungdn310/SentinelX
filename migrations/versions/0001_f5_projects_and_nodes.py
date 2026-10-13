@@ -7,7 +7,7 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
-    # 1. Bảng projects
+    # 1. Projects table
     op.create_table(
         "projects",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -17,7 +17,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
     op.create_index("ix_projects_name", "projects", ["name"], unique=True)
-    # 2. Bảng nodes
+    # 2. Nodes table
     op.create_table(
         "nodes",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),

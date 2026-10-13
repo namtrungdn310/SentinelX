@@ -11,7 +11,7 @@ from sentinelx_controller.modules.nodes.models import NodeModel
 
 
 class NodeRepository:
-    """Xử lý truy vấn CSDL cho thực thể Node."""
+    """Handle database queries for Node entity."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -24,7 +24,7 @@ class NodeRepository:
         os_info: str | None = None,
         node_id: uuid.UUID | None = None,
     ) -> NodeModel:
-        """Tạo bản ghi Node mới trong CSDL."""
+        """Create a new Node record in database."""
         node = NodeModel(
             id=node_id or uuid.uuid4(),
             project_id=project_id,
@@ -38,7 +38,7 @@ class NodeRepository:
         return node
 
     async def get_by_id(self, node_id: uuid.UUID) -> NodeModel | None:
-        """Lấy thông tin Node theo UUID."""
+        """Get a Node by its UUID."""
         stmt = select(NodeModel).where(NodeModel.id == node_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -46,7 +46,7 @@ class NodeRepository:
     async def get_by_ip_in_project(
         self, project_id: uuid.UUID, ip_address: str
     ) -> NodeModel | None:
-        """Kiểm tra sự tồn tại của IP trong cùng 1 project."""
+        """Check if an IP address exists within a project."""
         stmt = select(NodeModel).where(
             NodeModel.project_id == project_id,
             NodeModel.ip_address == ip_address.strip(),
@@ -55,7 +55,7 @@ class NodeRepository:
         return result.scalar_one_or_none()
 
     async def list_by_project(self, project_id: uuid.UUID) -> Sequence[NodeModel]:
-        """Lấy danh sách các nodes thuộc 1 project."""
+        """List nodes belonging to a project."""
         stmt = (
             select(NodeModel)
             .where(NodeModel.project_id == project_id)
@@ -65,7 +65,7 @@ class NodeRepository:
         return result.scalars().all()
 
     async def list_all(self) -> Sequence[NodeModel]:
-        """Lấy toàn bộ danh sách nodes trên hệ thống."""
+        """List all nodes across the system."""
         stmt = select(NodeModel).order_by(NodeModel.created_at.desc())
         result = await self._session.execute(stmt)
         return result.scalars().all()

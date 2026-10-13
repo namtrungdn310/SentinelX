@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class ProjectModel(Base, TimestampMixin):
-    """Bảng lưu trữ thông tin phân vùng dự án/hạ tầng."""
+    """Database table storing project metadata."""
 
     __tablename__ = "projects"
 

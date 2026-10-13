@@ -10,7 +10,7 @@ from sentinelx_controller.modules.projects.models import ProjectModel
 
 
 class ProjectRepository:
-    """Xử lý truy vấn CSDL cho thực thể Project."""
+    """Handle database queries for Project entity."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -21,7 +21,7 @@ class ProjectRepository:
         description: str | None = None,
         project_id: uuid.UUID | None = None,
     ) -> ProjectModel:
-        """Tạo một Project mới trong CSDL."""
+        """Create a new Project record in database."""
         project = ProjectModel(
             id=project_id or uuid.uuid4(),
             name=name.strip(),
@@ -32,19 +32,19 @@ class ProjectRepository:
         return project
 
     async def get_by_id(self, project_id: uuid.UUID) -> ProjectModel | None:
-        """Lấy thông tin Project theo UUID."""
+        """Get a Project by its UUID."""
         stmt = select(ProjectModel).where(ProjectModel.id == project_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> ProjectModel | None:
-        """Lấy thông tin Project theo tên (duy nhất)."""
+        """Get a Project by its unique name."""
         stmt = select(ProjectModel).where(ProjectModel.name == name.strip())
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_all(self) -> Sequence[ProjectModel]:
-        """Lấy danh sách toàn bộ các Projects."""
+        """Get list of all projects ordered by creation time."""
         stmt = select(ProjectModel).order_by(ProjectModel.created_at.desc())
         result = await self._session.execute(stmt)
         return result.scalars().all()

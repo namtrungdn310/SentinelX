@@ -8,7 +8,7 @@ from sentinelx_controller.modules.system.router import router as system_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
-# Gắn toàn bộ router của các modules vào API v1
+# Attach module routers to API v1
 api_v1_router.include_router(system_router)
 api_v1_router.include_router(projects_router)
 api_v1_router.include_router(nodes_router)

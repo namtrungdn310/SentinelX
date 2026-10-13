@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class NodeModel(Base, TimestampMixin):
-    """Bảng lưu trữ danh bạ máy chủ Linux được quản trị."""
+    """Database table storing managed Linux nodes."""
 
     __tablename__ = "nodes"
     __table_args__ = (

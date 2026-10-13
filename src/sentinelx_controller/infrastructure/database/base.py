@@ -8,13 +8,13 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(AsyncAttrs, DeclarativeBase):
-    """Base class cho toàn bộ ORM models của SentinelX Controller."""
+    """Base class for all ORM models in SentinelX Controller."""
 
     pass
 
 
 class TimestampMixin:
-    """Tự động gắn created_at và updated_at với timezone UTC."""
+    """Automatically attach created_at and updated_at with UTC timezone."""
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

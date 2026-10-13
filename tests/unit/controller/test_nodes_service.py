@@ -1,26 +1,31 @@
 """Unit tests for NodeService."""
 
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
 from sentinelx_common.contracts.nodes import NodeRegisterRequest
+from sentinelx_common.contracts.projects import ProjectResponse
 from sentinelx_controller.modules.nodes.models import NodeModel
 from sentinelx_controller.modules.nodes.repository import NodeRepository
 from sentinelx_controller.modules.nodes.service import NodeService
-from sentinelx_controller.modules.projects.models import ProjectModel
-from sentinelx_controller.modules.projects.repository import ProjectRepository
+from sentinelx_controller.modules.projects.service import ProjectService
 
 
 @pytest.mark.asyncio
 async def test_register_node_project_not_found_raises_404() -> None:
+    """Test register node raises 404 when project does not exist."""
     node_repo_mock = AsyncMock(spec=NodeRepository)
-    project_repo_mock = AsyncMock(spec=ProjectRepository)
-    project_repo_mock.get_by_id.return_value = None
+    project_service_mock = AsyncMock(spec=ProjectService)
+    project_service_mock.get_project.side_effect = HTTPException(
+        status_code=404,
+        detail="Project not found",
+    )
 
-    service = NodeService(node_repo=node_repo_mock, project_repo=project_repo_mock)
+    service = NodeService(node_repo=node_repo_mock, project_service=project_service_mock)
     req = NodeRegisterRequest(
         project_id=str(uuid.uuid4()),
         hostname="web-01",
@@ -36,12 +41,15 @@ async def test_register_node_project_not_found_raises_404() -> None:
 
 @pytest.mark.asyncio
 async def test_register_node_duplicate_ip_raises_conflict() -> None:
+    """Test register node raises 409 conflict when IP already exists in project."""
     node_repo_mock = AsyncMock(spec=NodeRepository)
-    project_repo_mock = AsyncMock(spec=ProjectRepository)
+    project_service_mock = AsyncMock(spec=ProjectService)
 
     p_id = uuid.uuid4()
-    project_repo_mock.get_by_id.return_value = ProjectModel(
-        id=p_id, name="Test-Project"
+    project_service_mock.get_project.return_value = ProjectResponse(
+        project_id=str(p_id),
+        name="Test-Project",
+        created_at=datetime.now(UTC),
     )
 
     existing_node = NodeModel(
@@ -52,7 +60,7 @@ async def test_register_node_duplicate_ip_raises_conflict() -> None:
     )
     node_repo_mock.get_by_ip_in_project.return_value = existing_node
 
-    service = NodeService(node_repo=node_repo_mock, project_repo=project_repo_mock)
+    service = NodeService(node_repo=node_repo_mock, project_service=project_service_mock)
     req = NodeRegisterRequest(
         project_id=str(p_id),
         hostname="web-02",

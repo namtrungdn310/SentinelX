@@ -7,22 +7,22 @@ from fastapi import HTTPException, status
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse, NodeStatus
 from sentinelx_controller.modules.nodes.models import NodeModel
 from sentinelx_controller.modules.nodes.repository import NodeRepository
-from sentinelx_controller.modules.projects.repository import ProjectRepository
+from sentinelx_controller.modules.projects.service import ProjectService
 
 
 class NodeService:
-    """Nghiệp vụ quản lý danh bạ Node."""
+    """Business logic for Node directory management."""
 
     def __init__(
         self,
         node_repo: NodeRepository,
-        project_repo: ProjectRepository,
+        project_service: ProjectService,
     ) -> None:
         self._node_repo = node_repo
-        self._project_repo = project_repo
+        self._project_service = project_service
 
     async def register_node(self, request: NodeRegisterRequest) -> NodeResponse:
-        """Đăng ký node mới vào project đã tồn tại."""
+        """Register a new node into an existing project."""
         try:
             p_uuid = uuid.UUID(request.project_id)
         except ValueError as err:
@@ -31,15 +31,10 @@ class NodeService:
                 detail="Invalid project_id UUID format",
             ) from err
 
-        # Xác thực project tồn tại
-        project = await self._project_repo.get_by_id(p_uuid)
-        if project is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project '{request.project_id}' not found",
-            )
+        # Verify that project exists via public ProjectService
+        await self._project_service.get_project(request.project_id)
 
-        # Xác thực tính duy nhất của IP trong project
+        # Verify IP uniqueness within project
         existing = await self._node_repo.get_by_ip_in_project(p_uuid, request.ip_address)
         if existing is not None:
             raise HTTPException(
@@ -56,7 +51,7 @@ class NodeService:
         return self._to_response(node)
 
     async def get_node(self, node_id_str: str) -> NodeResponse:
-        """Lấy thông tin node theo ID."""
+        """Get node details by node ID."""
         try:
             n_uuid = uuid.UUID(node_id_str)
         except ValueError as err:
@@ -74,7 +69,7 @@ class NodeService:
         return self._to_response(node)
 
     async def list_nodes(self, project_id_str: str | None = None) -> list[NodeResponse]:
-        """Liệt kê danh sách nodes (hỗ trợ lọc theo project)."""
+        """List nodes with optional project filter."""
         if project_id_str is not None:
             try:
                 p_uuid = uuid.UUID(project_id_str)
