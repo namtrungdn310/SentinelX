@@ -19,7 +19,8 @@ Không chứa business logic.
 ### Projects
 Trách nhiệm:
 - project/infrastructure lifecycle;
-- project identity.
+- project identity;
+- tenant isolation boundary (không gian làm việc cách ly khách hàng khi nâng cấp lên SaaS).
 
 ### Nodes
 Trách nhiệm:

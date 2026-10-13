@@ -90,6 +90,20 @@ Customer có thể là:
 
 Trong phạm vi PBL4, SentinelX không hướng tới enterprise-scale infrastructure.
 
+### 3.3. Mô hình Triển khai & Tầm nhìn SaaS (SaaS Evolution)
+
+Kiến trúc SentinelX được thiết kế để phục vụ khách hàng theo 2 giai đoạn:
+
+1. **Giai đoạn Foundation & Core (PBL4 Focus — Self-Hosted / On-Premise)**:
+   - Phần mềm được đóng gói để người dùng (doanh nghiệp, sysadmin) tự deploy trên hạ tầng vật lý hoặc cụm máy chủ nội bộ.
+   - Tập trung chứng minh năng lực kỹ thuật: thu thập tài nguyên Linux thật, phát hiện bất thường mạng, cân bằng tải và tự động kích hoạt tường lửa `nftables`.
+   - **Xác thực**: Admin đăng nhập vào Dashboard quản trị qua cơ chế xác thực tập trung (định hình ở **F10**).
+
+2. **Giai đoạn Mở rộng Sản phẩm (SaaS Multi-Tenancy — Milestone M9)**:
+   - Mô hình nền tảng đám mây tập trung cho nhiều khách hàng đăng ký sử dụng (SaaS Multi-Tenant Cloud).
+   - **Đơn vị cách ly (Tenant Isolation)**: Bảng `projects` đóng vai trò là Không gian làm việc (Workspace) riêng biệt cho từng khách hàng. Mỗi khách hàng tự quản lý danh bạ máy chủ, chính sách phòng thủ và báo cáo sự cố độc lập.
+   - Bổ sung quy trình đăng ký tài khoản công khai (Self-service Sign-up), mời thành viên và phân quyền quản trị (RBAC).
+
 ---
 
 ## 4. Managed Infrastructure Scope

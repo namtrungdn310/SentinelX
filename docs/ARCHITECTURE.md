@@ -572,3 +572,48 @@ Không đưa vào CORE trước khi baseline hoàn thành:
 - Microservices;
 - distributed Controller;
 - HA architecture.
+
+---
+
+## 19. SaaS Multi-Tenancy Architecture Evolution (Phase 2 / M9)
+
+SentinelX được thiết kế nền tảng (Foundation) với tầm nhìn phát triển thành nền tảng SaaS (Software-as-a-Service) cho các khách hàng/doanh nghiệp thuê bao quản trị hạ tầng server Linux:
+
+```text
+               SaaS Customers / Organizations
+                ┌─────────────────────────┐
+                │ Tenant A (Workspace A)  │
+                │ Tenant B (Workspace B)  │
+                └────────────┬────────────┘
+                             │ (HTTPS / REST / WS)
+                             ▼
+                ┌─────────────────────────┐
+                │  SentinelX Controller   │
+                │  - Auth & RBAC (M9)     │
+                │  - Projects (Tenancy)   │
+                │  - Ingestion & Pipeline │
+                └────────────┬────────────┘
+                             │
+     ┌───────────────────────┴───────────────────────┐
+     ▼                                               ▼
+Tenant A Servers                               Tenant B Servers
+[Agent A1] [Agent A2]                          [Agent B1] [Agent B2]
+```
+
+### 19.1. Đơn vị cách ly khách hàng (Tenant Boundary)
+- Module **`projects`** đóng vai trò là Không gian làm việc (Workspace/Tenant boundary).
+- Mọi tài nguyên hạ tầng (`nodes`), mẫu giám sát (`telemetry`), vụ việc an ninh (`incidents`) và luật tường lửa (`defense_rules`) đều được gắn chặt với `project_id`.
+- Dữ liệu giữa các khách hàng được cách ly triệt để theo cấp độ hàng (Row-Level Multi-Tenancy via `project_id`).
+
+### 19.2. Quy trình Agent Enrollment trong mô hình SaaS
+1. Khách hàng đăng nhập vào Dashboard, tạo một Node mới trong Workspace của mình và nhận **Enrollment Token**.
+2. Trên server Linux của khách hàng, chạy lệnh:
+   ```bash
+   sentinelx-agent enroll --controller https://sentinelx.io --token <ENROLLMENT_TOKEN>
+   ```
+3. Controller xác thực token, gắn máy chủ đó vào đúng Tenant/Project của khách hàng và cấp định danh `agent_id` kèm chứng thực an toàn.
+
+### 19.3. Lộ trình triển khai 2 giai đoạn
+1. **Giai đoạn 1 (Foundation & Core - PBL4)**: Hoàn thành Modular Monolith, Multi-Host network, Agent daemon thực, Load balancer và Tự động kích hoạt nftables. Xác thực quản trị viên Admin ở F10.
+2. **Giai đoạn 2 (SaaS Extension - M9)**: Bổ sung đăng ký tài khoản tự phục vụ (Self-service Sign-up), mời thành viên vào Workspace, thanh toán và phân quyền RBAC (Owner, Admin, Operator, Viewer).
+

@@ -248,6 +248,7 @@ Deliverables:
 
 - React + Vite + TypeScript;
 - app routing;
+- admin authentication baseline (login page + JWT token);
 - API client;
 - WebSocket client;
 - Overview page;
@@ -431,6 +432,7 @@ CORE FREEZE
 
 Phase 2 sau CORE:
 
+- M9 — SaaS Multi-Tenancy & Tenant User Management (Customer sign-up, Workspace isolation, RBAC);
 - Isolation Forest;
 - Adaptive Load Balancing;
 - advanced statistics;
