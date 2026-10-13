@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from sentinelx_controller.config import ControllerSettings
 from sentinelx_controller.infrastructure.database.base import Base
+# Import models để metadata nhận diện schema
+from sentinelx_controller.modules.nodes.models import NodeModel  # noqa: F401
+from sentinelx_controller.modules.projects.models import ProjectModel  # noqa: F401
 
 config = context.config
 

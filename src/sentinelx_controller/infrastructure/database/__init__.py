@@ -1,6 +1,6 @@
 """Database infrastructure package exports."""
 
-from sentinelx_controller.infrastructure.database.base import Base
+from sentinelx_controller.infrastructure.database.base import Base, TimestampMixin
 from sentinelx_controller.infrastructure.database.session import (
     check_db_readiness,
     close_db_engine,
@@ -12,6 +12,7 @@ from sentinelx_controller.infrastructure.database.session import (
 
 __all__ = [
     "Base",
+    "TimestampMixin",
     "check_db_readiness",
     "close_db_engine",
     "get_db_session",
