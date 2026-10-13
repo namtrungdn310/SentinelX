@@ -240,3 +240,36 @@ def test_metric_batch_response_valid() -> None:
     resp = MetricBatchResponse(status="ok", processed_count=5, received_at=now)
     assert resp.status == "ok"
     assert resp.processed_count == 5
+
+
+def test_enrollment_token_create_request() -> None:
+    """Test EnrollmentTokenCreateRequest valid and invalid bounds."""
+    from sentinelx_common.contracts import EnrollmentTokenCreateRequest
+
+    req = EnrollmentTokenCreateRequest(expires_in_hours=48)
+    assert req.expires_in_hours == 48
+
+    # Bounds: ge=1, le=720
+    with pytest.raises(ValidationError):
+        EnrollmentTokenCreateRequest(expires_in_hours=0)
+
+    with pytest.raises(ValidationError):
+        EnrollmentTokenCreateRequest(expires_in_hours=1000)
+
+
+def test_enrollment_token_response_valid() -> None:
+    """Test EnrollmentTokenResponse fields and status enum."""
+    from sentinelx_common.contracts import EnrollmentStatus, EnrollmentTokenResponse
+
+    now = datetime.now(UTC)
+    resp = EnrollmentTokenResponse(
+        token_id="11111111-2222-3333-4444-555555555555",
+        node_id="22222222-3333-4444-5555-666666666666",
+        enrollment_token="sx_enroll_secret123",
+        status=EnrollmentStatus.PENDING,
+        expires_at=now,
+        created_at=now,
+    )
+    assert resp.status == EnrollmentStatus.PENDING
+    assert resp.enrollment_token == "sx_enroll_secret123"
+

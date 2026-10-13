@@ -5,9 +5,18 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sentinelx_common.contracts.agents import (
+    AgentEnrollRequest,
+    AgentEnrollResponse,
+    EnrollmentTokenCreateRequest,
+    EnrollmentTokenResponse,
+)
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
 from sentinelx_controller.infrastructure.database.session import get_db_session
-from sentinelx_controller.modules.nodes.repository import NodeRepository
+from sentinelx_controller.modules.nodes.repository import (
+    AgentEnrollmentRepository,
+    NodeRepository,
+)
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.projects.router import get_project_service
 from sentinelx_controller.modules.projects.service import ProjectService
@@ -21,7 +30,12 @@ def get_node_service(
 ) -> NodeService:
     """Dependency providing NodeService."""
     node_repo = NodeRepository(session)
-    return NodeService(node_repo=node_repo, project_service=project_service)
+    enrollment_repo = AgentEnrollmentRepository(session)
+    return NodeService(
+        node_repo=node_repo,
+        project_service=project_service,
+        enrollment_repo=enrollment_repo,
+    )
 
 
 @router.post(
@@ -35,6 +49,19 @@ async def register_node(
     service: Annotated[NodeService, Depends(get_node_service)],
 ) -> NodeResponse:
     return await service.register_node(request)
+
+
+@router.post(
+    "/enroll",
+    response_model=AgentEnrollResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Enroll an Agent using an enrollment token",
+)
+async def enroll_agent(
+    request: AgentEnrollRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> AgentEnrollResponse:
+    return await service.enroll_agent(request)
 
 
 @router.get(
@@ -59,3 +86,43 @@ async def get_node(
     service: Annotated[NodeService, Depends(get_node_service)],
 ) -> NodeResponse:
     return await service.get_node(node_id)
+
+
+@router.post(
+    "/{node_id}/enrollment-tokens",
+    response_model=EnrollmentTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an enrollment token for a node",
+)
+async def create_enrollment_token(
+    node_id: str,
+    request: EnrollmentTokenCreateRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> EnrollmentTokenResponse:
+    return await service.create_enrollment_token(node_id, request)
+
+
+@router.get(
+    "/{node_id}/enrollment-tokens",
+    response_model=list[EnrollmentTokenResponse],
+    summary="List enrollment tokens issued for a node",
+)
+async def list_enrollment_tokens(
+    node_id: str,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> list[EnrollmentTokenResponse]:
+    return await service.list_enrollment_tokens(node_id)
+
+
+@router.post(
+    "/{node_id}/enrollment-tokens/{token_id}/revoke",
+    response_model=EnrollmentTokenResponse,
+    summary="Revoke an active enrollment token",
+)
+async def revoke_enrollment_token(
+    node_id: str,
+    token_id: str,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> EnrollmentTokenResponse:
+    return await service.revoke_enrollment_token(node_id, token_id)
+

@@ -3,10 +3,68 @@ Data models for Agent enrollment and heartbeat.
 """
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import Field
 
 from sentinelx_common.contracts.base import SentinelXBaseModel
+
+
+class EnrollmentStatus(StrEnum):
+    """Lifecycle status of an agent enrollment token."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+class EnrollmentTokenCreateRequest(SentinelXBaseModel):
+    """Request data to generate an enrollment token for a node."""
+
+    expires_in_hours: int = Field(
+        default=24,
+        ge=1,
+        le=720,
+        description="Token validity lifetime in hours (1-720)",
+    )
+
+
+class EnrollmentTokenResponse(SentinelXBaseModel):
+    """Response data containing issued enrollment token details."""
+
+    token_id: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        description="Enrollment record UUID string",
+    )
+    node_id: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        description="Node UUID string",
+    )
+    enrollment_token: str = Field(
+        ...,
+        description="Secret enrollment token",
+    )
+    status: EnrollmentStatus = Field(
+        default=EnrollmentStatus.PENDING,
+        description="Current status of the token",
+    )
+    expires_at: datetime = Field(
+        ...,
+        description="Token expiration timestamp in UTC",
+    )
+    enrolled_at: datetime | None = Field(
+        default=None,
+        description="Time of enrollment in UTC",
+    )
+    created_at: datetime = Field(
+        ...,
+        description="Token creation timestamp in UTC",
+    )
 
 
 class AgentEnrollRequest(SentinelXBaseModel):

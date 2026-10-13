@@ -3,6 +3,9 @@
 from sentinelx_common.contracts.agents import (
     AgentEnrollRequest,
     AgentEnrollResponse,
+    EnrollmentStatus,
+    EnrollmentTokenCreateRequest,
+    EnrollmentTokenResponse,
     HeartbeatRequest,
     HeartbeatResponse,
 )
@@ -25,6 +28,9 @@ from sentinelx_common.contracts.telemetry import (
 __all__ = [
     "AgentEnrollRequest",
     "AgentEnrollResponse",
+    "EnrollmentStatus",
+    "EnrollmentTokenCreateRequest",
+    "EnrollmentTokenResponse",
     "HeartbeatRequest",
     "HeartbeatResponse",
     "MetricBatchRequest",
@@ -37,3 +43,4 @@ __all__ = [
     "ProjectResponse",
     "SentinelXBaseModel",
 ]
+
