@@ -68,8 +68,8 @@ sentinelx/
 - **F3 — Shared Contracts + IDs + Time** `(DONE)`
 - **F4 — PostgreSQL Foundation** `(DONE)`
 - **F5 — Project + Node Registry** `(DONE)`
-- **F6 — Agent Enrollment** `(HIỆN TẠI)`
-- **F7 — Mock Agent + Heartbeat**
+- **F6 — Agent Enrollment** `(DONE)`
+- **F7 — Mock Agent + Heartbeat** `(HIỆN TẠI)`
 - **F8 — Fake Metrics Vertical Slice**
 - **F9 — Realtime WebSocket**
 - **F10 — Dashboard Skeleton**
