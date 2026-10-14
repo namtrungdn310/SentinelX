@@ -62,6 +62,10 @@ htmlcov/
 .vscode/
 *.swp
 *.swo
-*~
 .DS_Store
 Thumbs.db
+
+# Frontend / Node.js
+node_modules/
+dashboard/dist/
+*.tsbuildinfo

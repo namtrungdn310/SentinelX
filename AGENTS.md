@@ -119,9 +119,9 @@ F6  Agent Enrollment (DONE)
 F7  Mock Agent + Heartbeat (DONE)
 F8  Fake Metrics Vertical Slice (DONE)
 F9  Realtime WebSocket (DONE)
-F10 Dashboard Skeleton (HIỆN TẠI)
+F10 Dashboard Skeleton (DONE)
 F11 Docker PBL Lab (DONE)
-F12 Load Balancer Skeleton
+F12 Load Balancer Skeleton (HIỆN TẠI)
 F13 Health Check
 F14 Multi-Host Acceptance
 FOUNDATION FREEZE

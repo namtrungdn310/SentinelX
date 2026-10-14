@@ -23,6 +23,13 @@ check: lint typecheck test
 run:
 	uv run python -m sentinelx_controller.main
 
+dashboard-dev:
+	cd dashboard && npm run dev
+
+dashboard-build:
+	cd dashboard && npm run build
+
+
 # Docker Compose targets
 core-up:
 	docker compose --profile core up -d --build
