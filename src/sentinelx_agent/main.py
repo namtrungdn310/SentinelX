@@ -5,6 +5,10 @@ import logging
 import os
 import signal
 import sys
+from pathlib import Path
+
+from sentinelx_agent.config import AgentSettings
+from sentinelx_agent.daemon import AgentDaemon
 
 logging.basicConfig(
     level=os.getenv("SENTINELX_AGENT_LOG_LEVEL", "INFO"),
@@ -13,26 +17,13 @@ logging.basicConfig(
 logger = logging.getLogger("sentinelx_agent")
 
 
-async def heartbeat_loop(controller_url: str, node_id: str, interval: int) -> None:
-    """Send periodic mock heartbeat to the Controller."""
-    logger.info(
-        "Starting Agent heartbeat loop. Controller: %s, Node ID: %s",
-        controller_url,
-        node_id,
-    )
-    while True:
-        logger.debug("Heartbeat ping -> %s for node %s", controller_url, node_id)
-        await asyncio.sleep(interval)
-
-
 async def main() -> None:
-    """Run the Agent service."""
-    controller_url = os.getenv("SENTINELX_CONTROLLER_URL", "http://controller:8000")
-    node_id = os.getenv("SENTINELX_NODE_ID", os.getenv("HOSTNAME", "agent-unknown"))
-    interval = int(os.getenv("SENTINELX_HEARTBEAT_INTERVAL", "5"))
+    """Run the SentinelX Agent service."""
+    config_file = os.getenv("SENTINELX_AGENT_CONFIG")
+    config_path = Path(config_file) if config_file else None
+    settings = AgentSettings.load(config_path)
 
-    logger.info("Initializing SentinelX Agent [Node: %s]...", node_id)
-
+    daemon = AgentDaemon(settings=settings)
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
@@ -44,18 +35,10 @@ async def main() -> None:
         try:
             loop.add_signal_handler(sig, _shutdown)
         except NotImplementedError:
-            # Signal handling on Windows event loop fallback
+            # Signal handling fallback on Windows event loop
             pass
 
-    task = asyncio.create_task(heartbeat_loop(controller_url, node_id, interval))
-
-    await stop_event.wait()
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
-    logger.info("SentinelX Agent stopped cleanly.")
+    await daemon.run(stop_event=stop_event)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,8 @@ from sentinelx_common.contracts.agents import (
     AgentEnrollResponse,
     EnrollmentTokenCreateRequest,
     EnrollmentTokenResponse,
+    HeartbeatRequest,
+    HeartbeatResponse,
 )
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
 from sentinelx_controller.infrastructure.database.session import get_db_session
@@ -62,6 +64,20 @@ async def enroll_agent(
     service: Annotated[NodeService, Depends(get_node_service)],
 ) -> AgentEnrollResponse:
     return await service.enroll_agent(request)
+
+
+@router.post(
+    "/heartbeat",
+    response_model=HeartbeatResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Process agent heartbeat and update node liveness",
+)
+async def process_heartbeat(
+    request: HeartbeatRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> HeartbeatResponse:
+    return await service.process_heartbeat(request)
+
 
 
 @router.get(

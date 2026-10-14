@@ -94,6 +94,21 @@ class NodeRepository:
         await self._session.flush()
         return node
 
+    async def record_heartbeat(
+        self,
+        node_id: uuid.UUID,
+        last_seen_at: datetime,
+    ) -> NodeModel | None:
+        """Record node heartbeat timestamp and set status to ONLINE."""
+        node = await self.get_by_id(node_id)
+        if node is None:
+            return None
+
+        node.last_seen_at = last_seen_at
+        node.status = NodeStatus.ONLINE.value
+        await self._session.flush()
+        return node
+
 
 class AgentEnrollmentRepository:
     """Handle database operations for Agent enrollment tokens."""
@@ -170,4 +185,19 @@ class AgentEnrollmentRepository:
         record.status = EnrollmentStatus.REVOKED.value
         await self._session.flush()
         return record
+
+    async def verify_agent_credentials(
+        self,
+        node_id: uuid.UUID,
+        agent_id: uuid.UUID,
+    ) -> bool:
+        """Verify whether an agent_id is valid and currently approved for a node."""
+        stmt = select(AgentEnrollmentModel).where(
+            AgentEnrollmentModel.node_id == node_id,
+            AgentEnrollmentModel.agent_id == agent_id,
+            AgentEnrollmentModel.status == EnrollmentStatus.APPROVED.value,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
 

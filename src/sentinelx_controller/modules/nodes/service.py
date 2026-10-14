@@ -12,6 +12,8 @@ from sentinelx_common.contracts.agents import (
     EnrollmentStatus,
     EnrollmentTokenCreateRequest,
     EnrollmentTokenResponse,
+    HeartbeatRequest,
+    HeartbeatResponse,
 )
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse, NodeStatus
 from sentinelx_common.utils.time import ensure_utc
@@ -254,6 +256,42 @@ class NodeService:
             heartbeat_interval_seconds=10,
             enrolled_at=now,
         )
+
+    async def process_heartbeat(self, request: HeartbeatRequest) -> HeartbeatResponse:
+        """Process heartbeat from an Agent and update node online status."""
+        repo = self._ensure_enrollment_repo()
+        try:
+            n_uuid = uuid.UUID(request.node_id)
+            a_uuid = uuid.UUID(request.agent_id)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid UUID format in heartbeat request",
+            ) from err
+
+        node = await self._node_repo.get_by_id(n_uuid)
+        if node is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Node '{request.node_id}' not found",
+            )
+
+        is_valid = await repo.verify_agent_credentials(node_id=n_uuid, agent_id=a_uuid)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Agent credentials invalid or not enrolled for this node",
+            )
+
+        now = datetime.now(UTC)
+        await self._node_repo.record_heartbeat(node_id=n_uuid, last_seen_at=now)
+
+        return HeartbeatResponse(
+            status="ok",
+            received_at=now,
+            next_interval_seconds=10,
+        )
+
 
     def _ensure_enrollment_repo(self) -> AgentEnrollmentRepository:
         if self._enrollment_repo is None:
