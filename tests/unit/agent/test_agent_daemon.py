@@ -95,3 +95,56 @@ async def test_daemon_run_stops_on_event(tmp_path: Path) -> None:
     await daemon.run(stop_event=stop_event)
 
     assert mock_client.send_heartbeat.await_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_daemon_run_collects_and_sends_telemetry(tmp_path: Path) -> None:
+    """Test daemon runs telemetry loop, batches samples, and sends to controller."""
+    from sentinelx_common.contracts.telemetry import MetricBatchResponse
+
+    id_file = tmp_path / "agent_identity.json"
+    existing = AgentIdentity(
+        node_id="11111111-2222-3333-4444-555555555555",
+        agent_id="22222222-3333-4444-5555-666666666666",
+        status="enrolled",
+        enrolled_at=datetime.now(UTC),
+    )
+    AgentIdentityManager.save(id_file, existing)
+
+    settings = AgentSettings(
+        identity_path=id_file,
+        heartbeat_interval_seconds=10,
+        telemetry_interval_seconds=0.01,
+        telemetry_batch_size=2,
+    )
+    mock_client = AsyncMock(spec=ControllerClient)
+    mock_client.send_heartbeat.return_value = HeartbeatResponse(
+        status="ok",
+        received_at=datetime.now(UTC),
+        next_interval_seconds=10,
+    )
+    mock_client.send_metrics.return_value = MetricBatchResponse(
+        status="ok",
+        processed_count=2,
+        received_at=datetime.now(UTC),
+    )
+
+    daemon = AgentDaemon(settings=settings, client=mock_client)
+    stop_event = asyncio.Event()
+
+    async def trigger_stop() -> None:
+        # Wait until send_metrics is called at least once
+        for _ in range(50):
+            if mock_client.send_metrics.await_count >= 1:
+                break
+            await asyncio.sleep(0.01)
+        stop_event.set()
+
+    asyncio.create_task(trigger_stop())
+    await daemon.run(stop_event=stop_event)
+
+    assert mock_client.send_metrics.await_count >= 1
+    call_args = mock_client.send_metrics.call_args[0][0]
+    assert call_args.node_id == existing.node_id
+    assert call_args.agent_id == existing.agent_id
+    assert len(call_args.samples) == 2

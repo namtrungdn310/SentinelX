@@ -292,6 +292,22 @@ class NodeService:
             next_interval_seconds=10,
         )
 
+    async def verify_agent(self, node_id_str: str, agent_id_str: str) -> bool:
+        """Public method to verify if an agent_id is valid and active for a node."""
+        repo = self._ensure_enrollment_repo()
+        try:
+            n_uuid = uuid.UUID(node_id_str)
+            a_uuid = uuid.UUID(agent_id_str)
+        except ValueError:
+            return False
+
+        node = await self._node_repo.get_by_id(n_uuid)
+        if node is None:
+            return False
+
+        return await repo.verify_agent_credentials(node_id=n_uuid, agent_id=a_uuid)
+
+
 
     def _ensure_enrollment_repo(self) -> AgentEnrollmentRepository:
         if self._enrollment_repo is None:

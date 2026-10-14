@@ -39,6 +39,18 @@ class AgentSettings(BaseSettings):
         le=3600,
         description="Interval between heartbeats in seconds",
     )
+    telemetry_interval_seconds: float = Field(
+        default=5.0,
+        ge=0.01,
+        le=3600.0,
+        description="Interval between metric collections in seconds",
+    )
+    telemetry_batch_size: int = Field(
+        default=5,
+        ge=1,
+        le=1000,
+        description="Number of samples to batch before sending to Controller",
+    )
     identity_path: Path = Field(
         default=Path("data/agent_identity.json"),
         description="Path to local identity file storing agent_id",
@@ -109,6 +121,14 @@ class AgentSettings(BaseSettings):
                             yaml_data["heartbeat_interval_seconds"] = agent_section[
                                 "heartbeat_interval_seconds"
                             ]
+                        if "telemetry_interval_seconds" in agent_section:
+                            yaml_data["telemetry_interval_seconds"] = agent_section[
+                                "telemetry_interval_seconds"
+                            ]
+                        if "telemetry_batch_size" in agent_section:
+                            yaml_data["telemetry_batch_size"] = agent_section[
+                                "telemetry_batch_size"
+                            ]
                         if "identity_path" in agent_section:
                             yaml_data["identity_path"] = Path(agent_section["identity_path"])
 
@@ -123,6 +143,14 @@ class AgentSettings(BaseSettings):
         if "SENTINELX_HEARTBEAT_INTERVAL" in os.environ:
             env_kwargs["heartbeat_interval_seconds"] = int(
                 os.environ["SENTINELX_HEARTBEAT_INTERVAL"]
+            )
+        if "SENTINELX_TELEMETRY_INTERVAL" in os.environ:
+            env_kwargs["telemetry_interval_seconds"] = float(
+                os.environ["SENTINELX_TELEMETRY_INTERVAL"]
+            )
+        if "SENTINELX_TELEMETRY_BATCH_SIZE" in os.environ:
+            env_kwargs["telemetry_batch_size"] = int(
+                os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"]
             )
         if "SENTINELX_IDENTITY_PATH" in os.environ:
             env_kwargs["identity_path"] = Path(os.environ["SENTINELX_IDENTITY_PATH"])

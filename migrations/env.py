@@ -13,6 +13,9 @@ from sentinelx_controller.infrastructure.database.base import Base
 # Import models so metadata registers the schemas
 from sentinelx_controller.modules.nodes.models import NodeModel  # noqa: F401
 from sentinelx_controller.modules.projects.models import ProjectModel  # noqa: F401
+from sentinelx_controller.modules.telemetry.models import (  # noqa: F401
+    TelemetryMetricSampleModel,
+)
 
 config = context.config
 

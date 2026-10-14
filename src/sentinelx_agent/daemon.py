@@ -7,20 +7,25 @@ from datetime import UTC, datetime
 import aiohttp
 
 from sentinelx_agent.client import ControllerClient, ControllerClientError
+from sentinelx_agent.collectors.fake import FakeMetricGenerator
 from sentinelx_agent.config import AgentSettings
 from sentinelx_agent.identity import AgentIdentity, AgentIdentityManager
+from sentinelx_agent.telemetry import TelemetryBatcher
 from sentinelx_common.contracts.agents import AgentEnrollRequest, HeartbeatRequest
+from sentinelx_common.contracts.telemetry import MetricBatchRequest
 
 logger = logging.getLogger("sentinelx_agent.daemon")
 
 
 class AgentDaemon:
-    """Agent daemon controlling identity bootstrap and periodic heartbeat loop."""
+    """Agent daemon controlling identity bootstrap, heartbeat loop, and telemetry collection."""
 
     def __init__(
         self,
         settings: AgentSettings,
         client: ControllerClient | None = None,
+        collector: FakeMetricGenerator | None = None,
+        batcher: TelemetryBatcher | None = None,
     ) -> None:
         self.settings = settings
         self._client = client or ControllerClient(
@@ -28,13 +33,26 @@ class AgentDaemon:
             timeout_seconds=settings.timeout_seconds,
         )
         self._owns_client = client is None
+        self._collector = collector or FakeMetricGenerator()
+        self._batcher = batcher or TelemetryBatcher()
         self._identity: AgentIdentity | None = None
         self._stop_event = asyncio.Event()
+        self._telemetry_sequence: int = 1
 
     @property
     def identity(self) -> AgentIdentity | None:
         """Currently loaded or enrolled agent identity."""
         return self._identity
+
+    @property
+    def batcher(self) -> TelemetryBatcher:
+        """Telemetry batcher buffer."""
+        return self._batcher
+
+    @property
+    def collector(self) -> FakeMetricGenerator:
+        """Metric collector."""
+        return self._collector
 
     async def bootstrap_identity(self) -> AgentIdentity:
         """Load existing identity from disk or perform enrollment handshake."""
@@ -77,7 +95,7 @@ class AgentDaemon:
         return identity
 
     async def run(self, stop_event: asyncio.Event | None = None) -> None:
-        """Run daemon lifecycle: bootstrap identity then maintain heartbeat loop."""
+        """Run daemon lifecycle: bootstrap identity then maintain heartbeat and telemetry loops."""
         if stop_event is not None:
             self._stop_event = stop_event
 
@@ -112,8 +130,14 @@ class AgentDaemon:
             await self.shutdown()
             return
 
-        # Start heartbeat loop
-        await self._heartbeat_loop()
+        # Concurrently run heartbeat loop and telemetry collection loop
+        try:
+            await asyncio.gather(
+                self._heartbeat_loop(),
+                self._telemetry_loop(),
+            )
+        finally:
+            await self.shutdown()
 
     async def _heartbeat_loop(self) -> None:
         """Periodic heartbeat loop with exponential backoff on failure."""
@@ -142,7 +166,6 @@ class AgentDaemon:
                     sequence - 1,
                     next_interval,
                 )
-                # Wait for next heartbeat interval or until stopped
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=next_interval)
                 except TimeoutError:
@@ -164,7 +187,64 @@ class AgentDaemon:
                     self.settings.retry_max_delay_seconds,
                 )
 
-        await self.shutdown()
+    async def _telemetry_loop(self) -> None:
+        """Periodic metric collection and batch dispatching loop."""
+        assert self._identity is not None
+        current_delay = self.settings.retry_initial_delay_seconds
+        interval = float(self.settings.telemetry_interval_seconds)
+
+        logger.info(
+            "Agent telemetry loop started (interval=%.1fs, batch_size=%d)",
+            interval,
+            self.settings.telemetry_batch_size,
+        )
+
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+            except TimeoutError:
+                pass
+
+            if self._stop_event.is_set():
+                break
+
+            sample = self._collector.generate_sample()
+            self._batcher.add(sample)
+
+            if self._batcher.is_ready(self.settings.telemetry_batch_size):
+                samples_to_send = self._batcher.drain(self.settings.telemetry_batch_size)
+                batch_req = MetricBatchRequest(
+                    node_id=self._identity.node_id,
+                    agent_id=self._identity.agent_id,
+                    sequence=self._telemetry_sequence,
+                    sent_at=datetime.now(UTC),
+                    samples=samples_to_send,
+                )
+                try:
+                    resp = await self._client.send_metrics(batch_req)
+                    self._telemetry_sequence += 1
+                    current_delay = self.settings.retry_initial_delay_seconds
+                    logger.debug(
+                        "Telemetry batch acknowledged (seq=%d, processed=%d)",
+                        self._telemetry_sequence - 1,
+                        resp.processed_count,
+                    )
+                except (ControllerClientError, aiohttp.ClientError, TimeoutError) as err:
+                    logger.warning(
+                        "Telemetry batch dispatch failed [seq=%d]: %s. Re-buffering...",
+                        self._telemetry_sequence,
+                        err,
+                    )
+                    for s in reversed(samples_to_send):
+                        self._batcher.add(s)
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=current_delay)
+                    except TimeoutError:
+                        pass
+                    current_delay = min(
+                        current_delay * self.settings.retry_backoff_factor,
+                        self.settings.retry_max_delay_seconds,
+                    )
 
     async def shutdown(self) -> None:
         """Cleanly stop daemon and release client resources."""

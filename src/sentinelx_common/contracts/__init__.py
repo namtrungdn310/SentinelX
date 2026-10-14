@@ -22,6 +22,7 @@ from sentinelx_common.contracts.projects import (
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
     MetricBatchResponse,
+    MetricQueryResponse,
     MetricSample,
 )
 
@@ -35,6 +36,7 @@ __all__ = [
     "HeartbeatResponse",
     "MetricBatchRequest",
     "MetricBatchResponse",
+    "MetricQueryResponse",
     "MetricSample",
     "NodeRegisterRequest",
     "NodeResponse",

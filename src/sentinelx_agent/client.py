@@ -11,6 +11,10 @@ from sentinelx_common.contracts.agents import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
+from sentinelx_common.contracts.telemetry import (
+    MetricBatchRequest,
+    MetricBatchResponse,
+)
 
 logger = logging.getLogger("sentinelx_agent.client")
 
@@ -99,3 +103,25 @@ class ControllerClient:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return HeartbeatResponse.model_validate(data)
+
+    async def send_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
+        """Send a batch of metric samples to Controller."""
+        url = f"{self._base_url}/api/v1/telemetry/metrics"
+        session = await self._get_session()
+
+        payload = request.model_dump(mode="json")
+        logger.debug(
+            "Sending metric batch to %s (sequence=%d, count=%d)",
+            url,
+            request.sequence,
+            len(request.samples),
+        )
+
+        async with session.post(url, json=payload) as resp:
+            data = await resp.json()
+            if resp.status != 200:
+                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+                raise ControllerClientError(status_code=resp.status, message=detail)
+
+            return MetricBatchResponse.model_validate(data)
+

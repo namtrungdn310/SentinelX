@@ -70,8 +70,8 @@ F4  PostgreSQL Foundation (DONE)
 F5  Project + Node Registry (DONE)
 F6  Agent Enrollment (DONE)
 F7  Mock Agent + Heartbeat (DONE)
-F8  Fake Metrics Vertical Slice (HIỆN TẠI)
-F9  Realtime WebSocket
+F8  Fake Metrics Vertical Slice (DONE)
+F9  Realtime WebSocket (HIỆN TẠI)
 F10 Dashboard Skeleton
 F11 Docker PBL Lab (DONE)
 F12 Load Balancer Skeleton

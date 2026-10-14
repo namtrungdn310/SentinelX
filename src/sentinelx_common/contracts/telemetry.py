@@ -98,3 +98,24 @@ class MetricBatchResponse(SentinelXBaseModel):
         ...,
         description="Time when Controller received the batch in UTC",
     )
+
+
+class MetricQueryResponse(SentinelXBaseModel):
+    """Query result containing time-series metric samples for a node."""
+
+    node_id: str = Field(
+        ...,
+        min_length=36,
+        max_length=36,
+        description="Node UUID string",
+    )
+    count: int = Field(
+        ...,
+        ge=0,
+        description="Total number of returned metric samples",
+    )
+    samples: list[MetricSample] = Field(
+        default_factory=list,
+        description="Time-series samples ordered by observed_at descending",
+    )
+
