@@ -5,6 +5,11 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
+from sentinelx_common.contracts.realtime import (
+    RealtimeEventType,
+    RealtimeMessage,
+    RealtimeMetricPayload,
+)
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
     MetricBatchResponse,
@@ -12,6 +17,7 @@ from sentinelx_common.contracts.telemetry import (
     MetricSample,
 )
 from sentinelx_common.utils.time import ensure_utc
+from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
 
@@ -23,9 +29,11 @@ class TelemetryService:
         self,
         telemetry_repo: TelemetryRepository,
         node_service: NodeService,
+        realtime_hub: RealtimeHub | None = None,
     ) -> None:
         self._telemetry_repo = telemetry_repo
         self._node_service = node_service
+        self._realtime_hub = realtime_hub
 
     async def ingest_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
         """Validate agent credentials and persist incoming metric batch."""
@@ -53,6 +61,19 @@ class TelemetryService:
             received_at=now,
             samples=request.samples,
         )
+
+        if self._realtime_hub is not None:
+            metric_payload = RealtimeMetricPayload(
+                node_id=request.node_id,
+                samples=request.samples,
+                received_at=now,
+            )
+            message = RealtimeMessage(
+                event=RealtimeEventType.METRIC_UPDATE.value,
+                data=metric_payload.model_dump(mode="json"),
+                timestamp=now,
+            )
+            await self._realtime_hub.broadcast(message)
 
         return MetricBatchResponse(
             status="ok",

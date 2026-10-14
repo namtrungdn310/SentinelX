@@ -123,3 +123,41 @@ async def test_query_metrics_invalid_uuid_raises_422() -> None:
         await service.query_metrics(node_id_str="not-a-valid-uuid")
 
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_ingest_metrics_broadcasts_to_realtime_hub() -> None:
+    """Test ingest_metrics broadcasts event when realtime_hub is present."""
+    from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+
+    mock_repo = AsyncMock(spec=TelemetryRepository)
+    mock_node_svc = AsyncMock(spec=NodeService)
+    mock_node_svc.verify_agent.return_value = True
+    mock_hub = AsyncMock(spec=RealtimeHub)
+    mock_repo.save_batch.return_value = 1
+
+    service = TelemetryService(
+        telemetry_repo=mock_repo,
+        node_service=mock_node_svc,
+        realtime_hub=mock_hub,
+    )
+
+    node_id = str(uuid.uuid4())
+    agent_id = str(uuid.uuid4())
+    now = datetime.now(UTC)
+
+    request = MetricBatchRequest(
+        node_id=node_id,
+        agent_id=agent_id,
+        sequence=1,
+        sent_at=now,
+        samples=[MetricSample(observed_at=now, cpu_percent=50.0, memory_percent=60.0)],
+    )
+
+    await service.ingest_metrics(request)
+    mock_hub.broadcast.assert_awaited_once()
+    msg = mock_hub.broadcast.call_args[0][0]
+    assert msg.event == "metric_update"
+    assert msg.data["node_id"] == node_id
+    assert len(msg.data["samples"]) == 1
+

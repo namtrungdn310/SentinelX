@@ -12,6 +12,8 @@ from sentinelx_common.contracts.telemetry import (
     MetricQueryResponse,
 )
 from sentinelx_controller.infrastructure.database.session import get_db_session
+from sentinelx_controller.infrastructure.realtime import get_realtime_hub
+from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.modules.nodes.router import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
@@ -23,10 +25,15 @@ router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 def get_telemetry_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     node_service: Annotated[NodeService, Depends(get_node_service)],
+    realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
 ) -> TelemetryService:
     """Dependency providing TelemetryService."""
     telemetry_repo = TelemetryRepository(session)
-    return TelemetryService(telemetry_repo=telemetry_repo, node_service=node_service)
+    return TelemetryService(
+        telemetry_repo=telemetry_repo,
+        node_service=node_service,
+        realtime_hub=realtime_hub,
+    )
 
 
 @router.post(

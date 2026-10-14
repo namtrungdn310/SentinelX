@@ -19,6 +19,11 @@ from sentinelx_common.contracts.projects import (
     ProjectCreateRequest,
     ProjectResponse,
 )
+from sentinelx_common.contracts.realtime import (
+    RealtimeEventType,
+    RealtimeMessage,
+    RealtimeMetricPayload,
+)
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
     MetricBatchResponse,
@@ -43,6 +48,9 @@ __all__ = [
     "NodeStatus",
     "ProjectCreateRequest",
     "ProjectResponse",
+    "RealtimeEventType",
+    "RealtimeMessage",
+    "RealtimeMetricPayload",
     "SentinelXBaseModel",
 ]
 
