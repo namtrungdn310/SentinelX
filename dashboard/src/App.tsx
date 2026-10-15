@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Sparkles, ArrowRight } from 'lucide-react';
 import { Header } from './components/Header';
 import { KPICards } from './components/KPICards';
 import { NodeMatrix } from './components/NodeMatrix';
@@ -8,26 +9,36 @@ import { AddNodeModal } from './components/AddNodeModal';
 import { NodeDetailModal } from './components/NodeDetailModal';
 import { useWebSocket } from './useWebSocket';
 import { fetchProjects, fetchNodes, fetchNodeMetrics } from './api';
+import {
+  MOCK_PROJECTS,
+  MOCK_NODES,
+  MOCK_INITIAL_EVENTS,
+  generateMockTelemetryHistory,
+} from './mockData';
 import type { Project, Node, MetricSample, RealtimeMessage } from './types';
 
 export function App() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [isDemoMode, setIsDemoMode] = useState(true);
+
+  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [nodes, setNodes] = useState<Node[]>(MOCK_NODES);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(MOCK_NODES[0]);
 
-  const [telemetrySamples, setTelemetrySamples] = useState<MetricSample[]>([]);
-  const [events, setEvents] = useState<RealtimeMessage[]>([]);
+  const [telemetrySamples, setTelemetrySamples] = useState<MetricSample[]>(() =>
+    generateMockTelemetryHistory(MOCK_NODES[0])
+  );
+  const [events, setEvents] = useState<RealtimeMessage[]>(MOCK_INITIAL_EVENTS);
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // 1. Handle incoming realtime WebSocket events
+  // 1. Handle incoming realtime WebSocket events (from real Controller)
   const handleWebSocketMessage = useCallback((msg: RealtimeMessage) => {
     // Add to live audit event stream
     setEvents((prev) => [msg, ...prev.slice(0, 24)]);
@@ -78,29 +89,45 @@ export function App() {
     onMessage: handleWebSocketMessage,
   });
 
-  // 2. Initial Data Loading
+  // 2. Fetch data from real backend Controller or fallback to Demo Data
   const loadData = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      setIsRefreshing(true);
       const [projList, nodeList] = await Promise.all([
         fetchProjects(),
         fetchNodes(selectedProjectId || undefined),
       ]);
 
-      setProjects(projList);
-      setNodes(nodeList);
-
-      // Auto-select first node if none selected or current is missing
-      if (nodeList.length > 0) {
-        setSelectedNode((prev) => {
-          if (!prev || !nodeList.some((n) => n.id === prev.id)) {
-            return nodeList[0];
-          }
-          return prev;
-        });
+      if (projList.length === 0 && nodeList.length === 0) {
+        // Backend is up but database has 0 records -> activate demo mode
+        setIsDemoMode(true);
+        setProjects(MOCK_PROJECTS);
+        setNodes(MOCK_NODES);
+        setSelectedNode(MOCK_NODES[0]);
+        setTelemetrySamples(generateMockTelemetryHistory(MOCK_NODES[0]));
+        setEvents(MOCK_INITIAL_EVENTS);
+      } else {
+        // Live data detected!
+        setIsDemoMode(false);
+        setProjects(projList);
+        setNodes(nodeList);
+        if (nodeList.length > 0) {
+          setSelectedNode((prev) => {
+            if (!prev || !nodeList.some((n) => n.id === prev.id)) {
+              return nodeList[0];
+            }
+            return prev;
+          });
+        }
       }
-    } catch (err) {
-      console.error('Lỗi tải dữ liệu ban đầu:', err);
+    } catch {
+      // Backend offline / connection error -> maintain demo mode
+      setIsDemoMode(true);
+      setProjects(MOCK_PROJECTS);
+      setNodes(MOCK_NODES);
+      setSelectedNode((prev) => prev || MOCK_NODES[0]);
+      setTelemetrySamples((prev) => (prev.length > 0 ? prev : generateMockTelemetryHistory(MOCK_NODES[0])));
+      setEvents((prev) => (prev.length > 0 ? prev : MOCK_INITIAL_EVENTS));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -111,15 +138,91 @@ export function App() {
     loadData();
   }, [loadData]);
 
-  // 3. Load historical telemetry when selected node changes
+  // 3. Simulated Realtime Ticker during Demo Mode (Live breathing chart & stream)
+  useEffect(() => {
+    if (!isDemoMode) return;
+
+    const interval = setInterval(() => {
+      const nowIso = new Date().toISOString();
+
+      // Fluctuate online nodes slightly
+      setNodes((prevNodes) =>
+        prevNodes.map((node) => {
+          if (node.status !== 'online') return node;
+          const cpuDelta = (Math.random() - 0.48) * 3.5;
+          const memDelta = (Math.random() - 0.5) * 1.2;
+          const newCpu = Math.round(Math.max(8, Math.min(97, (node.latestCpu ?? 30) + cpuDelta)) * 10) / 10;
+          const newMem = Math.round(Math.max(15, Math.min(98, (node.latestMemory ?? 50) + memDelta)) * 10) / 10;
+
+          return {
+            ...node,
+            latestCpu: newCpu,
+            latestMemory: newMem,
+            latestRxBytes: Math.max(1000000, (node.latestRxBytes ?? 5000000) + Math.round((Math.random() - 0.5) * 400000)),
+            latestTxBytes: Math.max(1000000, (node.latestTxBytes ?? 3000000) + Math.round((Math.random() - 0.5) * 400000)),
+            last_seen: nowIso,
+          };
+        })
+      );
+
+      // Fluctuate selected node and push new sample to chart
+      setSelectedNode((curr) => {
+        if (!curr || curr.status !== 'online') return curr;
+        const cpuDelta = (Math.random() - 0.48) * 3.5;
+        const memDelta = (Math.random() - 0.5) * 1.2;
+        const newCpu = Math.round(Math.max(8, Math.min(97, (curr.latestCpu ?? 30) + cpuDelta)) * 10) / 10;
+        const newMem = Math.round(Math.max(15, Math.min(98, (curr.latestMemory ?? 50) + memDelta)) * 10) / 10;
+
+        const newSample: MetricSample = {
+          observed_at: nowIso,
+          cpu_percent: newCpu,
+          memory_percent: newMem,
+          disk_percent: curr.latestDisk ?? 35,
+          network_rx_bytes: curr.latestRxBytes ?? 18000000,
+          network_tx_bytes: curr.latestTxBytes ?? 12000000,
+        };
+
+        setTelemetrySamples((prev) => [...prev.slice(-29), newSample]);
+
+        // Push new realtime event
+        const sampleMsg: RealtimeMessage = {
+          event: 'metric_update',
+          data: {
+            node_id: curr.id,
+            samples: [newSample],
+            received_at: nowIso,
+          },
+          timestamp: nowIso,
+        };
+        setEvents((prev) => [sampleMsg, ...prev.slice(0, 24)]);
+
+        return {
+          ...curr,
+          latestCpu: newCpu,
+          latestMemory: newMem,
+          last_seen: nowIso,
+        };
+      });
+    }, 2400);
+
+    return () => clearInterval(interval);
+  }, [isDemoMode]);
+
+  // 4. Load historical telemetry when selected node changes
   useEffect(() => {
     if (!selectedNode) {
       setTelemetrySamples([]);
       return;
     }
 
+    if (isDemoMode) {
+      setTelemetrySamples(generateMockTelemetryHistory(selectedNode));
+      setIsLoadingChart(false);
+      return;
+    }
+
     let isMounted = true;
-    setIsChartLoading(true);
+    setIsLoadingChart(true);
 
     fetchNodeMetrics(selectedNode.id, 30)
       .then((res) => {
@@ -132,17 +235,27 @@ export function App() {
         if (isMounted) setTelemetrySamples([]);
       })
       .finally(() => {
-        if (isMounted) setIsChartLoading(false);
+        if (isMounted) setIsLoadingChart(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [selectedNode?.id]);
+  }, [selectedNode?.id, isDemoMode]);
 
-  function setIsChartLoading(loading: boolean) {
-    setIsLoadingChart(loading);
-  }
+  const handleToggleDemoMode = () => {
+    if (isDemoMode) {
+      setIsDemoMode(false);
+      loadData();
+    } else {
+      setIsDemoMode(true);
+      setProjects(MOCK_PROJECTS);
+      setNodes(MOCK_NODES);
+      setSelectedNode(MOCK_NODES[0]);
+      setTelemetrySamples(generateMockTelemetryHistory(MOCK_NODES[0]));
+      setEvents(MOCK_INITIAL_EVENTS);
+    }
+  };
 
   const handleSelectNode = (node: Node) => {
     setSelectedNode(node);
@@ -153,6 +266,11 @@ export function App() {
     setSelectedNode(newNode);
   };
 
+  // Filter nodes by selected project if chosen
+  const displayedNodes = selectedProjectId
+    ? nodes.filter((n) => n.project_id === selectedProjectId)
+    : nodes;
+
   return (
     <div className="app-container">
       {/* Top Header */}
@@ -162,6 +280,8 @@ export function App() {
         onSelectProject={setSelectedProjectId}
         isConnected={isConnected}
         latencyMs={latencyMs}
+        isDemoMode={isDemoMode}
+        onToggleDemoMode={handleToggleDemoMode}
         onOpenAddNode={() => setIsAddNodeOpen(true)}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
@@ -169,12 +289,34 @@ export function App() {
 
       {/* Main Workspace */}
       <main className="main-content">
+        {/* Demo Mode Notice Banner */}
+        {isDemoMode && (
+          <div className="demo-banner">
+            <div className="demo-banner-content">
+              <Sparkles size={16} color="#7c3aed" />
+              <span>
+                <strong>Chế độ Dữ liệu Mẫu (Demo Data) đang bật:</strong> Đang hiển thị 5 máy chủ Linux giả lập với luồng WebSocket và đồ thị thời gian thực.
+              </span>
+            </div>
+            <div className="demo-banner-actions">
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ fontSize: '11px', padding: '3px 8px', borderColor: '#bbf7d0', color: '#15803d' }}
+                onClick={loadData}
+              >
+                <span>Kiểm tra Controller thực tế</span>
+                <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* KPI Cards */}
-        <KPICards nodes={nodes} isLoading={isLoading} />
+        <KPICards nodes={displayedNodes} isLoading={isLoading} />
 
         {/* Node Health Matrix */}
         <NodeMatrix
-          nodes={nodes}
+          nodes={displayedNodes}
           selectedNodeId={selectedNode?.id || null}
           onSelectNode={handleSelectNode}
           isLoading={isLoading}
@@ -187,7 +329,7 @@ export function App() {
             samples={telemetrySamples}
             isLoading={isLoadingChart}
           />
-          <LiveEventStream events={events} isConnected={isConnected} />
+          <LiveEventStream events={events} isConnected={isConnected || isDemoMode} />
         </div>
       </main>
 

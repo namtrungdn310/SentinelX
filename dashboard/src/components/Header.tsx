@@ -1,4 +1,4 @@
-import { Shield, Plus, RefreshCw } from 'lucide-react';
+import { Shield, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import type { Project } from '../types';
 
 interface HeaderProps {
@@ -7,6 +7,8 @@ interface HeaderProps {
   onSelectProject: (id: string | null) => void;
   isConnected: boolean;
   latencyMs: number | null;
+  isDemoMode: boolean;
+  onToggleDemoMode: () => void;
   onOpenAddNode: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectProject,
   isConnected,
   latencyMs,
+  isDemoMode,
+  onToggleDemoMode,
   onOpenAddNode,
   onRefresh,
   isRefreshing,
@@ -38,6 +42,20 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Center / Right Actions */}
         <div className="header-actions">
+          {/* Demo Mode Toggle */}
+          <button
+            className={`demo-mode-pill ${isDemoMode ? 'active' : ''}`}
+            onClick={onToggleDemoMode}
+            title={
+              isDemoMode
+                ? 'Đang bật dữ liệu mẫu. Bấm để chuyển sang kết nối Controller thực tế.'
+                : 'Bấm để nạp dữ liệu mẫu trải nghiệm đầy đủ giao diện.'
+            }
+          >
+            <Sparkles size={13} />
+            <span>{isDemoMode ? 'Dữ liệu mẫu: BẬT' : 'Dữ liệu mẫu: TẮT'}</span>
+          </button>
+
           {/* Project Picker */}
           <div className="project-selector">
             <span className="text-label" style={{ fontSize: '10px' }}>Dự án:</span>
@@ -57,14 +75,26 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* WebSocket Pulse Status */}
           <div
-            className={`live-badge ${isConnected ? 'online' : 'offline'}`}
-            title={isConnected ? 'Kết nối WebSocket realtime hoạt động' : 'Mất kết nối WebSocket'}
+            className={`live-badge ${isConnected || isDemoMode ? 'online' : 'offline'}`}
+            title={
+              isConnected
+                ? 'Kết nối WebSocket realtime hoạt động'
+                : isDemoMode
+                ? 'Đang mô phỏng luồng telemetry thời gian thực'
+                : 'Mất kết nối WebSocket tới Controller'
+            }
           >
-            <span className={`pulse-dot ${isConnected ? 'pulse' : ''}`} />
-            <span>{isConnected ? 'Realtime Live' : 'Đang kết nối lại'}</span>
-            {isConnected && latencyMs !== null && (
+            <span className={`pulse-dot ${isConnected || isDemoMode ? 'pulse' : ''}`} />
+            <span>
+              {isConnected
+                ? 'Realtime Live'
+                : isDemoMode
+                ? 'Realtime (Mô phỏng)'
+                : 'Đang kết nối lại'}
+            </span>
+            {(isConnected || isDemoMode) && (
               <span className="font-mono" style={{ fontSize: '11px', opacity: 0.8 }}>
-                ({latencyMs}ms)
+                ({isConnected ? latencyMs ?? 0 : 8}ms)
               </span>
             )}
           </div>
@@ -90,3 +120,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
