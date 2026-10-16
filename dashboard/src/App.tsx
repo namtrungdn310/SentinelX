@@ -38,22 +38,22 @@ export function App() {
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // Datadog Navigation & Facets States
+  // Bộ lọc tìm kiếm và Facets theo tiếng Việt
   const [searchQuery, setSearchQuery] = useState('');
-  const [timeRange, setTimeRange] = useState('LIVE 5m');
+  const [timeRange, setTimeRange] = useState('Trực tiếp 5p');
   const [statusFacet, setStatusFacet] = useState<'all' | 'ok' | 'warn' | 'crit' | 'unenrolled'>('all');
   const [roleFacet, setRoleFacet] = useState<'all' | 'lb' | 'worker' | 'db'>('all');
 
-  // 1. Handle incoming realtime WebSocket events (from real Controller)
+  // 1. Xử lý gói tin WebSocket thời gian thực từ Controller
   const handleWebSocketMessage = useCallback((msg: RealtimeMessage) => {
-    // Add to live audit event stream
+    // Thêm vào dòng nhật ký sự kiện trực tiếp
     setEvents((prev) => [msg, ...prev.slice(0, 39)]);
 
     if (msg.event === 'metric_update' && msg.data.node_id && msg.data.samples) {
       const nodeId = msg.data.node_id;
       const latestSample = msg.data.samples[msg.data.samples.length - 1];
 
-      // Update Node in state with fresh metrics
+      // Cập nhật trạng thái Node
       setNodes((prevNodes) =>
         prevNodes.map((n) => {
           if (n.id === nodeId) {
@@ -72,7 +72,7 @@ export function App() {
         })
       );
 
-      // Append new sample to active telemetry chart if it corresponds to selected node
+      // Thêm mẫu đo mới vào đồ thị nếu node đang được chọn
       setSelectedNode((curr) => {
         if (curr && curr.id === nodeId) {
           setTelemetrySamples((prev) => [...prev.slice(-29), latestSample]);
@@ -102,7 +102,7 @@ export function App() {
     onMessage: handleWebSocketMessage,
   });
 
-  // 2. Fetch Projects and Nodes from Controller REST API
+  // 2. Tải danh sách dự án và máy chủ từ Controller REST API
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setIsRefreshing(true);
@@ -115,7 +115,7 @@ export function App() {
       if (projList && projList.length > 0) {
         setProjects(projList);
         setNodes(nodeList);
-        setIsDemoMode(false); // Successfully talking to real Controller API!
+        setIsDemoMode(false); // Kết nối thành công tới Controller thật!
 
         if (nodeList.length > 0) {
           setSelectedNode((prev) => {
@@ -126,7 +126,7 @@ export function App() {
         }
       }
     } catch {
-      // Backend offline / connection error -> maintain demo mode
+      // Backend offline -> tiếp tục chế độ demo
       setIsDemoMode(true);
       setProjects(MOCK_PROJECTS);
       setNodes(MOCK_NODES);
@@ -143,14 +143,13 @@ export function App() {
     loadData();
   }, [loadData]);
 
-  // 3. Simulated Realtime Ticker during Demo Mode (Live Datadog breathing chart & stream)
+  // 3. Giả lập luồng telemetry động trong chế độ mẫu
   useEffect(() => {
     if (!isDemoMode) return;
 
     const interval = setInterval(() => {
       const nowIso = new Date().toISOString();
 
-      // Fluctuate online nodes slightly
       setNodes((prevNodes) =>
         prevNodes.map((node) => {
           if (node.status !== 'online') return node;
@@ -170,7 +169,6 @@ export function App() {
         })
       );
 
-      // Fluctuate selected node and push new sample to chart
       setSelectedNode((curr) => {
         if (!curr || curr.status !== 'online') return curr;
         const cpuDelta = (Math.random() - 0.48) * 3.5;
@@ -201,7 +199,7 @@ export function App() {
     return () => clearInterval(interval);
   }, [isDemoMode]);
 
-  // 4. Load historical telemetry when selected node changes
+  // 4. Nạp lịch sử telemetry khi đổi node
   useEffect(() => {
     if (!selectedNode) {
       setTelemetrySamples([]);
@@ -259,30 +257,26 @@ export function App() {
     setSelectedNode(newNode);
   };
 
-  // Facet Counts Calculation
+  // Tính số lượng máy chủ theo từng trạng thái
   const countOk = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) <= 75).length;
   const countWarn = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) > 75).length;
   const countCrit = nodes.filter((n) => n.status === 'offline').length;
   const countUnenrolled = nodes.filter((n) => n.status === 'unenrolled').length;
 
-  // Filter Pipeline: Project -> Facet -> Search Query
+  // Lọc máy chủ theo Dự án -> Trạng thái -> Vai trò -> Ô Tìm kiếm
   const displayedNodes = nodes.filter((node) => {
-    // 1. Project Filter
     if (selectedProjectId && node.project_id !== selectedProjectId) return false;
 
-    // 2. Status Facet Filter
     if (statusFacet === 'ok' && (node.status !== 'online' || (node.latestCpu ?? 0) > 75)) return false;
     if (statusFacet === 'warn' && (node.status !== 'online' || (node.latestCpu ?? 0) <= 75)) return false;
     if (statusFacet === 'crit' && node.status !== 'offline') return false;
     if (statusFacet === 'unenrolled' && node.status !== 'unenrolled') return false;
 
-    // 3. Service Role Facet Filter
     const h = node.hostname.toLowerCase();
     if (roleFacet === 'lb' && !(h.includes('ingress') || h.includes('lb') || h.includes('gateway'))) return false;
     if (roleFacet === 'worker' && !(h.includes('worker') || h.includes('backend') || h.includes('api'))) return false;
     if (roleFacet === 'db' && !(h.includes('db') || h.includes('pg') || h.includes('primary'))) return false;
 
-    // 4. Search Query Filter (Datadog tag/hostname/IP search)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const match =
@@ -299,7 +293,7 @@ export function App() {
 
   return (
     <div className="app-container">
-      {/* 1. Datadog Top Navigation Bar */}
+      {/* 1. Thanh Điều Hướng Trên Cùng */}
       <Header
         projects={projects}
         selectedProject={selectedProjectId}
@@ -317,14 +311,14 @@ export function App() {
         isRefreshing={isRefreshing}
       />
 
-      {/* 2. Datadog Observability Workspace (Facets Sidebar + Viewport) */}
+      {/* 2. Không Gian Quan Trắc Hạ Tầng (Sidebar + Màn Hình Chính) */}
       <div className="observability-workspace">
-        {/* Left Facets Filter Sidebar */}
+        {/* Thanh Bộ Lọc Bên Trái (Facets) */}
         <aside className="facets-sidebar">
-          {/* Status Facet Group */}
+          {/* Nhóm Lọc Trạng Thái */}
           <div>
             <div className="facet-group-title">
-              <span>Status</span>
+              <span>Trạng Thái</span>
               <Activity size={12} />
             </div>
             <div
@@ -332,7 +326,7 @@ export function App() {
               onClick={() => setStatusFacet('all')}
             >
               <div className="facet-item-left">
-                <span>All Hosts</span>
+                <span>Tất cả máy chủ</span>
               </div>
               <span className="facet-badge-count">{nodes.length}</span>
             </div>
@@ -342,7 +336,7 @@ export function App() {
             >
               <div className="facet-item-left">
                 <span className="facet-status-indicator ok" />
-                <span>OK / Healthy</span>
+                <span>Bình thường (OK)</span>
               </div>
               <span className="facet-badge-count">{countOk}</span>
             </div>
@@ -352,7 +346,7 @@ export function App() {
             >
               <div className="facet-item-left">
                 <span className="facet-status-indicator warn" />
-                <span>Warning (&gt;75%)</span>
+                <span>Cảnh báo (&gt;75%)</span>
               </div>
               <span className="facet-badge-count">{countWarn}</span>
             </div>
@@ -363,7 +357,7 @@ export function App() {
               >
                 <div className="facet-item-left">
                   <span className="facet-status-indicator crit" />
-                  <span>Critical / Down</span>
+                  <span>Mất kết nối</span>
                 </div>
                 <span className="facet-badge-count">{countCrit}</span>
               </div>
@@ -374,16 +368,16 @@ export function App() {
             >
               <div className="facet-item-left">
                 <span className="facet-status-indicator unenrolled" />
-                <span>Unenrolled</span>
+                <span>Chưa đăng ký</span>
               </div>
               <span className="facet-badge-count">{countUnenrolled}</span>
             </div>
           </div>
 
-          {/* Service Role Facet Group */}
+          {/* Nhóm Lọc Vai Trò Hạ Tầng */}
           <div>
             <div className="facet-group-title">
-              <span>Service Role</span>
+              <span>Vai Trò Hạ Tầng</span>
               <Layers size={12} />
             </div>
             <div
@@ -391,7 +385,7 @@ export function App() {
               onClick={() => setRoleFacet('all')}
             >
               <div className="facet-item-left">
-                <span>All Roles</span>
+                <span>Tất cả vai trò</span>
               </div>
             </div>
             <div
@@ -399,8 +393,8 @@ export function App() {
               onClick={() => setRoleFacet('lb')}
             >
               <div className="facet-item-left">
-                <span className="host-tag role">lb</span>
-                <span>Ingress & LB</span>
+                <span className="host-tag role">cổng-lb</span>
+                <span>Cổng vào &amp; Cân bằng tải</span>
               </div>
             </div>
             <div
@@ -409,7 +403,7 @@ export function App() {
             >
               <div className="facet-item-left">
                 <span className="host-tag role">worker</span>
-                <span>Workload Backends</span>
+                <span>Máy chủ xử lý (Worker)</span>
               </div>
             </div>
             <div
@@ -417,47 +411,47 @@ export function App() {
               onClick={() => setRoleFacet('db')}
             >
               <div className="facet-item-left">
-                <span className="host-tag role">db</span>
-                <span>PostgreSQL Cluster</span>
+                <span className="host-tag role">csdl</span>
+                <span>Cụm CSDL PostgreSQL</span>
               </div>
             </div>
           </div>
 
-          {/* Tags Facet Group */}
+          {/* Nhóm Lọc Môi Trường */}
           <div>
             <div className="facet-group-title">
-              <span>Environment</span>
+              <span>Môi Trường</span>
               <Tag size={12} />
             </div>
             <div className="facet-item active">
               <div className="facet-item-left">
-                <span className="host-tag env">env:prod</span>
-                <span>Production</span>
+                <span className="host-tag env">mt:prod</span>
+                <span>Production Chính Thức</span>
               </div>
               <span className="facet-badge-count">{nodes.length}</span>
             </div>
           </div>
 
-          {/* Telemetry Core Specs */}
-          <div style={{ marginTop: 'auto', padding: '10px', background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '11px', color: 'var(--text-muted)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}>
-              <ShieldCheck size={13} style={{ color: 'var(--brand-purple)' }} />
-              <span>SentinelX Core v0.1</span>
+          {/* Thông Số Kỹ Thuật Lõi */}
+          <div style={{ marginTop: 'auto', padding: '12px', background: '#ffffff', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '11px', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', fontWeight: 700, marginBottom: '5px' }}>
+              <ShieldCheck size={14} style={{ color: 'var(--brand-indigo)' }} />
+              <span>Lõi SentinelX v0.1</span>
             </div>
-            <div>Agent Engine: psutil + /proc</div>
-            <div>Active Health: Eject &amp; Re-add</div>
+            <div>Quan trắc: psutil + /proc</div>
+            <div>Cân bằng tải: Eject &amp; Re-add</div>
           </div>
         </aside>
 
-        {/* Right Main Observability Viewport */}
+        {/* Màn Hình Quan Trắc Chính */}
         <main className="main-viewport">
-          {/* Demo Mode Banner (Datadog notification strip) */}
+          {/* Thông Báo Bản Mẫu */}
           {isDemoMode && (
             <div className="demo-banner">
               <div className="demo-banner-content">
-                <Sparkles size={14} color="#a855f7" />
+                <Sparkles size={14} color="#6366f1" />
                 <span>
-                  <strong>Datadog Telemetry Simulation Active:</strong> Đang giả lập luồng metrics và log tail thời gian thực của 5 máy chủ Linux.
+                  <strong>Chế Độ Giả Lập Telemetry Đang Bật:</strong> Đang mô phỏng luồng chỉ số tài nguyên và nhật ký sự kiện của 5 máy chủ Linux thời gian thực.
                 </span>
               </div>
               <div>
@@ -466,17 +460,17 @@ export function App() {
                   style={{ borderColor: 'var(--border-strong)', color: 'var(--text-primary)' }}
                   onClick={loadData}
                 >
-                  <span>Connect Real Controller</span>
+                  <span>Kết nối Controller Thực Tế</span>
                   <ArrowRight size={11} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* 3. Fleet Metrics Summary Strip (KPI Bar) */}
+          {/* 3. Thanh Tổng Hợp Chỉ Số Toàn Cụm (KPI Bar) */}
           <KPICards nodes={displayedNodes} isLoading={isLoading} />
 
-          {/* 4. Host Fleet Map & Health Matrix */}
+          {/* 4. Bản Đồ Ma Trận Máy Chủ */}
           <NodeMatrix
             nodes={displayedNodes}
             selectedNodeId={selectedNode?.id || null}
@@ -488,7 +482,7 @@ export function App() {
             }}
           />
 
-          {/* 5. Time-Series Telemetry & Live Tail Stream */}
+          {/* 5. Đồ Thị Chuỗi Thời Gian & Dòng Nhật Ký Trực Tiếp */}
           <div className="telemetry-row">
             <TelemetryChart
               selectedNode={selectedNode}
@@ -500,7 +494,7 @@ export function App() {
         </main>
       </div>
 
-      {/* Modals */}
+      {/* Hộp Thoại */}
       <AddNodeModal
         projects={projects}
         selectedProjectId={selectedProjectId}

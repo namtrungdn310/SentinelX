@@ -21,7 +21,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
     return (
       <div className="chart-panel">
         <div className="chart-panel-header">
-          <span className="text-title" style={{ fontSize: '13px' }}>Time-Series Telemetry Explorer</span>
+          <span className="text-title" style={{ fontSize: '13px' }}>Đồ Thị Phân Tích Chuỗi Thời Gian</span>
         </div>
         <div
           style={{
@@ -35,7 +35,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
           }}
         >
           <Server size={28} style={{ opacity: 0.3 }} />
-          <p className="text-body">Chọn một máy chủ trong Fleet để kiểm tra đồ thị thời gian thực</p>
+          <p className="text-body">Chọn một máy chủ trong cụm để kiểm tra đồ thị thời gian thực</p>
         </div>
       </div>
     );
@@ -52,11 +52,9 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
     );
   }
 
-  // Reverse samples if needed, display up to 30 latest points
   const displaySamples = [...samples].reverse().slice(-30);
   const count = displaySamples.length;
 
-  // Chart Dimensions
   const width = 640;
   const height = 200;
   const pad = { top: 20, right: 20, bottom: 25, left: 35 };
@@ -73,7 +71,6 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
     return pad.top + graphH - (clamped / 100) * graphH;
   };
 
-  // Generate SVG path for CPU and Memory
   const cpuLine = displaySamples.map((s, i) => `${getX(i)},${getY(s.cpu_percent)}`).join(' ');
   const memLine = displaySamples.map((s, i) => `${getX(i)},${getY(s.memory_percent)}`).join(' ');
 
@@ -89,7 +86,6 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
       ` L ${getX(count - 1)},${pad.top + graphH} L ${getX(0)},${pad.top + graphH} Z`
     : '';
 
-  // Current stats
   const latestSample = displaySamples[displaySamples.length - 1];
   const hoveredSample = hoverIndex !== null && displaySamples[hoverIndex] ? displaySamples[hoverIndex] : null;
 
@@ -98,7 +94,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
 
   return (
     <div className="chart-panel">
-      {/* Datadog Chart Header */}
+      {/* Tiêu Đề Đồ Thị */}
       <div className="chart-panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Activity size={14} style={{ color: 'var(--brand-cyan)' }} />
@@ -106,10 +102,10 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             {selectedNode.hostname}
           </span>
           <span className="host-ip">{selectedNode.ip_address}</span>
-          <span className="host-tag role">1s stream</span>
+          <span className="host-tag role">chu kỳ 1s</span>
         </div>
 
-        {/* Metric Toggles */}
+        {/* Nút Bật/Tắt Đường Đo */}
         <div className="chart-legends">
           <div
             className="legend-pill"
@@ -125,21 +121,21 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             onClick={() => setShowMem(!showMem)}
             style={{ opacity: showMem ? 1 : 0.4 }}
           >
-            <span className="legend-color-dot" style={{ backgroundColor: 'var(--brand-purple)' }} />
-            <span>MEM: {activeMem.toFixed(1)}%</span>
+            <span className="legend-color-dot" style={{ backgroundColor: 'var(--brand-indigo)' }} />
+            <span>RAM: {activeMem.toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
-      {/* Interactive SVG Chart */}
+      {/* SVG Biểu Đồ Thời Gian Thực */}
       <div className="chart-canvas-container">
         {hoveredSample && (
           <div className="chart-tooltip-box">
             <span style={{ color: 'var(--text-muted)' }}>
               {new Date(hoveredSample.observed_at).toLocaleTimeString()}
             </span>
-            <span style={{ color: 'var(--brand-cyan)' }}>CPU: {hoveredSample.cpu_percent.toFixed(1)}%</span>
-            <span style={{ color: 'var(--brand-purple)' }}>MEM: {hoveredSample.memory_percent.toFixed(1)}%</span>
+            <span style={{ color: '#38bdf8' }}>CPU: {hoveredSample.cpu_percent.toFixed(1)}%</span>
+            <span style={{ color: '#a5b4fc' }}>RAM: {hoveredSample.memory_percent.toFixed(1)}%</span>
           </div>
         )}
 
@@ -149,17 +145,17 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
           onMouseLeave={() => setHoverIndex(null)}
         >
           <defs>
-            <linearGradient id="ddCpuGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+            <linearGradient id="warmCpuGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.0" />
             </linearGradient>
-            <linearGradient id="ddMemGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.22" />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.0" />
+            <linearGradient id="warmMemGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
-          {/* Grid lines (25%, 50%, 75%, 100%) */}
+          {/* Đường Kẻ Lưới Mức Độ (25%, 50%, 75%, 100%) */}
           {[0, 25, 50, 75, 100].map((val) => {
             const y = getY(val);
             return (
@@ -169,7 +165,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
                   y1={y}
                   x2={pad.left + graphW}
                   y2={y}
-                  stroke="#1c263b"
+                  stroke="var(--border-subtle)"
                   strokeWidth="1"
                   strokeDasharray="2 3"
                 />
@@ -177,7 +173,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
                   x={pad.left - 6}
                   y={y + 3}
                   textAnchor="end"
-                  fill="#475569"
+                  fill="var(--text-muted)"
                   fontSize="9"
                   fontFamily="var(--font-mono)"
                 >
@@ -187,14 +183,14 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             );
           })}
 
-          {/* Memory Area & Line */}
+          {/* Vùng & Đường Bộ Nhớ RAM */}
           {showMem && count > 0 && (
             <>
-              <path d={memArea} fill="url(#ddMemGrad)" />
+              <path d={memArea} fill="url(#warmMemGrad)" />
               <polyline
                 points={memLine}
                 fill="none"
-                stroke="#a855f7"
+                stroke="#6366f1"
                 strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -202,14 +198,14 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             </>
           )}
 
-          {/* CPU Area & Line */}
+          {/* Vùng & Đường CPU */}
           {showCpu && count > 0 && (
             <>
-              <path d={cpuArea} fill="url(#ddCpuGrad)" />
+              <path d={cpuArea} fill="url(#warmCpuGrad)" />
               <polyline
                 points={cpuLine}
                 fill="none"
-                stroke="#06b6d4"
+                stroke="#0284c7"
                 strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -217,7 +213,7 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             </>
           )}
 
-          {/* Hover Crosshair Detection */}
+          {/* Vùng Cảm Ứng Di Chuột (Crosshair Sensor) */}
           {displaySamples.map((_s, i) => {
             const x = getX(i);
             return (
@@ -234,14 +230,14 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             );
           })}
 
-          {/* Active Hover Crosshair Line */}
+          {/* Đường Kẻ Thước Ngắm Khi Di Chuột */}
           {hoverIndex !== null && (
             <line
               x1={getX(hoverIndex)}
               y1={pad.top}
               x2={getX(hoverIndex)}
               y2={pad.top + graphH}
-              stroke="#38bdf8"
+              stroke="var(--brand-indigo)"
               strokeWidth="1"
               strokeDasharray="2 2"
             />

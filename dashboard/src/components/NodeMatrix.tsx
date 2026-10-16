@@ -17,16 +17,16 @@ function formatRelativeTime(dateString: string | null): string {
   const diffSec = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
   if (diffSec < 5) return 'Vừa xong';
   if (diffSec < 60) return `${diffSec}s trước`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m trước`;
-  return `${Math.floor(diffSec / 3600)}h trước`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
+  return `${Math.floor(diffSec / 3600)} giờ trước`;
 }
 
 function getNodeRole(hostname: string): { label: string; type: 'lb' | 'worker' | 'db' | 'edge' } {
   const h = hostname.toLowerCase();
-  if (h.includes('ingress') || h.includes('lb') || h.includes('gateway')) return { label: 'role:ingress-lb', type: 'lb' };
-  if (h.includes('db') || h.includes('pg') || h.includes('primary')) return { label: 'role:database-pg', type: 'db' };
-  if (h.includes('api')) return { label: 'role:api-service', type: 'edge' };
-  return { label: 'role:worker-node', type: 'worker' };
+  if (h.includes('ingress') || h.includes('lb') || h.includes('gateway')) return { label: 'vai-trò:cổng-vào-lb', type: 'lb' };
+  if (h.includes('db') || h.includes('pg') || h.includes('primary')) return { label: 'vai-trò:csdl-postgres', type: 'db' };
+  if (h.includes('api')) return { label: 'vai-trò:dịch-vụ-api', type: 'edge' };
+  return { label: 'vai-trò:máy-chủ-worker', type: 'worker' };
 }
 
 export const NodeMatrix: React.FC<NodeMatrixProps> = ({
@@ -42,7 +42,7 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
     return (
       <div className="matrix-card">
         <div className="matrix-card-header">
-          <span className="text-title">Host Fleet Map & Health Matrix</span>
+          <span className="text-title">Bản Đồ Hạ Tầng &amp; Ma Trận Máy Chủ</span>
         </div>
         <div className="host-grid">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -57,27 +57,27 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
     <div className="matrix-card">
       <div className="matrix-card-header">
         <div className="matrix-card-title-group">
-          <Server size={15} style={{ color: 'var(--brand-purple)' }} />
+          <Server size={15} style={{ color: 'var(--brand-indigo)' }} />
           <h2 className="text-title" style={{ fontSize: '13px' }}>
-            Infrastructure Host Fleet
+            Hạ Tầng Cụm Máy Chủ (Host Fleet)
           </h2>
-          <span className="facet-badge-count">{nodes.length} hosts</span>
+          <span className="facet-badge-count">{nodes.length} máy chủ</span>
         </div>
 
         <div className="matrix-controls">
-          {/* View Mode Switcher */}
+          {/* Chuyển Đổi Dạng Xem (Lưới Ô vs Bảng SRE) */}
           <div className="view-mode-toggle">
             <button
               className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
               onClick={() => setViewMode('grid')}
-              title="Xem dạng Host Map Grid"
+              title="Xem dạng Lưới ô máy chủ (Host Map)"
             >
               <LayoutGrid size={13} />
             </button>
             <button
               className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
               onClick={() => setViewMode('table')}
-              title="Xem dạng SRE Data Table"
+              title="Xem dạng Bảng chi tiết (SRE Table)"
             >
               <List size={13} />
             </button>
@@ -86,11 +86,11 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
       </div>
 
       {nodes.length === 0 ? (
-        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
           Không tìm thấy máy chủ nào phù hợp với bộ lọc hiện tại.
         </div>
       ) : viewMode === 'grid' ? (
-        /* Host Map Grid Mode (Datadog style) */
+        /* Dạng Lưới Ô Máy Chủ (Host Map Grid) */
         <div className="host-grid">
           {nodes.map((node) => {
             const isSelected = node.id === selectedNodeId;
@@ -100,13 +100,22 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
             const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
             const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
 
+            const statusLabel =
+              node.status === 'online'
+                ? 'HOẠT ĐỘNG'
+                : node.status === 'degraded'
+                ? 'CẢNH BÁO'
+                : node.status === 'offline'
+                ? 'MẤT KẾT NỐI'
+                : 'CHƯA ĐĂNG KÝ';
+
             return (
               <div
                 key={node.id}
                 className={`host-tile ${isSelected ? 'selected' : ''}`}
                 onClick={() => onSelectNode(node)}
                 onDoubleClick={() => onOpenDetail?.(node)}
-                title="Nhấn để xem telemetry, nhấp đúp để mở chi tiết node"
+                title="Bấm để xem đồ thị telemetry, nhấp đúp để mở thông số chi tiết"
               >
                 <div className="host-tile-header">
                   <div className="host-identity">
@@ -114,18 +123,18 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
                     <span className="host-name" title={node.hostname}>{node.hostname}</span>
                   </div>
                   <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
-                    {node.status === 'online' ? 'OK' : node.status}
+                    {statusLabel}
                   </span>
                 </div>
 
-                {/* Host Tags */}
+                {/* Thẻ Phân Loại */}
                 <div className="host-tags-row">
                   <span className="host-ip">{node.ip_address}</span>
                   <span className="host-tag role">{role.label}</span>
-                  <span className="host-tag env">env:prod</span>
+                  <span className="host-tag env">mt:production</span>
                 </div>
 
-                {/* Micro Metric Gauges */}
+                {/* Vạch Đo Chỉ Số Tức Thời */}
                 {node.status === 'online' ? (
                   <div className="host-metric-row">
                     <div className="metric-bar-item">
@@ -139,7 +148,7 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
                     </div>
 
                     <div className="metric-bar-item" style={{ marginTop: '3px' }}>
-                      <span className="metric-bar-label">MEM</span>
+                      <span className="metric-bar-label">RAM</span>
                       <span className="metric-bar-value">{mem.toFixed(1)}%</span>
                     </div>
                     <div className="micro-meter">
@@ -156,18 +165,18 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
           })}
         </div>
       ) : (
-        /* Host List Table Mode (Datadog SRE Table) */
+        /* Dạng Bảng Dữ Liệu SRE (Detailed SRE Table) */
         <div className="table-container">
           <table className="datadog-table">
             <thead>
               <tr>
-                <th style={{ width: '90px' }}>Status</th>
-                <th>Host & IP</th>
-                <th>Service Role</th>
-                <th style={{ width: '160px' }}>CPU Utilization</th>
-                <th style={{ width: '160px' }}>Memory</th>
-                <th>Network I/O</th>
-                <th>Last Seen</th>
+                <th style={{ width: '110px' }}>Trạng Thái</th>
+                <th>Máy Chủ &amp; Địa Chỉ IP</th>
+                <th>Vai Trò Hạ Tầng</th>
+                <th style={{ width: '160px' }}>Mức Tải CPU</th>
+                <th style={{ width: '160px' }}>Bộ Nhớ RAM</th>
+                <th>Lưu Lượng I/O</th>
+                <th>Lần Cuối Báo Cáo</th>
               </tr>
             </thead>
             <tbody>
@@ -179,21 +188,30 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
                 const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
                 const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
 
+                const statusLabel =
+                  node.status === 'online'
+                    ? 'HOẠT ĐỘNG'
+                    : node.status === 'degraded'
+                    ? 'CẢNH BÁO'
+                    : node.status === 'offline'
+                    ? 'MẤT KẾT NỐI'
+                    : 'CHƯA ĐĂNG KÝ';
+
                 return (
                   <tr
                     key={node.id}
                     className={isSelected ? 'selected' : ''}
                     onClick={() => onSelectNode(node)}
                     onDoubleClick={() => onOpenDetail?.(node)}
-                    title="Nhấn để xem telemetry, nhấp đúp để mở chi tiết node"
+                    title="Bấm để xem telemetry, nhấp đúp để mở chi tiết máy chủ"
                   >
                     <td>
                       <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
-                        {node.status === 'online' ? 'OK' : node.status}
+                        {statusLabel}
                       </span>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
                         {node.hostname}
                       </div>
                       <div className="host-ip">{node.ip_address}</div>

@@ -33,7 +33,7 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
   const okNodes = onlineNodes.filter((n) => (n.latestCpu ?? 0) <= 75 && (n.latestMemory ?? 0) <= 85);
   const offlineNodes = nodes.filter((n) => n.status === 'offline' || n.status === 'unenrolled');
 
-  // Compute Fleet Averages
+  // Tính toán số liệu trung bình toàn cụm
   const activeMetrics = onlineNodes.filter((n) => n.latestCpu !== undefined);
   const avgCpu = activeMetrics.length
     ? Math.round((activeMetrics.reduce((acc, n) => acc + (n.latestCpu || 0), 0) / activeMetrics.length) * 10) / 10
@@ -51,15 +51,15 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
 
   return (
     <div className="kpi-strip">
-      {/* 1. Host Health Summary */}
+      {/* 1. Trạng Thái Máy Chủ */}
       <div className="kpi-strip-card">
         <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Fleet Host Status</span>
+          <span className="kpi-strip-title">Trạng Thái Máy Chủ</span>
           <Server size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
         <div className="kpi-strip-value-row">
           <span className="kpi-strip-value">{onlineNodes.length}</span>
-          <span className="kpi-strip-unit">/ {totalNodes} Total Hosts</span>
+          <span className="kpi-strip-unit">/ {totalNodes} Máy Chủ Hoạt Động</span>
         </div>
         <div className="micro-meter" style={{ display: 'flex' }}>
           <div
@@ -77,30 +77,30 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
         </div>
         <div className="kpi-strip-subtext">
           <span style={{ color: 'var(--status-ok)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <CheckCircle2 size={11} /> {okNodes.length} OK
+            <CheckCircle2 size={11} /> {okNodes.length} Bình thường
           </span>
           {warnNodes.length > 0 && (
             <span style={{ color: 'var(--status-warn)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <AlertTriangle size={11} /> {warnNodes.length} Warn
+              <AlertTriangle size={11} /> {warnNodes.length} Cảnh báo
             </span>
           )}
           {offlineNodes.length > 0 && (
             <span style={{ color: 'var(--text-muted)' }}>
-              {offlineNodes.length} Inactive
+              {offlineNodes.length} Chưa kết nối
             </span>
           )}
         </div>
       </div>
 
-      {/* 2. Fleet CPU Utilization */}
+      {/* 2. Mức Tiêu Thụ CPU */}
       <div className="kpi-strip-card">
         <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Avg CPU Utilization</span>
+          <span className="kpi-strip-title">Tải CPU Trung Bình</span>
           <Cpu size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
         <div className="kpi-strip-value-row">
           <span className="kpi-strip-value">{avgCpu.toFixed(1)}%</span>
-          <span className="kpi-strip-unit">Across Fleet</span>
+          <span className="kpi-strip-unit">Toàn Cụm</span>
         </div>
         <div className="micro-meter">
           <div
@@ -109,20 +109,20 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
           />
         </div>
         <div className="kpi-strip-subtext">
-          <span>Target: &lt; 75.0%</span>
-          <span className="font-mono">{activeMetrics.length} reporting</span>
+          <span>Ngưỡng an toàn: &lt; 75.0%</span>
+          <span className="font-mono">{activeMetrics.length} máy chủ đo đạc</span>
         </div>
       </div>
 
-      {/* 3. Fleet Memory Usage */}
+      {/* 3. Mức Chiếm Dụng Bộ Nhớ RAM */}
       <div className="kpi-strip-card">
         <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Avg Memory Usage</span>
+          <span className="kpi-strip-title">Bộ Nhớ RAM Chiếm Dụng</span>
           <HardDrive size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
         <div className="kpi-strip-value-row">
           <span className="kpi-strip-value">{avgMem.toFixed(1)}%</span>
-          <span className="kpi-strip-unit">Allocated</span>
+          <span className="kpi-strip-unit">Đã Phân Bổ</span>
         </div>
         <div className="micro-meter">
           <div
@@ -131,27 +131,27 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
           />
         </div>
         <div className="kpi-strip-subtext">
-          <span>Buffer: {(100 - avgMem).toFixed(1)}% free</span>
-          <span className="font-mono">{onlineNodes.length} active</span>
+          <span>Khả dụng: {(100 - avgMem).toFixed(1)}%</span>
+          <span className="font-mono">{onlineNodes.length} trực tuyến</span>
         </div>
       </div>
 
-      {/* 4. Network I/O Throughput */}
+      {/* 4. Lưu Lượng Băng Thông Mạng */}
       <div className="kpi-strip-card">
         <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Network Throughput</span>
+          <span className="kpi-strip-title">Băng Thông Mạng (I/O)</span>
           <ArrowDownUp size={14} style={{ color: 'var(--brand-cyan)' }} />
         </div>
         <div className="kpi-strip-value-row">
           <span className="kpi-strip-value">{formatBytes(totalRx + totalTx)}</span>
-          <span className="kpi-strip-unit">Total I/O</span>
+          <span className="kpi-strip-unit">Tổng Lưu Lượng</span>
         </div>
         <div className="micro-meter">
           <div className="micro-meter-fill cyan" style={{ width: '65%' }} />
         </div>
         <div className="kpi-strip-subtext">
-          <span className="font-mono">↓ {formatBytes(totalRx)} In</span>
-          <span className="font-mono">↑ {formatBytes(totalTx)} Out</span>
+          <span className="font-mono">↓ Nhận: {formatBytes(totalRx)}</span>
+          <span className="font-mono">↑ Gửi: {formatBytes(totalTx)}</span>
         </div>
       </div>
     </div>

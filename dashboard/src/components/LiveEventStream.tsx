@@ -23,48 +23,50 @@ export const LiveEventStream: React.FC<LiveEventStreamProps> = ({ events, isConn
 
   return (
     <div className="log-panel">
-      {/* Header */}
+      {/* Tiêu Đề Bảng Nhật Ký */}
       <div className="log-panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Terminal size={14} style={{ color: 'var(--brand-purple)' }} />
+          <Terminal size={14} style={{ color: '#a5b4fc' }} />
           <span
             className="facet-status-indicator"
             style={{ backgroundColor: isConnected ? 'var(--status-ok)' : 'var(--status-muted)' }}
-            title={isConnected ? 'Connected' : 'Disconnected'}
+            title={isConnected ? 'Đang kết nối' : 'Mất kết nối'}
           />
-          <span className="text-title" style={{ fontSize: '13px' }}>
-            Live Event Stream (Tail -f)
+          <span className="text-title" style={{ fontSize: '13px', color: '#f8fafc' }}>
+            Nhật Ký Sự Kiện Trực Tiếp (Tail -f)
           </span>
-          <span className="facet-badge-count">{filteredEvents.length} events</span>
+          <span className="facet-badge-count" style={{ background: '#0f172a', color: '#94a3b8', borderColor: '#334155' }}>
+            {filteredEvents.length} sự kiện
+          </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Pause / Resume Button */}
+          {/* Nút Tạm Dừng / Tiếp Tục */}
           <button
             className="btn btn-outline btn-sm"
-            style={{ padding: '2px 6px', fontSize: '11px', height: '24px' }}
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px', background: '#334155', color: '#f8fafc', borderColor: '#475569' }}
             onClick={() => setIsPaused(!isPaused)}
-            title={isPaused ? 'Tiếp tục dòng sự kiện' : 'Tạm dừng cuộn'}
+            title={isPaused ? 'Tiếp tục nhận luồng sự kiện' : 'Tạm dừng cuộn'}
           >
             {isPaused ? <Play size={11} /> : <Pause size={11} />}
-            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+            <span>{isPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
           </button>
         </div>
       </div>
 
-      {/* Mini Filter */}
-      <div style={{ padding: '4px 10px', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <Search size={11} style={{ color: 'var(--text-muted)' }} />
+      {/* Ô Lọc Nhật Ký */}
+      <div style={{ padding: '5px 12px', background: '#0a0f1d', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '7px' }}>
+        <Search size={11} style={{ color: '#64748b' }} />
         <input
           type="text"
-          placeholder="Filter event tail (e.g. metric, node, warn)..."
+          placeholder="Lọc sự kiện (vd: metric, node, warn, health)..."
           value={logFilter}
           onChange={(e) => setLogFilter(e.target.value)}
           style={{
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: 'var(--text-primary)',
+            color: '#f8fafc',
             fontSize: '11px',
             fontFamily: 'var(--font-mono)',
             width: '100%',
@@ -72,29 +74,31 @@ export const LiveEventStream: React.FC<LiveEventStreamProps> = ({ events, isConn
         />
       </div>
 
-      {/* Terminal Console Output */}
+      {/* Dòng Chảy Sự Kiện (Console Output) */}
       <div className="log-stream-body">
         {filteredEvents.length === 0 ? (
-          <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748b' }}>
             Đang chờ gói tin telemetry WebSocket từ Controller...
           </div>
         ) : (
           filteredEvents.slice(0, 30).map((evt, idx) => {
             const time = new Date(evt.timestamp).toLocaleTimeString();
-            const nodeId = evt.data.node_id ? String(evt.data.node_id).substring(0, 10) : 'sys';
+            const nodeId = evt.data.node_id ? String(evt.data.node_id).substring(0, 10) : 'hệ-thống';
             const sampleCount = evt.data.samples && Array.isArray(evt.data.samples) ? evt.data.samples.length : 1;
             const isMetric = evt.event === 'metric_update';
+
+            const levelLabel = isMetric ? 'CHỈ SỐ' : evt.event.toUpperCase();
 
             return (
               <div key={idx} className="log-row">
                 <span className="log-timestamp">{time}</span>
                 <span className={`log-level ${isMetric ? 'metric' : 'info'}`}>
-                  {isMetric ? 'METRIC' : evt.event.toUpperCase()}
+                  {levelLabel}
                 </span>
                 <span className="log-host">[{nodeId}]</span>
                 <span className="log-msg">
                   {isMetric
-                    ? `Ingested batch: ${sampleCount} samples (cpu/mem/disk/net)`
+                    ? `Đã nhận gói: ${sampleCount} mẫu đo (cpu/ram/disk/mạng)`
                     : JSON.stringify(evt.data).substring(0, 80)}
                 </span>
               </div>

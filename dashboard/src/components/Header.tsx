@@ -38,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="header-bar">
       <div className="header-inner">
-        {/* Brand & Breadcrumbs (Datadog style) */}
+        {/* Logo & Điều hướng phân cấp (Breadcrumbs) */}
         <div className="brand-section">
           <div className="brand-logo-badge">
             <Shield size={16} strokeWidth={2.5} />
@@ -46,28 +46,28 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="brand-title">
             <span>SentinelX</span>
             <span className="slash">/</span>
-            <span className="brand-breadcrumb">Host Map & Fleet</span>
+            <span className="brand-breadcrumb">Bản Đồ &amp; Cụm Máy Chủ</span>
           </div>
         </div>
 
-        {/* Universal Search Filter (Datadog tag filter) */}
+        {/* Thanh Tìm Kiếm Lọc Nhanh (Search Filter) */}
         <div className="header-search">
           <Search size={13} className="header-search-icon" />
           <input
             type="text"
             className="header-search-input"
-            placeholder="Lọc host, IP hoặc tag (vd: host:edge, 10.0.1, online)..."
+            placeholder="Lọc host, IP hoặc thẻ (vd: host:edge, 10.0.1, hoạt động)..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />
           <span className="header-search-badge">/</span>
         </div>
 
-        {/* Right Actions */}
+        {/* Các Thao Tác Phía Phải */}
         <div className="header-actions">
-          {/* Timeframe Picker */}
+          {/* Hộp Chọn Mốc Thời Gian */}
           <div className="time-picker" title="Khoảng thời gian giám sát telemetry">
-            {['LIVE 5m', '15m', '1h', '4h'].map((t) => (
+            {['Trực tiếp 5p', '15 phút', '1 giờ', '4 giờ'].map((t) => (
               <button
                 key={t}
                 className={`time-picker-btn ${timeRange === t ? 'active' : ''}`}
@@ -78,14 +78,14 @@ export const Header: React.FC<HeaderProps> = ({
             ))}
           </div>
 
-          {/* Project Selector */}
+          {/* Lựa Chọn Dự Án */}
           <div className="project-selector">
             <select
               className="project-select-dropdown"
               value={selectedProject || ''}
               onChange={(e) => onSelectProject(e.target.value ? e.target.value : null)}
             >
-              <option value="">Tất cả Projects ({projects.length})</option>
+              <option value="">Tất cả dự án ({projects.length})</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -94,19 +94,19 @@ export const Header: React.FC<HeaderProps> = ({
             </select>
           </div>
 
-          {/* Live WebSocket Status */}
+          {/* Trạng Thái Kết Nối WebSocket */}
           <div
             className={`live-badge ${isConnected || isDemoMode ? 'online' : 'offline'}`}
             title={
               isConnected
-                ? 'Kết nối WebSocket realtime Controller'
+                ? 'Đã kết nối luồng WebSocket thời gian thực tới Controller'
                 : isDemoMode
-                ? 'Đang giả lập luồng telemetry Datadog'
+                ? 'Đang giả lập luồng telemetry tự động'
                 : 'Mất kết nối WebSocket tới Controller'
             }
           >
             <span className={`pulse-dot ${isConnected || isDemoMode ? 'pulse' : ''}`} />
-            <span>{isConnected ? 'LIVE' : isDemoMode ? 'SIMULATED' : 'RECONNECTING'}</span>
+            <span>{isConnected ? 'TRỰC TIẾP' : isDemoMode ? 'DỮ LIỆU MẪU' : 'ĐANG KẾT NỐI LẠI'}</span>
             {(isConnected || isDemoMode) && (
               <span className="font-mono" style={{ fontSize: '10px', opacity: 0.8 }}>
                 {isConnected ? latencyMs ?? 0 : 8}ms
@@ -114,17 +114,17 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Refresh Action */}
+          {/* Làm Mới Dữ Liệu */}
           <button
             className="btn btn-outline btn-sm"
-            style={{ padding: '5px 8px' }}
+            style={{ padding: '6px 9px' }}
             onClick={onRefresh}
-            title="Đồng bộ lại dữ liệu"
+            title="Làm mới lại dữ liệu từ máy chủ"
           >
             <RefreshCw size={13} className={isRefreshing ? 'pulse' : ''} />
           </button>
 
-          {/* Demo Mode Toggle */}
+          {/* Nút Chuyển Chế Độ Mẫu */}
           <button
             className={`demo-mode-pill ${isDemoMode ? 'active' : ''}`}
             onClick={onToggleDemoMode}
@@ -135,17 +135,17 @@ export const Header: React.FC<HeaderProps> = ({
             }
           >
             <Sparkles size={12} />
-            <span>{isDemoMode ? 'Demo Data' : 'Live Core'}</span>
+            <span>{isDemoMode ? 'Bản Mẫu' : 'Thực Tế'}</span>
           </button>
 
-          {/* Add / Enroll Host Button */}
+          {/* Nút Đăng Ký Thêm Máy Chủ */}
           <button
             className="btn btn-primary btn-sm"
             onClick={onOpenAddNode}
-            style={{ fontWeight: 600 }}
+            style={{ fontWeight: 700 }}
           >
             <Plus size={13} strokeWidth={2.5} />
-            <span>Enroll Host</span>
+            <span>Thêm Máy Chủ</span>
           </button>
         </div>
       </div>
