@@ -104,6 +104,11 @@ services:
     environment:
       SENTINELX_LB_HOST: 0.0.0.0
       SENTINELX_LB_PORT: 8080
+      SENTINELX_LB_BACKENDS: "http://backend01:8080,http://backend02:8080"
+      SENTINELX_LB_ALGORITHM: round_robin
+      SENTINELX_LB_HEALTH_CHECK__ENABLED: "true"
+      SENTINELX_LB_HEALTH_CHECK__PATH: "/health"
+      SENTINELX_LB_HEALTH_CHECK__INTERVAL_SECONDS: "3.0"
       SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
     networks:
       sentinelx_public:
