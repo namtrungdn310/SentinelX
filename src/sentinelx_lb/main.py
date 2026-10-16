@@ -1,52 +1,43 @@
-"""Main entry point for SentinelX Load Balancer."""
+"""CLI entrypoint for SentinelX Load Balancer daemon."""
 
 import logging
-import os
 import sys
 
 from aiohttp import web
 
-logging.basicConfig(
-    level=os.getenv("SENTINELX_LB_LOG_LEVEL", "INFO"),
-    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-)
-logger = logging.getLogger("sentinelx_lb")
+from sentinelx_lb.config import LBSettings
+from sentinelx_lb.server import create_app
 
 
-async def health_check(_request: web.Request) -> web.Response:
-    """Return health status of the Load Balancer."""
-    return web.json_response({
-        "status": "healthy",
-        "service": "sentinelx-lb",
-        "version": "0.1.0",
-    })
-
-
-async def handle_proxy(request: web.Request) -> web.Response:
-    """Fallback handler / proxy placeholder for Lab testing."""
-    return web.json_response({
-        "message": "SentinelX Load Balancer active",
-        "path": request.path,
-        "method": request.method,
-    })
-
-
-def create_app() -> web.Application:
-    """Create and configure the aiohttp web application."""
-    app = web.Application()
-    app.router.add_get("/health", health_check)
-    app.router.add_route("*", "/{tail:.*}", handle_proxy)
-    return app
+def setup_logging(log_level: str) -> logging.Logger:
+    """Configure structured console logging for the LB service."""
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=numeric_level,
+        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    )
+    return logging.getLogger("sentinelx_lb")
 
 
 def main() -> None:
-    """Run the Load Balancer HTTP server."""
-    host = os.getenv("SENTINELX_LB_HOST", "0.0.0.0")
-    port = int(os.getenv("SENTINELX_LB_PORT", "8080"))
+    """Load settings and start the aiohttp web server."""
+    settings = LBSettings()
+    logger = setup_logging(settings.log_level)
 
-    logger.info("Starting SentinelX Load Balancer on %s:%d...", host, port)
-    app = create_app()
-    web.run_app(app, host=host, port=port)
+    logger.info("Starting SentinelX Load Balancer...")
+    logger.info("Listening on: %s:%d", settings.host, settings.port)
+    logger.info("Routing Algorithm: %s", settings.algorithm.value)
+    logger.info("Configured Backends: %d targets", len(settings.backends))
+    for idx, b in enumerate(settings.backends):
+        logger.info("  [%d] %s (%s)", idx + 1, b.url, b.name or "unnamed")
+
+    app = create_app(settings=settings)
+    web.run_app(
+        app,
+        host=settings.host,
+        port=settings.port,
+        print=None,  # Avoid default aiohttp banner clashing with structured logging
+    )
 
 
 if __name__ == "__main__":

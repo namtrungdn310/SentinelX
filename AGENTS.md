@@ -121,8 +121,8 @@ F8  Fake Metrics Vertical Slice (DONE)
 F9  Realtime WebSocket (DONE)
 F10 Dashboard Skeleton (DONE)
 F11 Docker PBL Lab (DONE)
-F12 Load Balancer Skeleton (HIỆN TẠI)
-F13 Health Check
+F12 Load Balancer Skeleton (DONE)
+F13 Health Check (HIỆN TẠI)
 F14 Multi-Host Acceptance
 FOUNDATION FREEZE
 
