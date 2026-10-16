@@ -76,8 +76,8 @@ F10 Dashboard Skeleton (DONE)
 F11 Docker PBL Lab (DONE)
 F12 Load Balancer Skeleton (DONE)
 F13 Health Check (DONE)
-F14 Multi-Host Acceptance (HIỆN TẠI)
-FOUNDATION FREEZE
+F14 Multi-Host Acceptance (DONE)
+FOUNDATION FREEZE (ACHIEVED)
 
 M1 Real Resource Monitoring
 M2 Network Collection
