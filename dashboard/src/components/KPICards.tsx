@@ -1,4 +1,5 @@
-import { Server, Cpu, HardDrive, ArrowUpRight } from 'lucide-react';
+import React from 'react';
+import { Server, Cpu, HardDrive, ArrowDownUp, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { Node } from '../types';
 
 interface KPICardsProps {
@@ -17,9 +18,9 @@ function formatBytes(bytes: number | undefined): string {
 export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
   if (isLoading) {
     return (
-      <div className="kpi-grid">
+      <div className="kpi-strip">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="kpi-card skeleton-box skeleton" />
+          <div key={i} className="kpi-strip-card skeleton" style={{ height: '76px' }} />
         ))}
       </div>
     );
@@ -28,117 +29,129 @@ export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
   const onlineNodes = nodes.filter((n) => n.status === 'online');
   const totalNodes = nodes.length;
 
-  // Calculate average CPU and RAM from online nodes having metrics
+  const warnNodes = onlineNodes.filter((n) => (n.latestCpu ?? 0) > 75 || (n.latestMemory ?? 0) > 85);
+  const okNodes = onlineNodes.filter((n) => (n.latestCpu ?? 0) <= 75 && (n.latestMemory ?? 0) <= 85);
+  const offlineNodes = nodes.filter((n) => n.status === 'offline' || n.status === 'unenrolled');
+
+  // Compute Fleet Averages
   const activeMetrics = onlineNodes.filter((n) => n.latestCpu !== undefined);
   const avgCpu = activeMetrics.length
-    ? Math.round(activeMetrics.reduce((acc, n) => acc + (n.latestCpu || 0), 0) / activeMetrics.length)
+    ? Math.round((activeMetrics.reduce((acc, n) => acc + (n.latestCpu || 0), 0) / activeMetrics.length) * 10) / 10
     : 0;
 
   const avgMem = activeMetrics.length
-    ? Math.round(activeMetrics.reduce((acc, n) => acc + (n.latestMemory || 0), 0) / activeMetrics.length)
+    ? Math.round((activeMetrics.reduce((acc, n) => acc + (n.latestMemory || 0), 0) / activeMetrics.length) * 10) / 10
     : 0;
 
   const totalRx = nodes.reduce((acc, n) => acc + (n.latestRxBytes || 0), 0);
   const totalTx = nodes.reduce((acc, n) => acc + (n.latestTxBytes || 0), 0);
 
+  const cpuStatusClass = avgCpu > 80 ? 'crit' : avgCpu > 60 ? 'warn' : 'ok';
+  const memStatusClass = avgMem > 85 ? 'crit' : avgMem > 70 ? 'warn' : 'purple';
+
   return (
-    <div className="kpi-grid">
-      {/* 1. Monitored Nodes */}
-      <div className="kpi-card">
-        <div className="kpi-header">
-          <span className="text-label">Máy chủ Giám sát</span>
-          <div
-            className="kpi-icon-container"
-            style={{ backgroundColor: '#eef2ff', color: '#4f46e5' }}
-          >
-            <Server size={18} />
-          </div>
+    <div className="kpi-strip">
+      {/* 1. Host Health Summary */}
+      <div className="kpi-strip-card">
+        <div className="kpi-strip-header">
+          <span className="kpi-strip-title">Fleet Host Status</span>
+          <Server size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
-        <div className="kpi-value-row">
-          <span className="kpi-value">{onlineNodes.length}</span>
-          <span className="kpi-subtext">/ {totalNodes} node đang hoạt động</span>
+        <div className="kpi-strip-value-row">
+          <span className="kpi-strip-value">{onlineNodes.length}</span>
+          <span className="kpi-strip-unit">/ {totalNodes} Total Hosts</span>
         </div>
-        <div className="mini-meter">
+        <div className="micro-meter" style={{ display: 'flex' }}>
           <div
-            className="mini-meter-fill"
-            style={{
-              width: `${totalNodes > 0 ? (onlineNodes.length / totalNodes) * 100 : 0}%`,
-              backgroundColor: '#059669',
-            }}
+            className="micro-meter-fill ok"
+            style={{ width: `${totalNodes ? (okNodes.length / totalNodes) * 100 : 0}%` }}
+          />
+          <div
+            className="micro-meter-fill warn"
+            style={{ width: `${totalNodes ? (warnNodes.length / totalNodes) * 100 : 0}%` }}
+          />
+          <div
+            className="micro-meter-fill crit"
+            style={{ width: `${totalNodes ? (offlineNodes.length / totalNodes) * 100 : 0}%` }}
           />
         </div>
-      </div>
-
-      {/* 2. Avg CPU */}
-      <div className="kpi-card">
-        <div className="kpi-header">
-          <span className="text-label">CPU Trung bình</span>
-          <div
-            className="kpi-icon-container"
-            style={{ backgroundColor: '#ecfdf5', color: '#059669' }}
-          >
-            <Cpu size={18} />
-          </div>
-        </div>
-        <div className="kpi-value-row">
-          <span className="kpi-value">{avgCpu}%</span>
-          <span className="kpi-subtext">{activeMetrics.length} node có số liệu</span>
-        </div>
-        <div className="mini-meter">
-          <div
-            className="mini-meter-fill"
-            style={{
-              width: `${Math.min(100, avgCpu)}%`,
-              backgroundColor: avgCpu > 80 ? '#e11d48' : avgCpu > 60 ? '#d97706' : '#059669',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* 3. Avg Memory */}
-      <div className="kpi-card">
-        <div className="kpi-header">
-          <span className="text-label">Bộ nhớ RAM</span>
-          <div
-            className="kpi-icon-container"
-            style={{ backgroundColor: '#fffbeb', color: '#d97706' }}
-          >
-            <HardDrive size={18} />
-          </div>
-        </div>
-        <div className="kpi-value-row">
-          <span className="kpi-value">{avgMem}%</span>
-          <span className="kpi-subtext">Mức tải toàn hệ thống</span>
-        </div>
-        <div className="mini-meter">
-          <div
-            className="mini-meter-fill"
-            style={{
-              width: `${Math.min(100, avgMem)}%`,
-              backgroundColor: avgMem > 85 ? '#e11d48' : avgMem > 70 ? '#d97706' : '#4f46e5',
-            }}
-          />
-        </div>
-      </div>
-
-      {/* 4. Network Throughput */}
-      <div className="kpi-card">
-        <div className="kpi-header">
-          <span className="text-label">Lưu lượng Mạng</span>
-          <div
-            className="kpi-icon-container"
-            style={{ backgroundColor: '#f1f5f9', color: '#475569' }}
-          >
-            <ArrowUpRight size={18} />
-          </div>
-        </div>
-        <div className="kpi-value-row">
-          <span className="kpi-value" style={{ fontSize: '20px' }}>
-            {formatBytes(totalRx + totalTx)}
+        <div className="kpi-strip-subtext">
+          <span style={{ color: 'var(--status-ok)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <CheckCircle2 size={11} /> {okNodes.length} OK
           </span>
+          {warnNodes.length > 0 && (
+            <span style={{ color: 'var(--status-warn)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <AlertTriangle size={11} /> {warnNodes.length} Warn
+            </span>
+          )}
+          {offlineNodes.length > 0 && (
+            <span style={{ color: 'var(--text-muted)' }}>
+              {offlineNodes.length} Inactive
+            </span>
+          )}
         </div>
-        <div className="kpi-subtext font-mono" style={{ marginTop: '4px' }}>
-          RX: {formatBytes(totalRx)} • TX: {formatBytes(totalTx)}
+      </div>
+
+      {/* 2. Fleet CPU Utilization */}
+      <div className="kpi-strip-card">
+        <div className="kpi-strip-header">
+          <span className="kpi-strip-title">Avg CPU Utilization</span>
+          <Cpu size={14} style={{ color: 'var(--text-muted)' }} />
+        </div>
+        <div className="kpi-strip-value-row">
+          <span className="kpi-strip-value">{avgCpu.toFixed(1)}%</span>
+          <span className="kpi-strip-unit">Across Fleet</span>
+        </div>
+        <div className="micro-meter">
+          <div
+            className={`micro-meter-fill ${cpuStatusClass}`}
+            style={{ width: `${Math.min(100, avgCpu)}%` }}
+          />
+        </div>
+        <div className="kpi-strip-subtext">
+          <span>Target: &lt; 75.0%</span>
+          <span className="font-mono">{activeMetrics.length} reporting</span>
+        </div>
+      </div>
+
+      {/* 3. Fleet Memory Usage */}
+      <div className="kpi-strip-card">
+        <div className="kpi-strip-header">
+          <span className="kpi-strip-title">Avg Memory Usage</span>
+          <HardDrive size={14} style={{ color: 'var(--text-muted)' }} />
+        </div>
+        <div className="kpi-strip-value-row">
+          <span className="kpi-strip-value">{avgMem.toFixed(1)}%</span>
+          <span className="kpi-strip-unit">Allocated</span>
+        </div>
+        <div className="micro-meter">
+          <div
+            className={`micro-meter-fill ${memStatusClass}`}
+            style={{ width: `${Math.min(100, avgMem)}%` }}
+          />
+        </div>
+        <div className="kpi-strip-subtext">
+          <span>Buffer: {(100 - avgMem).toFixed(1)}% free</span>
+          <span className="font-mono">{onlineNodes.length} active</span>
+        </div>
+      </div>
+
+      {/* 4. Network I/O Throughput */}
+      <div className="kpi-strip-card">
+        <div className="kpi-strip-header">
+          <span className="kpi-strip-title">Network Throughput</span>
+          <ArrowDownUp size={14} style={{ color: 'var(--brand-cyan)' }} />
+        </div>
+        <div className="kpi-strip-value-row">
+          <span className="kpi-strip-value">{formatBytes(totalRx + totalTx)}</span>
+          <span className="kpi-strip-unit">Total I/O</span>
+        </div>
+        <div className="micro-meter">
+          <div className="micro-meter-fill cyan" style={{ width: '65%' }} />
+        </div>
+        <div className="kpi-strip-subtext">
+          <span className="font-mono">↓ {formatBytes(totalRx)} In</span>
+          <span className="font-mono">↑ {formatBytes(totalTx)} Out</span>
         </div>
       </div>
     </div>

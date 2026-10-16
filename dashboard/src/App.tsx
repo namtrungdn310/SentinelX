@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, Layers, Tag, Activity, ShieldCheck } from 'lucide-react';
 import { Header } from './components/Header';
 import { KPICards } from './components/KPICards';
 import { NodeMatrix } from './components/NodeMatrix';
@@ -38,10 +38,16 @@ export function App() {
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  // Datadog Navigation & Facets States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [timeRange, setTimeRange] = useState('LIVE 5m');
+  const [statusFacet, setStatusFacet] = useState<'all' | 'ok' | 'warn' | 'crit' | 'unenrolled'>('all');
+  const [roleFacet, setRoleFacet] = useState<'all' | 'lb' | 'worker' | 'db'>('all');
+
   // 1. Handle incoming realtime WebSocket events (from real Controller)
   const handleWebSocketMessage = useCallback((msg: RealtimeMessage) => {
     // Add to live audit event stream
-    setEvents((prev) => [msg, ...prev.slice(0, 24)]);
+    setEvents((prev) => [msg, ...prev.slice(0, 39)]);
 
     if (msg.event === 'metric_update' && msg.data.node_id && msg.data.samples) {
       const nodeId = msg.data.node_id;
@@ -66,16 +72,14 @@ export function App() {
         })
       );
 
-      // If this event belongs to the currently selected node, append samples to chart
+      // Append new sample to active telemetry chart if it corresponds to selected node
       setSelectedNode((curr) => {
         if (curr && curr.id === nodeId) {
-          setTelemetrySamples((prevSamples) => {
-            const updated = [...prevSamples, ...msg.data.samples!];
-            return updated.slice(-50); // Keep last 50 points
-          });
+          setTelemetrySamples((prev) => [...prev.slice(-29), latestSample]);
           return {
             ...curr,
             status: 'online',
+            last_seen: msg.data.received_at || new Date().toISOString(),
             latestCpu: latestSample.cpu_percent,
             latestMemory: latestSample.memory_percent,
           };
@@ -83,14 +87,24 @@ export function App() {
         return curr;
       });
     }
+
+    if (msg.event === 'node_status' && msg.data.node_id && msg.data.status) {
+      const nodeId = msg.data.node_id;
+      const status = msg.data.status as Node['status'];
+      setNodes((prev) =>
+        prev.map((n) => (n.id === nodeId ? { ...n, status } : n))
+      );
+      setSelectedNode((curr) => (curr && curr.id === nodeId ? { ...curr, status } : curr));
+    }
   }, []);
 
   const { isConnected, latencyMs } = useWebSocket({
     onMessage: handleWebSocketMessage,
   });
 
-  // 2. Fetch data from real backend Controller or fallback to Demo Data
+  // 2. Fetch Projects and Nodes from Controller REST API
   const loadData = useCallback(async () => {
+    setIsLoading(true);
     setIsRefreshing(true);
     try {
       const [projList, nodeList] = await Promise.all([
@@ -98,25 +112,16 @@ export function App() {
         fetchNodes(selectedProjectId || undefined),
       ]);
 
-      if (projList.length === 0 && nodeList.length === 0) {
-        // Backend is up but database has 0 records -> activate demo mode
-        setIsDemoMode(true);
-        setProjects(MOCK_PROJECTS);
-        setNodes(MOCK_NODES);
-        setSelectedNode(MOCK_NODES[0]);
-        setTelemetrySamples(generateMockTelemetryHistory(MOCK_NODES[0]));
-        setEvents(MOCK_INITIAL_EVENTS);
-      } else {
-        // Live data detected!
-        setIsDemoMode(false);
+      if (projList && projList.length > 0) {
         setProjects(projList);
         setNodes(nodeList);
+        setIsDemoMode(false); // Successfully talking to real Controller API!
+
         if (nodeList.length > 0) {
           setSelectedNode((prev) => {
-            if (!prev || !nodeList.some((n) => n.id === prev.id)) {
-              return nodeList[0];
-            }
-            return prev;
+            if (!prev) return nodeList[0];
+            const found = nodeList.find((n) => n.id === prev.id);
+            return found || nodeList[0];
           });
         }
       }
@@ -138,7 +143,7 @@ export function App() {
     loadData();
   }, [loadData]);
 
-  // 3. Simulated Realtime Ticker during Demo Mode (Live breathing chart & stream)
+  // 3. Simulated Realtime Ticker during Demo Mode (Live Datadog breathing chart & stream)
   useEffect(() => {
     if (!isDemoMode) return;
 
@@ -178,23 +183,11 @@ export function App() {
           cpu_percent: newCpu,
           memory_percent: newMem,
           disk_percent: curr.latestDisk ?? 35,
-          network_rx_bytes: curr.latestRxBytes ?? 18000000,
-          network_tx_bytes: curr.latestTxBytes ?? 12000000,
+          network_tx_bytes: curr.latestTxBytes ?? 1000000,
+          network_rx_bytes: curr.latestRxBytes ?? 2000000,
         };
 
         setTelemetrySamples((prev) => [...prev.slice(-29), newSample]);
-
-        // Push new realtime event
-        const sampleMsg: RealtimeMessage = {
-          event: 'metric_update',
-          data: {
-            node_id: curr.id,
-            samples: [newSample],
-            received_at: nowIso,
-          },
-          timestamp: nowIso,
-        };
-        setEvents((prev) => [sampleMsg, ...prev.slice(0, 24)]);
 
         return {
           ...curr,
@@ -203,7 +196,7 @@ export function App() {
           last_seen: nowIso,
         };
       });
-    }, 2400);
+    }, 2200);
 
     return () => clearInterval(interval);
   }, [isDemoMode]);
@@ -266,18 +259,55 @@ export function App() {
     setSelectedNode(newNode);
   };
 
-  // Filter nodes by selected project if chosen
-  const displayedNodes = selectedProjectId
-    ? nodes.filter((n) => n.project_id === selectedProjectId)
-    : nodes;
+  // Facet Counts Calculation
+  const countOk = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) <= 75).length;
+  const countWarn = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) > 75).length;
+  const countCrit = nodes.filter((n) => n.status === 'offline').length;
+  const countUnenrolled = nodes.filter((n) => n.status === 'unenrolled').length;
+
+  // Filter Pipeline: Project -> Facet -> Search Query
+  const displayedNodes = nodes.filter((node) => {
+    // 1. Project Filter
+    if (selectedProjectId && node.project_id !== selectedProjectId) return false;
+
+    // 2. Status Facet Filter
+    if (statusFacet === 'ok' && (node.status !== 'online' || (node.latestCpu ?? 0) > 75)) return false;
+    if (statusFacet === 'warn' && (node.status !== 'online' || (node.latestCpu ?? 0) <= 75)) return false;
+    if (statusFacet === 'crit' && node.status !== 'offline') return false;
+    if (statusFacet === 'unenrolled' && node.status !== 'unenrolled') return false;
+
+    // 3. Service Role Facet Filter
+    const h = node.hostname.toLowerCase();
+    if (roleFacet === 'lb' && !(h.includes('ingress') || h.includes('lb') || h.includes('gateway'))) return false;
+    if (roleFacet === 'worker' && !(h.includes('worker') || h.includes('backend') || h.includes('api'))) return false;
+    if (roleFacet === 'db' && !(h.includes('db') || h.includes('pg') || h.includes('primary'))) return false;
+
+    // 4. Search Query Filter (Datadog tag/hostname/IP search)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const match =
+        node.hostname.toLowerCase().includes(q) ||
+        node.ip_address.toLowerCase().includes(q) ||
+        node.status.toLowerCase().includes(q) ||
+        (q.startsWith('host:') && node.hostname.toLowerCase().includes(q.replace('host:', ''))) ||
+        (q.startsWith('ip:') && node.ip_address.toLowerCase().includes(q.replace('ip:', '')));
+      if (!match) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="app-container">
-      {/* Top Header */}
+      {/* 1. Datadog Top Navigation Bar */}
       <Header
         projects={projects}
         selectedProject={selectedProjectId}
         onSelectProject={setSelectedProjectId}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        timeRange={timeRange}
+        onTimeRangeChange={setTimeRange}
         isConnected={isConnected}
         latencyMs={latencyMs}
         isDemoMode={isDemoMode}
@@ -287,51 +317,188 @@ export function App() {
         isRefreshing={isRefreshing}
       />
 
-      {/* Main Workspace */}
-      <main className="main-content">
-        {/* Demo Mode Notice Banner */}
-        {isDemoMode && (
-          <div className="demo-banner">
-            <div className="demo-banner-content">
-              <Sparkles size={16} color="#7c3aed" />
-              <span>
-                <strong>Chế độ Dữ liệu Mẫu (Demo Data) đang bật:</strong> Đang hiển thị 5 máy chủ Linux giả lập với luồng WebSocket và đồ thị thời gian thực.
-              </span>
+      {/* 2. Datadog Observability Workspace (Facets Sidebar + Viewport) */}
+      <div className="observability-workspace">
+        {/* Left Facets Filter Sidebar */}
+        <aside className="facets-sidebar">
+          {/* Status Facet Group */}
+          <div>
+            <div className="facet-group-title">
+              <span>Status</span>
+              <Activity size={12} />
             </div>
-            <div className="demo-banner-actions">
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '11px', padding: '3px 8px', borderColor: '#bbf7d0', color: '#15803d' }}
-                onClick={loadData}
+            <div
+              className={`facet-item ${statusFacet === 'all' ? 'active' : ''}`}
+              onClick={() => setStatusFacet('all')}
+            >
+              <div className="facet-item-left">
+                <span>All Hosts</span>
+              </div>
+              <span className="facet-badge-count">{nodes.length}</span>
+            </div>
+            <div
+              className={`facet-item ${statusFacet === 'ok' ? 'active' : ''}`}
+              onClick={() => setStatusFacet('ok')}
+            >
+              <div className="facet-item-left">
+                <span className="facet-status-indicator ok" />
+                <span>OK / Healthy</span>
+              </div>
+              <span className="facet-badge-count">{countOk}</span>
+            </div>
+            <div
+              className={`facet-item ${statusFacet === 'warn' ? 'active' : ''}`}
+              onClick={() => setStatusFacet('warn')}
+            >
+              <div className="facet-item-left">
+                <span className="facet-status-indicator warn" />
+                <span>Warning (&gt;75%)</span>
+              </div>
+              <span className="facet-badge-count">{countWarn}</span>
+            </div>
+            {countCrit > 0 && (
+              <div
+                className={`facet-item ${statusFacet === 'crit' ? 'active' : ''}`}
+                onClick={() => setStatusFacet('crit')}
               >
-                <span>Kiểm tra Controller thực tế</span>
-                <ArrowRight size={12} />
-              </button>
+                <div className="facet-item-left">
+                  <span className="facet-status-indicator crit" />
+                  <span>Critical / Down</span>
+                </div>
+                <span className="facet-badge-count">{countCrit}</span>
+              </div>
+            )}
+            <div
+              className={`facet-item ${statusFacet === 'unenrolled' ? 'active' : ''}`}
+              onClick={() => setStatusFacet('unenrolled')}
+            >
+              <div className="facet-item-left">
+                <span className="facet-status-indicator unenrolled" />
+                <span>Unenrolled</span>
+              </div>
+              <span className="facet-badge-count">{countUnenrolled}</span>
             </div>
           </div>
-        )}
 
-        {/* KPI Cards */}
-        <KPICards nodes={displayedNodes} isLoading={isLoading} />
+          {/* Service Role Facet Group */}
+          <div>
+            <div className="facet-group-title">
+              <span>Service Role</span>
+              <Layers size={12} />
+            </div>
+            <div
+              className={`facet-item ${roleFacet === 'all' ? 'active' : ''}`}
+              onClick={() => setRoleFacet('all')}
+            >
+              <div className="facet-item-left">
+                <span>All Roles</span>
+              </div>
+            </div>
+            <div
+              className={`facet-item ${roleFacet === 'lb' ? 'active' : ''}`}
+              onClick={() => setRoleFacet('lb')}
+            >
+              <div className="facet-item-left">
+                <span className="host-tag role">lb</span>
+                <span>Ingress & LB</span>
+              </div>
+            </div>
+            <div
+              className={`facet-item ${roleFacet === 'worker' ? 'active' : ''}`}
+              onClick={() => setRoleFacet('worker')}
+            >
+              <div className="facet-item-left">
+                <span className="host-tag role">worker</span>
+                <span>Workload Backends</span>
+              </div>
+            </div>
+            <div
+              className={`facet-item ${roleFacet === 'db' ? 'active' : ''}`}
+              onClick={() => setRoleFacet('db')}
+            >
+              <div className="facet-item-left">
+                <span className="host-tag role">db</span>
+                <span>PostgreSQL Cluster</span>
+              </div>
+            </div>
+          </div>
 
-        {/* Node Health Matrix */}
-        <NodeMatrix
-          nodes={displayedNodes}
-          selectedNodeId={selectedNode?.id || null}
-          onSelectNode={handleSelectNode}
-          isLoading={isLoading}
-        />
+          {/* Tags Facet Group */}
+          <div>
+            <div className="facet-group-title">
+              <span>Environment</span>
+              <Tag size={12} />
+            </div>
+            <div className="facet-item active">
+              <div className="facet-item-left">
+                <span className="host-tag env">env:prod</span>
+                <span>Production</span>
+              </div>
+              <span className="facet-badge-count">{nodes.length}</span>
+            </div>
+          </div>
 
-        {/* Realtime Telemetry Chart & Live Event Stream */}
-        <div className="dashboard-columns">
-          <TelemetryChart
-            selectedNode={selectedNode}
-            samples={telemetrySamples}
-            isLoading={isLoadingChart}
+          {/* Telemetry Core Specs */}
+          <div style={{ marginTop: 'auto', padding: '10px', background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '11px', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '4px' }}>
+              <ShieldCheck size={13} style={{ color: 'var(--brand-purple)' }} />
+              <span>SentinelX Core v0.1</span>
+            </div>
+            <div>Agent Engine: psutil + /proc</div>
+            <div>Active Health: Eject &amp; Re-add</div>
+          </div>
+        </aside>
+
+        {/* Right Main Observability Viewport */}
+        <main className="main-viewport">
+          {/* Demo Mode Banner (Datadog notification strip) */}
+          {isDemoMode && (
+            <div className="demo-banner">
+              <div className="demo-banner-content">
+                <Sparkles size={14} color="#a855f7" />
+                <span>
+                  <strong>Datadog Telemetry Simulation Active:</strong> Đang giả lập luồng metrics và log tail thời gian thực của 5 máy chủ Linux.
+                </span>
+              </div>
+              <div>
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ borderColor: 'var(--border-strong)', color: 'var(--text-primary)' }}
+                  onClick={loadData}
+                >
+                  <span>Connect Real Controller</span>
+                  <ArrowRight size={11} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Fleet Metrics Summary Strip (KPI Bar) */}
+          <KPICards nodes={displayedNodes} isLoading={isLoading} />
+
+          {/* 4. Host Fleet Map & Health Matrix */}
+          <NodeMatrix
+            nodes={displayedNodes}
+            selectedNodeId={selectedNode?.id || null}
+            onSelectNode={handleSelectNode}
+            isLoading={isLoading}
+            onOpenDetail={(node) => {
+              setSelectedNode(node);
+              setIsDetailOpen(true);
+            }}
           />
-          <LiveEventStream events={events} isConnected={isConnected || isDemoMode} />
-        </div>
-      </main>
+
+          {/* 5. Time-Series Telemetry & Live Tail Stream */}
+          <div className="telemetry-row">
+            <TelemetryChart
+              selectedNode={selectedNode}
+              samples={telemetrySamples}
+              isLoading={isLoadingChart}
+            />
+            <LiveEventStream events={events} isConnected={isConnected || isDemoMode} />
+          </div>
+        </main>
+      </div>
 
       {/* Modals */}
       <AddNodeModal

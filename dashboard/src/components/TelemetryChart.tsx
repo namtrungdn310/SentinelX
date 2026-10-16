@@ -1,4 +1,5 @@
-import { Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Server } from 'lucide-react';
 import type { MetricSample, Node } from '../types';
 
 interface TelemetryChartProps {
@@ -12,26 +13,29 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
   samples,
   isLoading,
 }) => {
+  const [showCpu, setShowCpu] = useState(true);
+  const [showMem, setShowMem] = useState(true);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
   if (!selectedNode) {
     return (
-      <div className="telemetry-chart-card">
-        <div className="chart-header">
-          <h3 className="text-title">Đồ Thị Tài Nguyên Thời Gian Thực</h3>
+      <div className="chart-panel">
+        <div className="chart-panel-header">
+          <span className="text-title" style={{ fontSize: '13px' }}>Time-Series Telemetry Explorer</span>
         </div>
         <div
           style={{
-            height: '220px',
+            height: '240px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'var(--text-muted)',
-            backgroundColor: 'var(--bg-subtle)',
-            borderRadius: 'var(--radius-md)',
+            gap: '8px',
           }}
         >
-          <Activity size={28} style={{ opacity: 0.5, marginBottom: '8px' }} />
-          <p className="text-body">Chọn một máy chủ trong Ma Trận để xem đồ thị CPU & RAM trực tiếp</p>
+          <Server size={28} style={{ opacity: 0.3 }} />
+          <p className="text-body">Chọn một máy chủ trong Fleet để kiểm tra đồ thị thời gian thực</p>
         </div>
       </div>
     );
@@ -39,102 +43,142 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
 
   if (isLoading) {
     return (
-      <div className="telemetry-chart-card">
-        <div className="chart-header">
-          <h3 className="text-title">Đang tải số liệu node: {selectedNode.hostname}</h3>
+      <div className="chart-panel">
+        <div className="chart-panel-header">
+          <span className="text-title" style={{ fontSize: '13px' }}>Đang nạp telemetry: {selectedNode.hostname}</span>
         </div>
-        <div className="skeleton skeleton-box" style={{ height: '220px' }} />
+        <div className="skeleton" style={{ height: '240px', margin: '12px' }} />
       </div>
     );
   }
 
-  // Reverse samples if ordered desc, so oldest is on the left, newest on the right
+  // Reverse samples if needed, display up to 30 latest points
   const displaySamples = [...samples].reverse().slice(-30);
+  const count = displaySamples.length;
 
   // Chart Dimensions
-  const width = 600;
-  const height = 180;
-  const padding = { top: 20, right: 20, bottom: 25, left: 35 };
-  const graphWidth = width - padding.left - padding.right;
-  const graphHeight = height - padding.top - padding.bottom;
+  const width = 640;
+  const height = 200;
+  const pad = { top: 20, right: 20, bottom: 25, left: 35 };
+  const graphW = width - pad.left - pad.right;
+  const graphH = height - pad.top - pad.bottom;
 
-  const pointsCount = displaySamples.length;
-
-  const getX = (index: number) => {
-    if (pointsCount <= 1) return padding.left + graphWidth / 2;
-    return padding.left + (index / (pointsCount - 1)) * graphWidth;
+  const getX = (i: number) => {
+    if (count <= 1) return pad.left + graphW / 2;
+    return pad.left + (i / (count - 1)) * graphW;
   };
 
   const getY = (val: number) => {
     const clamped = Math.max(0, Math.min(100, val));
-    return padding.top + graphHeight - (clamped / 100) * graphHeight;
+    return pad.top + graphH - (clamped / 100) * graphH;
   };
 
   // Generate SVG path for CPU and Memory
-  const cpuPoints = displaySamples.map((s, i) => `${getX(i)},${getY(s.cpu_percent)}`).join(' ');
-  const memPoints = displaySamples.map((s, i) => `${getX(i)},${getY(s.memory_percent)}`).join(' ');
+  const cpuLine = displaySamples.map((s, i) => `${getX(i)},${getY(s.cpu_percent)}`).join(' ');
+  const memLine = displaySamples.map((s, i) => `${getX(i)},${getY(s.memory_percent)}`).join(' ');
 
-  const cpuArea = displaySamples.length > 0
+  const cpuArea = count > 0
     ? `M ${getX(0)},${getY(displaySamples[0].cpu_percent)} ` +
       displaySamples.map((s, i) => `L ${getX(i)},${getY(s.cpu_percent)}`).join(' ') +
-      ` L ${getX(displaySamples.length - 1)},${padding.top + graphHeight} L ${getX(0)},${padding.top + graphHeight} Z`
+      ` L ${getX(count - 1)},${pad.top + graphH} L ${getX(0)},${pad.top + graphH} Z`
     : '';
 
+  const memArea = count > 0
+    ? `M ${getX(0)},${getY(displaySamples[0].memory_percent)} ` +
+      displaySamples.map((s, i) => `L ${getX(i)},${getY(s.memory_percent)}`).join(' ') +
+      ` L ${getX(count - 1)},${pad.top + graphH} L ${getX(0)},${pad.top + graphH} Z`
+    : '';
+
+  // Current stats
   const latestSample = displaySamples[displaySamples.length - 1];
+  const hoveredSample = hoverIndex !== null && displaySamples[hoverIndex] ? displaySamples[hoverIndex] : null;
+
+  const activeCpu = hoveredSample ? hoveredSample.cpu_percent : latestSample?.cpu_percent ?? selectedNode.latestCpu ?? 0;
+  const activeMem = hoveredSample ? hoveredSample.memory_percent : latestSample?.memory_percent ?? selectedNode.latestMemory ?? 0;
 
   return (
-    <div className="telemetry-chart-card">
-      <div className="chart-header">
-        <div>
-          <h3 className="text-title">
-            Đồ Thị Trực Tiếp: <span style={{ color: 'var(--primary)' }}>{selectedNode.hostname}</span>
-          </h3>
-          <p className="text-body font-mono" style={{ fontSize: '11px' }}>
-            IP: {selectedNode.ip_address} • Cập nhật mỗi giây qua WebSocket
-          </p>
+    <div className="chart-panel">
+      {/* Datadog Chart Header */}
+      <div className="chart-panel-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity size={14} style={{ color: 'var(--brand-cyan)' }} />
+          <span className="text-title" style={{ fontSize: '13px' }}>
+            {selectedNode.hostname}
+          </span>
+          <span className="host-ip">{selectedNode.ip_address}</span>
+          <span className="host-tag role">1s stream</span>
         </div>
 
-        <div className="chart-legend">
-          <div className="legend-item">
-            <span className="legend-color-dot" style={{ backgroundColor: '#059669' }} />
-            <span>CPU: <strong>{latestSample ? latestSample.cpu_percent : 0}%</strong></span>
+        {/* Metric Toggles */}
+        <div className="chart-legends">
+          <div
+            className="legend-pill"
+            onClick={() => setShowCpu(!showCpu)}
+            style={{ opacity: showCpu ? 1 : 0.4 }}
+          >
+            <span className="legend-color-dot" style={{ backgroundColor: 'var(--brand-cyan)' }} />
+            <span>CPU: {activeCpu.toFixed(1)}%</span>
           </div>
-          <div className="legend-item">
-            <span className="legend-color-dot" style={{ backgroundColor: '#4f46e5' }} />
-            <span>RAM: <strong>{latestSample ? latestSample.memory_percent : 0}%</strong></span>
+
+          <div
+            className="legend-pill"
+            onClick={() => setShowMem(!showMem)}
+            style={{ opacity: showMem ? 1 : 0.4 }}
+          >
+            <span className="legend-color-dot" style={{ backgroundColor: 'var(--brand-purple)' }} />
+            <span>MEM: {activeMem.toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
-      <div className="svg-chart-container">
-        <svg viewBox={`0 0 ${width} ${height}`} className="chart-svg" preserveAspectRatio="none">
+      {/* Interactive SVG Chart */}
+      <div className="chart-canvas-container">
+        {hoveredSample && (
+          <div className="chart-tooltip-box">
+            <span style={{ color: 'var(--text-muted)' }}>
+              {new Date(hoveredSample.observed_at).toLocaleTimeString()}
+            </span>
+            <span style={{ color: 'var(--brand-cyan)' }}>CPU: {hoveredSample.cpu_percent.toFixed(1)}%</span>
+            <span style={{ color: 'var(--brand-purple)' }}>MEM: {hoveredSample.memory_percent.toFixed(1)}%</span>
+          </div>
+        )}
+
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          style={{ width: '100%', height: 'auto', display: 'block' }}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
           <defs>
-            <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#059669" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#059669" stopOpacity="0.0" />
+            <linearGradient id="ddCpuGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
+            </linearGradient>
+            <linearGradient id="ddMemGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
-          {/* Grid lines (0%, 25%, 50%, 75%, 100%) */}
+          {/* Grid lines (25%, 50%, 75%, 100%) */}
           {[0, 25, 50, 75, 100].map((val) => {
             const y = getY(val);
             return (
               <g key={val}>
                 <line
-                  x1={padding.left}
+                  x1={pad.left}
                   y1={y}
-                  x2={width - padding.right}
+                  x2={pad.left + graphW}
                   y2={y}
-                  stroke="var(--border-subtle)"
-                  strokeDasharray={val === 0 || val === 100 ? '0' : '3 3'}
+                  stroke="#1c263b"
                   strokeWidth="1"
+                  strokeDasharray="2 3"
                 />
                 <text
-                  x={padding.left - 6}
+                  x={pad.left - 6}
                   y={y + 3}
                   textAnchor="end"
+                  fill="#475569"
                   fontSize="9"
-                  fill="var(--text-muted)"
                   fontFamily="var(--font-mono)"
                 >
                   {val}%
@@ -143,53 +187,64 @@ export const TelemetryChart: React.FC<TelemetryChartProps> = ({
             );
           })}
 
-          {/* CPU Area Fill */}
-          {cpuArea && <path d={cpuArea} fill="url(#cpuGradient)" />}
-
-          {/* RAM Line (Indigo) */}
-          {memPoints && (
-            <polyline
-              fill="none"
-              stroke="#4f46e5"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              points={memPoints}
-            />
+          {/* Memory Area & Line */}
+          {showMem && count > 0 && (
+            <>
+              <path d={memArea} fill="url(#ddMemGrad)" />
+              <polyline
+                points={memLine}
+                fill="none"
+                stroke="#a855f7"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </>
           )}
 
-          {/* CPU Line (Emerald) */}
-          {cpuPoints && (
-            <polyline
-              fill="none"
-              stroke="#059669"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              points={cpuPoints}
-            />
+          {/* CPU Area & Line */}
+          {showCpu && count > 0 && (
+            <>
+              <path d={cpuArea} fill="url(#ddCpuGrad)" />
+              <polyline
+                points={cpuLine}
+                fill="none"
+                stroke="#06b6d4"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </>
           )}
 
-          {/* Latest Point Indicator */}
-          {latestSample && (
-            <g>
-              <circle
-                cx={getX(displaySamples.length - 1)}
-                cy={getY(latestSample.cpu_percent)}
-                r="4"
-                fill="#059669"
-                stroke="#ffffff"
-                strokeWidth="2"
+          {/* Hover Crosshair Detection */}
+          {displaySamples.map((_s, i) => {
+            const x = getX(i);
+            return (
+              <rect
+                key={i}
+                x={x - (graphW / count) / 2}
+                y={pad.top}
+                width={graphW / count}
+                height={graphH}
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+                onMouseEnter={() => setHoverIndex(i)}
               />
-              <circle
-                cx={getX(displaySamples.length - 1)}
-                cy={getY(latestSample.memory_percent)}
-                r="4"
-                fill="#4f46e5"
-                stroke="#ffffff"
-                strokeWidth="2"
-              />
-            </g>
+            );
+          })}
+
+          {/* Active Hover Crosshair Line */}
+          {hoverIndex !== null && (
+            <line
+              x1={getX(hoverIndex)}
+              y1={pad.top}
+              x2={getX(hoverIndex)}
+              y2={pad.top + graphH}
+              stroke="#38bdf8"
+              strokeWidth="1"
+              strokeDasharray="2 2"
+            />
           )}
         </svg>
       </div>

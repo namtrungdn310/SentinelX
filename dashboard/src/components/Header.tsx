@@ -1,10 +1,15 @@
-import { Shield, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import React from 'react';
+import { Shield, Plus, RefreshCw, Sparkles, Search } from 'lucide-react';
 import type { Project } from '../types';
 
 interface HeaderProps {
   projects: Project[];
   selectedProject: string | null;
   onSelectProject: (id: string | null) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  timeRange: string;
+  onTimeRangeChange: (range: string) => void;
   isConnected: boolean;
   latencyMs: number | null;
   isDemoMode: boolean;
@@ -18,6 +23,10 @@ export const Header: React.FC<HeaderProps> = ({
   projects,
   selectedProject,
   onSelectProject,
+  searchQuery,
+  onSearchChange,
+  timeRange,
+  onTimeRangeChange,
   isConnected,
   latencyMs,
   isDemoMode,
@@ -29,42 +38,54 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="header-bar">
       <div className="header-inner">
-        {/* Brand */}
+        {/* Brand & Breadcrumbs (Datadog style) */}
         <div className="brand-section">
           <div className="brand-logo-badge">
-            <Shield size={18} strokeWidth={2.5} />
+            <Shield size={16} strokeWidth={2.5} />
           </div>
-          <div>
-            <h1 className="brand-title">SentinelX</h1>
-            <p className="brand-subtitle">Quản trị & Giám sát Hạ tầng Linux</p>
+          <div className="brand-title">
+            <span>SentinelX</span>
+            <span className="slash">/</span>
+            <span className="brand-breadcrumb">Host Map & Fleet</span>
           </div>
         </div>
 
-        {/* Center / Right Actions */}
-        <div className="header-actions">
-          {/* Demo Mode Toggle */}
-          <button
-            className={`demo-mode-pill ${isDemoMode ? 'active' : ''}`}
-            onClick={onToggleDemoMode}
-            title={
-              isDemoMode
-                ? 'Đang bật dữ liệu mẫu. Bấm để chuyển sang kết nối Controller thực tế.'
-                : 'Bấm để nạp dữ liệu mẫu trải nghiệm đầy đủ giao diện.'
-            }
-          >
-            <Sparkles size={13} />
-            <span>{isDemoMode ? 'Dữ liệu mẫu: BẬT' : 'Dữ liệu mẫu: TẮT'}</span>
-          </button>
+        {/* Universal Search Filter (Datadog tag filter) */}
+        <div className="header-search">
+          <Search size={13} className="header-search-icon" />
+          <input
+            type="text"
+            className="header-search-input"
+            placeholder="Lọc host, IP hoặc tag (vd: host:edge, 10.0.1, online)..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+          <span className="header-search-badge">/</span>
+        </div>
 
-          {/* Project Picker */}
+        {/* Right Actions */}
+        <div className="header-actions">
+          {/* Timeframe Picker */}
+          <div className="time-picker" title="Khoảng thời gian giám sát telemetry">
+            {['LIVE 5m', '15m', '1h', '4h'].map((t) => (
+              <button
+                key={t}
+                className={`time-picker-btn ${timeRange === t ? 'active' : ''}`}
+                onClick={() => onTimeRangeChange(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Project Selector */}
           <div className="project-selector">
-            <span className="text-label" style={{ fontSize: '10px' }}>Dự án:</span>
             <select
               className="project-select-dropdown"
               value={selectedProject || ''}
               onChange={(e) => onSelectProject(e.target.value ? e.target.value : null)}
             >
-              <option value="">Tất cả dự án ({projects.length})</option>
+              <option value="">Tất cả Projects ({projects.length})</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -73,51 +94,61 @@ export const Header: React.FC<HeaderProps> = ({
             </select>
           </div>
 
-          {/* WebSocket Pulse Status */}
+          {/* Live WebSocket Status */}
           <div
             className={`live-badge ${isConnected || isDemoMode ? 'online' : 'offline'}`}
             title={
               isConnected
-                ? 'Kết nối WebSocket realtime hoạt động'
+                ? 'Kết nối WebSocket realtime Controller'
                 : isDemoMode
-                ? 'Đang mô phỏng luồng telemetry thời gian thực'
+                ? 'Đang giả lập luồng telemetry Datadog'
                 : 'Mất kết nối WebSocket tới Controller'
             }
           >
             <span className={`pulse-dot ${isConnected || isDemoMode ? 'pulse' : ''}`} />
-            <span>
-              {isConnected
-                ? 'Realtime Live'
-                : isDemoMode
-                ? 'Realtime (Mô phỏng)'
-                : 'Đang kết nối lại'}
-            </span>
+            <span>{isConnected ? 'LIVE' : isDemoMode ? 'SIMULATED' : 'RECONNECTING'}</span>
             {(isConnected || isDemoMode) && (
-              <span className="font-mono" style={{ fontSize: '11px', opacity: 0.8 }}>
-                ({isConnected ? latencyMs ?? 0 : 8}ms)
+              <span className="font-mono" style={{ fontSize: '10px', opacity: 0.8 }}>
+                {isConnected ? latencyMs ?? 0 : 8}ms
               </span>
             )}
           </div>
 
-          {/* Refresh Button */}
+          {/* Refresh Action */}
           <button
             className="btn btn-outline btn-sm"
+            style={{ padding: '5px 8px' }}
             onClick={onRefresh}
-            disabled={isRefreshing}
-            title="Làm mới dữ liệu từ Controller"
+            title="Đồng bộ lại dữ liệu"
           >
-            <RefreshCw size={14} className={isRefreshing ? 'spin' : ''} />
-            <span>Làm mới</span>
+            <RefreshCw size={13} className={isRefreshing ? 'pulse' : ''} />
           </button>
 
-          {/* Add Node Button */}
-          <button className="btn btn-primary btn-sm" onClick={onOpenAddNode}>
-            <Plus size={15} />
-            <span>Thêm Node mới</span>
+          {/* Demo Mode Toggle */}
+          <button
+            className={`demo-mode-pill ${isDemoMode ? 'active' : ''}`}
+            onClick={onToggleDemoMode}
+            title={
+              isDemoMode
+                ? 'Dữ liệu mẫu đang bật. Bấm để chuyển sang kết nối Controller thực tế.'
+                : 'Bấm để nạp dữ liệu mẫu trải nghiệm đầy đủ giao diện.'
+            }
+          >
+            <Sparkles size={12} />
+            <span>{isDemoMode ? 'Demo Data' : 'Live Core'}</span>
+          </button>
+
+          {/* Add / Enroll Host Button */}
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={onOpenAddNode}
+            style={{ fontWeight: 600 }}
+          >
+            <Plus size={13} strokeWidth={2.5} />
+            <span>Enroll Host</span>
           </button>
         </div>
       </div>
     </header>
   );
 };
-

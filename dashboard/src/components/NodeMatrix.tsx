@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Server, Clock, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Server, LayoutGrid, List } from 'lucide-react';
 import type { Node } from '../types';
 
 interface NodeMatrixProps {
@@ -7,17 +7,26 @@ interface NodeMatrixProps {
   selectedNodeId: string | null;
   onSelectNode: (node: Node) => void;
   isLoading: boolean;
+  onOpenDetail?: (node: Node) => void;
 }
 
-type FilterType = 'all' | 'online' | 'offline' | 'unenrolled';
+type ViewMode = 'grid' | 'table';
 
 function formatRelativeTime(dateString: string | null): string {
   if (!dateString) return 'Chưa kết nối';
   const diffSec = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
   if (diffSec < 5) return 'Vừa xong';
   if (diffSec < 60) return `${diffSec}s trước`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
-  return `${Math.floor(diffSec / 3600)} giờ trước`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m trước`;
+  return `${Math.floor(diffSec / 3600)}h trước`;
+}
+
+function getNodeRole(hostname: string): { label: string; type: 'lb' | 'worker' | 'db' | 'edge' } {
+  const h = hostname.toLowerCase();
+  if (h.includes('ingress') || h.includes('lb') || h.includes('gateway')) return { label: 'role:ingress-lb', type: 'lb' };
+  if (h.includes('db') || h.includes('pg') || h.includes('primary')) return { label: 'role:database-pg', type: 'db' };
+  if (h.includes('api')) return { label: 'role:api-service', type: 'edge' };
+  return { label: 'role:worker-node', type: 'worker' };
 }
 
 export const NodeMatrix: React.FC<NodeMatrixProps> = ({
@@ -25,173 +34,218 @@ export const NodeMatrix: React.FC<NodeMatrixProps> = ({
   selectedNodeId,
   onSelectNode,
   isLoading,
+  onOpenDetail,
 }) => {
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
-  const onlineCount = nodes.filter((n) => n.status === 'online').length;
-  const offlineCount = nodes.filter((n) => n.status === 'offline').length;
-  const unenrolledCount = nodes.filter((n) => n.status === 'unenrolled').length;
-
-  const filteredNodes = nodes.filter((n) => {
-    if (filter === 'online') return n.status === 'online';
-    if (filter === 'offline') return n.status === 'offline';
-    if (filter === 'unenrolled') return n.status === 'unenrolled';
-    return true;
-  });
+  if (isLoading) {
+    return (
+      <div className="matrix-card">
+        <div className="matrix-card-header">
+          <span className="text-title">Host Fleet Map & Health Matrix</span>
+        </div>
+        <div className="host-grid">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="host-tile skeleton" style={{ height: '90px' }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section className="node-matrix-section">
-      {/* Header and Filter Tabs */}
-      <div className="section-header">
-        <div>
-          <h2 className="text-title">Ma Trận Máy Chủ (Node Health Matrix)</h2>
-          <p className="text-body" style={{ fontSize: '12px' }}>
-            Giám sát trạng thái hoạt động và tiêu hao tài nguyên tức thời
-          </p>
+    <div className="matrix-card">
+      <div className="matrix-card-header">
+        <div className="matrix-card-title-group">
+          <Server size={15} style={{ color: 'var(--brand-purple)' }} />
+          <h2 className="text-title" style={{ fontSize: '13px' }}>
+            Infrastructure Host Fleet
+          </h2>
+          <span className="facet-badge-count">{nodes.length} hosts</span>
         </div>
 
-        {/* Filter Controls */}
-        <div className="filter-tabs">
-          <button
-            className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            Tất cả ({nodes.length})
-          </button>
-          <button
-            className={`filter-tab ${filter === 'online' ? 'active' : ''}`}
-            onClick={() => setFilter('online')}
-          >
-            Trực tuyến ({onlineCount})
-          </button>
-          <button
-            className={`filter-tab ${filter === 'unenrolled' ? 'active' : ''}`}
-            onClick={() => setFilter('unenrolled')}
-          >
-            Chưa kích hoạt ({unenrolledCount})
-          </button>
-          {offlineCount > 0 && (
+        <div className="matrix-controls">
+          {/* View Mode Switcher */}
+          <div className="view-mode-toggle">
             <button
-              className={`filter-tab ${filter === 'offline' ? 'active' : ''}`}
-              onClick={() => setFilter('offline')}
+              className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Xem dạng Host Map Grid"
             >
-              Mất kết nối ({offlineCount})
+              <LayoutGrid size={13} />
             </button>
-          )}
+            <button
+              className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Xem dạng SRE Data Table"
+            >
+              <List size={13} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Grid Content */}
-      {isLoading ? (
-        <div className="nodes-grid">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="node-card skeleton-box skeleton" style={{ height: '140px' }} />
-          ))}
+      {nodes.length === 0 ? (
+        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          Không tìm thấy máy chủ nào phù hợp với bộ lọc hiện tại.
         </div>
-      ) : filteredNodes.length === 0 ? (
-        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <Server size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-          <p className="text-body">Không có máy chủ nào phù hợp với bộ lọc.</p>
-        </div>
-      ) : (
-        <div className="nodes-grid">
-          {filteredNodes.map((node) => {
-            const isSelected = selectedNodeId === node.id;
-            const cpu = node.latestCpu !== undefined ? node.latestCpu : 0;
-            const mem = node.latestMemory !== undefined ? node.latestMemory : 0;
+      ) : viewMode === 'grid' ? (
+        /* Host Map Grid Mode (Datadog style) */
+        <div className="host-grid">
+          {nodes.map((node) => {
+            const isSelected = node.id === selectedNodeId;
+            const role = getNodeRole(node.hostname);
+            const cpu = node.latestCpu ?? 0;
+            const mem = node.latestMemory ?? 0;
+            const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
+            const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
 
             return (
               <div
                 key={node.id}
-                className={`node-card ${isSelected ? 'selected' : ''}`}
+                className={`host-tile ${isSelected ? 'selected' : ''}`}
                 onClick={() => onSelectNode(node)}
+                onDoubleClick={() => onOpenDetail?.(node)}
+                title="Nhấn để xem telemetry, nhấp đúp để mở chi tiết node"
               >
-                {/* Card Title & Status Badge */}
-                <div className="node-card-header">
-                  <div>
-                    <h3 className="node-card-title">{node.hostname}</h3>
-                    <span className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {node.ip_address}
-                    </span>
+                <div className="host-tile-header">
+                  <div className="host-identity">
+                    <span className={`facet-status-indicator ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`} />
+                    <span className="host-name" title={node.hostname}>{node.hostname}</span>
                   </div>
-
-                  <span className={`status-badge ${node.status}`}>
-                    {node.status === 'online' && 'Trực tuyến'}
-                    {node.status === 'unenrolled' && 'Chưa đăng ký'}
-                    {node.status === 'offline' && 'Mất kết nối'}
-                    {node.status === 'degraded' && 'Quá tải'}
+                  <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
+                    {node.status === 'online' ? 'OK' : node.status}
                   </span>
                 </div>
 
-                {/* Resource Meters */}
+                {/* Host Tags */}
+                <div className="host-tags-row">
+                  <span className="host-ip">{node.ip_address}</span>
+                  <span className="host-tag role">{role.label}</span>
+                  <span className="host-tag env">env:prod</span>
+                </div>
+
+                {/* Micro Metric Gauges */}
                 {node.status === 'online' ? (
-                  <div className="node-metrics-bars">
-                    {/* CPU */}
+                  <div className="host-metric-row">
                     <div className="metric-bar-item">
-                      <div className="metric-bar-labels">
-                        <span className="text-label" style={{ fontSize: '10px' }}>CPU</span>
-                        <span className="font-mono" style={{ fontWeight: 600 }}>{cpu}%</span>
-                      </div>
-                      <div className="mini-meter" style={{ marginTop: 0 }}>
-                        <div
-                          className="mini-meter-fill"
-                          style={{
-                            width: `${cpu}%`,
-                            backgroundColor: cpu > 80 ? 'var(--status-critical)' : cpu > 60 ? 'var(--status-warning)' : 'var(--status-online)',
-                          }}
-                        />
-                      </div>
+                      <span className="metric-bar-label">CPU</span>
+                      <span className="metric-bar-value" style={{ color: cpu > 80 ? 'var(--status-crit)' : 'inherit' }}>
+                        {cpu.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="micro-meter">
+                      <div className={`micro-meter-fill ${cpuClass}`} style={{ width: `${Math.min(100, cpu)}%` }} />
                     </div>
 
-                    {/* RAM */}
-                    <div className="metric-bar-item">
-                      <div className="metric-bar-labels">
-                        <span className="text-label" style={{ fontSize: '10px' }}>RAM</span>
-                        <span className="font-mono" style={{ fontWeight: 600 }}>{mem}%</span>
-                      </div>
-                      <div className="mini-meter" style={{ marginTop: 0 }}>
-                        <div
-                          className="mini-meter-fill"
-                          style={{
-                            width: `${mem}%`,
-                            backgroundColor: mem > 85 ? 'var(--status-critical)' : 'var(--primary)',
-                          }}
-                        />
-                      </div>
+                    <div className="metric-bar-item" style={{ marginTop: '3px' }}>
+                      <span className="metric-bar-label">MEM</span>
+                      <span className="metric-bar-value">{mem.toFixed(1)}%</span>
+                    </div>
+                    <div className="micro-meter">
+                      <div className={`micro-meter-fill ${memClass}`} style={{ width: `${Math.min(100, mem)}%` }} />
                     </div>
                   </div>
                 ) : (
-                  <div style={{ padding: '8px 0', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {node.status === 'unenrolled'
-                      ? 'Cần cấp Token để Agent kết nối lần đầu'
-                      : 'Không nhận được nhịp tim (heartbeat)'}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '6px 0' }}>
+                    Chưa có số liệu telemetry tức thời
                   </div>
                 )}
-
-                {/* Footer Time & Arrow */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginTop: '12px',
-                    paddingTop: '8px',
-                    borderTop: '1px solid var(--border-subtle)',
-                    fontSize: '11px',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={12} />
-                    {formatRelativeTime(node.last_seen)}
-                  </span>
-                  <ChevronRight size={14} style={{ color: isSelected ? 'var(--primary)' : 'inherit' }} />
-                </div>
               </div>
             );
           })}
         </div>
+      ) : (
+        /* Host List Table Mode (Datadog SRE Table) */
+        <div className="table-container">
+          <table className="datadog-table">
+            <thead>
+              <tr>
+                <th style={{ width: '90px' }}>Status</th>
+                <th>Host & IP</th>
+                <th>Service Role</th>
+                <th style={{ width: '160px' }}>CPU Utilization</th>
+                <th style={{ width: '160px' }}>Memory</th>
+                <th>Network I/O</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((node) => {
+                const isSelected = node.id === selectedNodeId;
+                const role = getNodeRole(node.hostname);
+                const cpu = node.latestCpu ?? 0;
+                const mem = node.latestMemory ?? 0;
+                const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
+                const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
+
+                return (
+                  <tr
+                    key={node.id}
+                    className={isSelected ? 'selected' : ''}
+                    onClick={() => onSelectNode(node)}
+                    onDoubleClick={() => onOpenDetail?.(node)}
+                    title="Nhấn để xem telemetry, nhấp đúp để mở chi tiết node"
+                  >
+                    <td>
+                      <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
+                        {node.status === 'online' ? 'OK' : node.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                        {node.hostname}
+                      </div>
+                      <div className="host-ip">{node.ip_address}</div>
+                    </td>
+                    <td>
+                      <span className="host-tag role">{role.label}</span>
+                    </td>
+                    <td>
+                      {node.status === 'online' ? (
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '3px' }}>
+                            <span className="font-mono">{cpu.toFixed(1)}%</span>
+                          </div>
+                          <div className="micro-meter">
+                            <div className={`micro-meter-fill ${cpuClass}`} style={{ width: `${Math.min(100, cpu)}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      {node.status === 'online' ? (
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '3px' }}>
+                            <span className="font-mono">{mem.toFixed(1)}%</span>
+                          </div>
+                          <div className="micro-meter">
+                            <div className={`micro-meter-fill ${memClass}`} style={{ width: `${Math.min(100, mem)}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="font-mono" style={{ fontSize: '11px' }}>
+                        ↓ {node.latestRxBytes ? `${(node.latestRxBytes / 1000000).toFixed(1)} MB/s` : '0 B/s'}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {formatRelativeTime(node.last_seen)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-    </section>
+    </div>
   );
 };
