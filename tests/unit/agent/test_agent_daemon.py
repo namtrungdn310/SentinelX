@@ -148,3 +148,24 @@ async def test_daemon_run_collects_and_sends_telemetry(tmp_path: Path) -> None:
     assert call_args.node_id == existing.node_id
     assert call_args.agent_id == existing.agent_id
     assert len(call_args.samples) == 2
+
+
+def test_daemon_initializes_real_collector_by_default() -> None:
+    """Test daemon initializes RealResourceCollector by default."""
+    from sentinelx_agent.collectors.real import RealResourceCollector
+
+    settings = AgentSettings()
+    mock_client = AsyncMock(spec=ControllerClient)
+    daemon = AgentDaemon(settings=settings, client=mock_client)
+    assert isinstance(daemon.collector, RealResourceCollector)
+
+
+def test_daemon_initializes_fake_collector_when_configured() -> None:
+    """Test daemon initializes FakeMetricGenerator when configured."""
+    from sentinelx_agent.collectors.fake import FakeMetricGenerator
+
+    settings = AgentSettings(telemetry_collector_type="fake")
+    mock_client = AsyncMock(spec=ControllerClient)
+    daemon = AgentDaemon(settings=settings, client=mock_client)
+    assert isinstance(daemon.collector, FakeMetricGenerator)
+

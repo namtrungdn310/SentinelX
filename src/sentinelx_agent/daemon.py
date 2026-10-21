@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 import aiohttp
 
 from sentinelx_agent.client import ControllerClient, ControllerClientError
+from sentinelx_agent.collectors.base import MetricCollector
 from sentinelx_agent.collectors.fake import FakeMetricGenerator
+from sentinelx_agent.collectors.real import RealResourceCollector
 from sentinelx_agent.config import AgentSettings
 from sentinelx_agent.identity import AgentIdentity, AgentIdentityManager
 from sentinelx_agent.telemetry import TelemetryBatcher
@@ -24,7 +26,7 @@ class AgentDaemon:
         self,
         settings: AgentSettings,
         client: ControllerClient | None = None,
-        collector: FakeMetricGenerator | None = None,
+        collector: MetricCollector | None = None,
         batcher: TelemetryBatcher | None = None,
     ) -> None:
         self.settings = settings
@@ -33,7 +35,15 @@ class AgentDaemon:
             timeout_seconds=settings.timeout_seconds,
         )
         self._owns_client = client is None
-        self._collector = collector or FakeMetricGenerator()
+
+        # Khởi tạo Collector linh hoạt: ưu tiên injected collector -> sau đó kiểm tra config
+        if collector is not None:
+            self._collector: MetricCollector = collector
+        elif settings.telemetry_collector_type.lower() == "fake":
+            self._collector = FakeMetricGenerator()
+        else:
+            self._collector = RealResourceCollector(disk_path=settings.telemetry_disk_path)
+
         self._batcher = batcher or TelemetryBatcher()
         self._identity: AgentIdentity | None = None
         self._stop_event = asyncio.Event()
@@ -50,7 +60,7 @@ class AgentDaemon:
         return self._batcher
 
     @property
-    def collector(self) -> FakeMetricGenerator:
+    def collector(self) -> MetricCollector:
         """Metric collector."""
         return self._collector
 
@@ -194,9 +204,10 @@ class AgentDaemon:
         interval = float(self.settings.telemetry_interval_seconds)
 
         logger.info(
-            "Agent telemetry loop started (interval=%.1fs, batch_size=%d)",
+            "Agent telemetry loop started (interval=%.1fs, batch_size=%d, collector=%s)",
             interval,
             self.settings.telemetry_batch_size,
+            type(self._collector).__name__,
         )
 
         while not self._stop_event.is_set():
@@ -208,7 +219,8 @@ class AgentDaemon:
             if self._stop_event.is_set():
                 break
 
-            sample = self._collector.generate_sample()
+            # Thu thập metric trong worker thread - không bao giờ chặn asyncio event loop
+            sample = await asyncio.to_thread(self._collector.collect)
             self._batcher.add(sample)
 
             if self._batcher.is_ready(self.settings.telemetry_batch_size):
