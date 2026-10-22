@@ -51,6 +51,14 @@ class AgentSettings(BaseSettings):
         le=1000,
         description="Number of samples to batch before sending to Controller",
     )
+    telemetry_collector_type: str = Field(
+        default="real",
+        description="Type of metric collector to use ('real' or 'fake')",
+    )
+    telemetry_disk_path: str | None = Field(
+        default=None,
+        description="Custom directory mount path for disk usage monitoring",
+    )
     identity_path: Path = Field(
         default=Path("data/agent_identity.json"),
         description="Path to local identity file storing agent_id",
@@ -129,6 +137,12 @@ class AgentSettings(BaseSettings):
                             yaml_data["telemetry_batch_size"] = agent_section[
                                 "telemetry_batch_size"
                             ]
+                        if "telemetry_collector_type" in agent_section:
+                            yaml_data["telemetry_collector_type"] = agent_section[
+                                "telemetry_collector_type"
+                            ]
+                        if "telemetry_disk_path" in agent_section:
+                            yaml_data["telemetry_disk_path"] = agent_section["telemetry_disk_path"]
                         if "identity_path" in agent_section:
                             yaml_data["identity_path"] = Path(agent_section["identity_path"])
 
@@ -152,6 +166,12 @@ class AgentSettings(BaseSettings):
             env_kwargs["telemetry_batch_size"] = int(
                 os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"]
             )
+        if "SENTINELX_TELEMETRY_COLLECTOR_TYPE" in os.environ:
+            env_kwargs["telemetry_collector_type"] = os.environ[
+                "SENTINELX_TELEMETRY_COLLECTOR_TYPE"
+            ]
+        if "SENTINELX_TELEMETRY_DISK_PATH" in os.environ:
+            env_kwargs["telemetry_disk_path"] = os.environ["SENTINELX_TELEMETRY_DISK_PATH"]
         if "SENTINELX_IDENTITY_PATH" in os.environ:
             env_kwargs["identity_path"] = Path(os.environ["SENTINELX_IDENTITY_PATH"])
 

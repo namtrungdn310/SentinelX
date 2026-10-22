@@ -46,3 +46,7 @@ class FakeMetricGenerator:
             network_rx_bytes=rx,
             network_tx_bytes=tx,
         )
+
+    def collect(self) -> MetricSample:
+        """Conform to MetricCollector protocol."""
+        return self.generate_sample()
