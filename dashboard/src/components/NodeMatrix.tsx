@@ -1,269 +1,251 @@
-import React, { useState } from 'react';
-import { Server, LayoutGrid, List } from 'lucide-react';
-import type { Node } from '../types';
-
-interface NodeMatrixProps {
+import { useState } from "react";
+import {
+  ArrowDownUp,
+  ArrowUpRight,
+  LayoutGrid,
+  List,
+  Server,
+} from "lucide-react";
+import type { Node } from "../types";
+import { healthLabels, nodeHealth, nodeRole } from "../presentation";
+interface Props {
   nodes: Node[];
   selectedNodeId: string | null;
   onSelectNode: (node: Node) => void;
   isLoading: boolean;
   onOpenDetail?: (node: Node) => void;
 }
-
-type ViewMode = 'grid' | 'table';
-
-function formatRelativeTime(dateString: string | null): string {
-  if (!dateString) return 'Chưa kết nối';
-  const diffSec = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
-  if (diffSec < 5) return 'Vừa xong';
-  if (diffSec < 60) return `${diffSec}s trước`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
-  return `${Math.floor(diffSec / 3600)} giờ trước`;
-}
-
-function getNodeRole(hostname: string): { label: string; type: 'lb' | 'worker' | 'db' | 'edge' } {
-  const h = hostname.toLowerCase();
-  if (h.includes('ingress') || h.includes('lb') || h.includes('gateway')) return { label: 'vai-trò:cổng-vào-lb', type: 'lb' };
-  if (h.includes('db') || h.includes('pg') || h.includes('primary')) return { label: 'vai-trò:csdl-postgres', type: 'db' };
-  if (h.includes('api')) return { label: 'vai-trò:dịch-vụ-api', type: 'edge' };
-  return { label: 'vai-trò:máy-chủ-worker', type: 'worker' };
-}
-
-export const NodeMatrix: React.FC<NodeMatrixProps> = ({
+export function NodeMatrix({
   nodes,
   selectedNodeId,
   onSelectNode,
   isLoading,
   onOpenDetail,
-}) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-
-  if (isLoading) {
-    return (
-      <div className="matrix-card">
-        <div className="matrix-card-header">
-          <span className="text-title">Bản Đồ Hạ Tầng &amp; Ma Trận Máy Chủ</span>
-        </div>
-        <div className="host-grid">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="host-tile skeleton" style={{ height: '90px' }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
+}: Props) {
+  const [view, setView] = useState<"table" | "grid">("table");
+  const [sort, setSort] = useState<{
+    key: "hostname" | "latestCpu" | "latestMemory";
+    ascending: boolean;
+  } | null>(null);
+  const sorted = sort
+    ? [...nodes].sort((a, b) => {
+        const left = a[sort.key];
+        const right = b[sort.key];
+        if (left === undefined) return right === undefined ? 0 : 1;
+        if (right === undefined) return -1;
+        const result =
+          typeof left === "string" && typeof right === "string"
+            ? left.localeCompare(right)
+            : Number(left) - Number(right);
+        return sort.ascending ? result : -result;
+      })
+    : nodes;
+  const toggleSort = (key: "hostname" | "latestCpu" | "latestMemory") =>
+    setSort((current) => ({
+      key,
+      ascending: current?.key === key ? !current.ascending : key === "hostname",
+    }));
+  const sortDirection = (key: string) =>
+    sort?.key === key
+      ? sort.ascending
+        ? ("ascending" as const)
+        : ("descending" as const)
+      : ("none" as const);
   return (
-    <div className="matrix-card">
-      <div className="matrix-card-header">
-        <div className="matrix-card-title-group">
-          <Server size={15} style={{ color: 'var(--brand-indigo)' }} />
-          <h2 className="text-title" style={{ fontSize: '13px' }}>
-            Hạ Tầng Cụm Máy Chủ (Host Fleet)
+    <section
+      className="panel fleet-panel"
+      id="host-fleet"
+      aria-busy={isLoading}
+    >
+      <div className="panel-heading">
+        <div>
+          <h2>
+            Máy chủ <span className="count-badge">{nodes.length}</span>
           </h2>
-          <span className="facet-badge-count">{nodes.length} máy chủ</span>
+          <p>Trạng thái Agent và mẫu tài nguyên gần nhất</p>
         </div>
-
-        <div className="matrix-controls">
-          {/* Chuyển Đổi Dạng Xem (Lưới Ô vs Bảng SRE) */}
-          <div className="view-mode-toggle">
-            <button
-              className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="Xem dạng Lưới ô máy chủ (Host Map)"
-            >
-              <LayoutGrid size={13} />
-            </button>
-            <button
-              className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
-              onClick={() => setViewMode('table')}
-              title="Xem dạng Bảng chi tiết (SRE Table)"
-            >
-              <List size={13} />
-            </button>
-          </div>
+        <div className="segmented">
+          <button
+            aria-label="Xem bảng máy chủ"
+            aria-pressed={view === "table"}
+            className={view === "table" ? "active" : ""}
+            onClick={() => setView("table")}
+          >
+            <List size={16} />
+          </button>
+          <button
+            aria-label="Xem lưới máy chủ"
+            aria-pressed={view === "grid"}
+            className={view === "grid" ? "active" : ""}
+            onClick={() => setView("grid")}
+          >
+            <LayoutGrid size={16} />
+          </button>
         </div>
       </div>
-
-      {nodes.length === 0 ? (
-        <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Không tìm thấy máy chủ nào phù hợp với bộ lọc hiện tại.
+      {isLoading ? (
+        <div className="panel-empty">Đang tải máy chủ…</div>
+      ) : !nodes.length ? (
+        <div className="panel-empty">
+          <Server size={28} />
+          <strong>Chưa tìm thấy máy chủ</strong>
+          <p>Thử đổi từ khóa hoặc xóa bộ lọc hiện tại.</p>
         </div>
-      ) : viewMode === 'grid' ? (
-        /* Dạng Lưới Ô Máy Chủ (Host Map Grid) */
-        <div className="host-grid">
-          {nodes.map((node) => {
-            const isSelected = node.id === selectedNodeId;
-            const role = getNodeRole(node.hostname);
-            const cpu = node.latestCpu ?? 0;
-            const mem = node.latestMemory ?? 0;
-            const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
-            const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
-
-            const statusLabel =
-              node.status === 'online'
-                ? 'HOẠT ĐỘNG'
-                : node.status === 'degraded'
-                ? 'CẢNH BÁO'
-                : node.status === 'offline'
-                ? 'MẤT KẾT NỐI'
-                : 'CHƯA ĐĂNG KÝ';
-
-            return (
-              <div
-                key={node.id}
-                className={`host-tile ${isSelected ? 'selected' : ''}`}
-                onClick={() => onSelectNode(node)}
-                onDoubleClick={() => onOpenDetail?.(node)}
-                title="Bấm để xem đồ thị telemetry, nhấp đúp để mở thông số chi tiết"
-              >
-                <div className="host-tile-header">
-                  <div className="host-identity">
-                    <span className={`facet-status-indicator ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`} />
-                    <span className="host-name" title={node.hostname}>{node.hostname}</span>
-                  </div>
-                  <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
-                    {statusLabel}
-                  </span>
-                </div>
-
-                {/* Thẻ Phân Loại */}
-                <div className="host-tags-row">
-                  <span className="host-ip">{node.ip_address}</span>
-                  <span className="host-tag role">{role.label}</span>
-                  <span className="host-tag env">mt:production</span>
-                </div>
-
-                {/* Vạch Đo Chỉ Số Tức Thời */}
-                {node.status === 'online' ? (
-                  <div className="host-metric-row">
-                    <div className="metric-bar-item">
-                      <span className="metric-bar-label">CPU</span>
-                      <span className="metric-bar-value" style={{ color: cpu > 80 ? 'var(--status-crit)' : 'inherit' }}>
-                        {cpu.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="micro-meter">
-                      <div className={`micro-meter-fill ${cpuClass}`} style={{ width: `${Math.min(100, cpu)}%` }} />
-                    </div>
-
-                    <div className="metric-bar-item" style={{ marginTop: '3px' }}>
-                      <span className="metric-bar-label">RAM</span>
-                      <span className="metric-bar-value">{mem.toFixed(1)}%</span>
-                    </div>
-                    <div className="micro-meter">
-                      <div className={`micro-meter-fill ${memClass}`} style={{ width: `${Math.min(100, mem)}%` }} />
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '6px 0' }}>
-                    Chưa có số liệu telemetry tức thời
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        /* Dạng Bảng Dữ Liệu SRE (Detailed SRE Table) */
-        <div className="table-container">
-          <table className="datadog-table">
+      ) : view === "table" ? (
+        <div className="table-scroll">
+          <table className="host-table">
             <thead>
               <tr>
-                <th style={{ width: '110px' }}>Trạng Thái</th>
-                <th>Máy Chủ &amp; Địa Chỉ IP</th>
-                <th>Vai Trò Hạ Tầng</th>
-                <th style={{ width: '160px' }}>Mức Tải CPU</th>
-                <th style={{ width: '160px' }}>Bộ Nhớ RAM</th>
-                <th>Lưu Lượng I/O</th>
-                <th>Lần Cuối Báo Cáo</th>
+                <th aria-sort={sortDirection("hostname")}>
+                  <button
+                    className="table-sort"
+                    onClick={() => toggleSort("hostname")}
+                  >
+                    HOSTNAME / IP <ArrowDownUp size={11} />
+                  </button>
+                </th>
+                <th>TRẠNG THÁI</th>
+                <th aria-sort={sortDirection("latestCpu")}>
+                  <button
+                    className="table-sort"
+                    onClick={() => toggleSort("latestCpu")}
+                  >
+                    CPU <ArrowDownUp size={11} />
+                  </button>
+                </th>
+                <th aria-sort={sortDirection("latestMemory")}>
+                  <button
+                    className="table-sort"
+                    onClick={() => toggleSort("latestMemory")}
+                  >
+                    RAM <ArrowDownUp size={11} />
+                  </button>
+                </th>
+                <th>
+                  <span className="sr-only">Chi tiết</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {nodes.map((node) => {
-                const isSelected = node.id === selectedNodeId;
-                const role = getNodeRole(node.hostname);
-                const cpu = node.latestCpu ?? 0;
-                const mem = node.latestMemory ?? 0;
-                const cpuClass = cpu > 80 ? 'crit' : cpu > 60 ? 'warn' : 'ok';
-                const memClass = mem > 85 ? 'crit' : mem > 70 ? 'warn' : 'purple';
-
-                const statusLabel =
-                  node.status === 'online'
-                    ? 'HOẠT ĐỘNG'
-                    : node.status === 'degraded'
-                    ? 'CẢNH BÁO'
-                    : node.status === 'offline'
-                    ? 'MẤT KẾT NỐI'
-                    : 'CHƯA ĐĂNG KÝ';
-
-                return (
-                  <tr
-                    key={node.id}
-                    className={isSelected ? 'selected' : ''}
-                    onClick={() => onSelectNode(node)}
-                    onDoubleClick={() => onOpenDetail?.(node)}
-                    title="Bấm để xem telemetry, nhấp đúp để mở chi tiết máy chủ"
-                  >
-                    <td>
-                      <span className={`status-badge ${node.status === 'online' ? 'ok' : node.status === 'degraded' ? 'warn' : 'crit'}`}>
-                        {statusLabel}
+              {sorted.map((node) => (
+                <tr
+                  key={node.id}
+                  className={selectedNodeId === node.id ? "selected" : ""}
+                >
+                  <td>
+                    <button
+                      className="host-select"
+                      onClick={() => onSelectNode(node)}
+                      aria-pressed={selectedNodeId === node.id}
+                    >
+                      <span className="server-icon">
+                        <Server size={16} />
                       </span>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                        {node.hostname}
-                      </div>
-                      <div className="host-ip">{node.ip_address}</div>
-                    </td>
-                    <td>
-                      <span className="host-tag role">{role.label}</span>
-                    </td>
-                    <td>
-                      {node.status === 'online' ? (
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '3px' }}>
-                            <span className="font-mono">{cpu.toFixed(1)}%</span>
-                          </div>
-                          <div className="micro-meter">
-                            <div className={`micro-meter-fill ${cpuClass}`} style={{ width: `${Math.min(100, cpu)}%` }} />
-                          </div>
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>
-                      )}
-                    </td>
-                    <td>
-                      {node.status === 'online' ? (
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '3px' }}>
-                            <span className="font-mono">{mem.toFixed(1)}%</span>
-                          </div>
-                          <div className="micro-meter">
-                            <div className={`micro-meter-fill ${memClass}`} style={{ width: `${Math.min(100, mem)}%` }} />
-                          </div>
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="font-mono" style={{ fontSize: '11px' }}>
-                        ↓ {node.latestRxBytes ? `${(node.latestRxBytes / 1000000).toFixed(1)} MB/s` : '0 B/s'}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="font-mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {formatRelativeTime(node.last_seen)}
+                      <span>
+                        <strong>{node.hostname}</strong>
+                        <small>
+                          {node.ip_address}{" "}
+                          <span>· {nodeRole(node.hostname)}</span>
+                        </small>
                       </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </button>
+                  </td>
+                  <td>
+                    <span className={`status-badge ${nodeHealth(node)}`}>
+                      <i />
+                      {healthLabels[nodeHealth(node)]}
+                    </span>
+                  </td>
+                  <td>
+                    <Metric value={node.latestCpu} />
+                  </td>
+                  <td>
+                    <Metric value={node.latestMemory} memory />
+                  </td>
+                  <td>
+                    <button
+                      className="icon-button detail-button"
+                      aria-label={`Chi tiết ${node.hostname}`}
+                      onClick={() => onOpenDetail?.(node)}
+                    >
+                      <ArrowUpRight size={17} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+      ) : (
+        <div className="host-grid">
+          {sorted.map((node) => (
+            <article
+              className={`host-tile ${selectedNodeId === node.id ? "selected" : ""}`}
+              key={node.id}
+            >
+              <button
+                className="tile-select"
+                onClick={() => onSelectNode(node)}
+                aria-pressed={selectedNodeId === node.id}
+              >
+                <Server size={19} />
+                <strong>{node.hostname}</strong>
+                <span className={`status-badge ${nodeHealth(node)}`}>
+                  {healthLabels[nodeHealth(node)]}
+                </span>
+                <small>
+                  {node.ip_address} · {nodeRole(node.hostname)}
+                </small>
+                <span className="tile-metrics">
+                  <span>
+                    CPU <b>{node.latestCpu?.toFixed(1) ?? "—"}%</b>
+                  </span>
+                  <span>
+                    RAM <b>{node.latestMemory?.toFixed(1) ?? "—"}%</b>
+                  </span>
+                </span>
+              </button>
+              <button
+                className="tile-detail"
+                onClick={() => onOpenDetail?.(node)}
+              >
+                Chi tiết máy chủ <ArrowUpRight size={14} />
+              </button>
+            </article>
+          ))}
+        </div>
       )}
+      <div className="panel-foot">
+        <span>Hiển thị {nodes.length} máy chủ</span>
+        <span>
+          Chọn host để xem telemetry <ArrowUpRight size={12} />
+        </span>
+      </div>
+    </section>
+  );
+}
+function Metric({
+  value,
+  memory = false,
+}: {
+  value?: number;
+  memory?: boolean;
+}) {
+  return (
+    <div className="table-metric">
+      <span>{value === undefined ? "—" : `${value.toFixed(1)}%`}</span>
+      <span className="micro-meter">
+        <i
+          className={
+            value !== undefined && value > (memory ? 85 : 75)
+              ? "warning"
+              : memory
+                ? "memory"
+                : ""
+          }
+          style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }}
+        />
+      </span>
     </div>
   );
-};
+}

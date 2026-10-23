@@ -2,20 +2,29 @@
  * REST API Client for SentinelX Controller.
  */
 
-import type { MetricQueryResponse, Node, Project } from './types';
+import type { MetricQueryResponse, Node, Project } from "./types";
 
-const API_BASE = '/api/v1';
+const API_BASE = "/api/v1";
 
 export async function fetchProjects(): Promise<Project[]> {
-  const res = await fetch(`${API_BASE}/projects`);
+  const res = await fetch(`${API_BASE}/projects`, {
+    signal: AbortSignal.timeout(10000),
+  });
   if (!res.ok) throw new Error(`Lỗi tải dự án: ${res.statusText}`);
-  return res.json();
+  const data = await res.json();
+  return data.map((project: Project & { project_id?: string }) => ({
+    ...project,
+    id: project.project_id ?? project.id,
+  }));
 }
 
-export async function createProject(name: string, description?: string): Promise<Project> {
+export async function createProject(
+  name: string,
+  description?: string,
+): Promise<Project> {
   const res = await fetch(`${API_BASE}/projects`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, description }),
   });
   if (!res.ok) throw new Error(`Lỗi tạo dự án: ${res.statusText}`);
@@ -29,8 +38,10 @@ export async function createProject(name: string, description?: string): Promise
 }
 
 export async function fetchNodes(projectId?: string): Promise<Node[]> {
-  const url = projectId ? `${API_BASE}/nodes?project_id=${projectId}` : `${API_BASE}/nodes`;
-  const res = await fetch(url);
+  const url = projectId
+    ? `${API_BASE}/nodes?project_id=${projectId}`
+    : `${API_BASE}/nodes`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Lỗi tải máy chủ: ${res.statusText}`);
   const data = await res.json();
   return data.map((n: Record<string, unknown>) => ({
@@ -47,11 +58,11 @@ export async function fetchNodes(projectId?: string): Promise<Node[]> {
 export async function createNode(
   projectId: string,
   hostname: string,
-  ipAddress: string
+  ipAddress: string,
 ): Promise<Node> {
   const res = await fetch(`${API_BASE}/nodes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       project_id: projectId,
       hostname,
@@ -71,19 +82,29 @@ export async function createNode(
   };
 }
 
-export async function createEnrollmentToken(nodeId: string, hours = 24): Promise<string> {
+export async function createEnrollmentToken(
+  nodeId: string,
+  hours = 24,
+): Promise<string> {
   const res = await fetch(`${API_BASE}/nodes/${nodeId}/enrollment-tokens`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ expires_in_hours: hours }),
   });
-  if (!res.ok) throw new Error(`Lỗi tạo mã enrollment token: ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`Lỗi tạo mã enrollment token: ${res.statusText}`);
   const data = await res.json();
   return data.enrollment_token;
 }
 
-export async function fetchNodeMetrics(nodeId: string, limit = 50): Promise<MetricQueryResponse> {
-  const res = await fetch(`${API_BASE}/telemetry/nodes/${nodeId}/metrics?limit=${limit}`);
+export async function fetchNodeMetrics(
+  nodeId: string,
+  limit = 50,
+): Promise<MetricQueryResponse> {
+  const res = await fetch(
+    `${API_BASE}/telemetry/nodes/${nodeId}/metrics?limit=${limit}`,
+    { signal: AbortSignal.timeout(10000) },
+  );
   if (!res.ok) throw new Error(`Lỗi tải số liệu node: ${res.statusText}`);
   return res.json();
 }

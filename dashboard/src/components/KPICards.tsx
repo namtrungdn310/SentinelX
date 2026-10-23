@@ -1,159 +1,127 @@
-import React from 'react';
-import { Server, Cpu, HardDrive, ArrowDownUp, CheckCircle2, AlertTriangle } from 'lucide-react';
-import type { Node } from '../types';
+import {
+  Server,
+  Cpu,
+  MemoryStick,
+  ArrowDownUp,
+  TriangleAlert,
+} from "lucide-react";
+import type { Node } from "../types";
+import { formatBytes, nodeHealth } from "../presentation";
 
-interface KPICardsProps {
+export function KPICards({
+  nodes,
+  isLoading,
+}: {
   nodes: Node[];
   isLoading: boolean;
-}
-
-function formatBytes(bytes: number | undefined): string {
-  if (!bytes || bytes === 0) return '0 B/s';
-  const k = 1024;
-  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
-}
-
-export const KPICards: React.FC<KPICardsProps> = ({ nodes, isLoading }) => {
-  if (isLoading) {
-    return (
-      <div className="kpi-strip">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="kpi-strip-card skeleton" style={{ height: '76px' }} />
-        ))}
-      </div>
-    );
-  }
-
-  const onlineNodes = nodes.filter((n) => n.status === 'online');
-  const totalNodes = nodes.length;
-
-  const warnNodes = onlineNodes.filter((n) => (n.latestCpu ?? 0) > 75 || (n.latestMemory ?? 0) > 85);
-  const okNodes = onlineNodes.filter((n) => (n.latestCpu ?? 0) <= 75 && (n.latestMemory ?? 0) <= 85);
-  const offlineNodes = nodes.filter((n) => n.status === 'offline' || n.status === 'unenrolled');
-
-  // Tính toán số liệu trung bình toàn cụm
-  const activeMetrics = onlineNodes.filter((n) => n.latestCpu !== undefined);
-  const avgCpu = activeMetrics.length
-    ? Math.round((activeMetrics.reduce((acc, n) => acc + (n.latestCpu || 0), 0) / activeMetrics.length) * 10) / 10
-    : 0;
-
-  const avgMem = activeMetrics.length
-    ? Math.round((activeMetrics.reduce((acc, n) => acc + (n.latestMemory || 0), 0) / activeMetrics.length) * 10) / 10
-    : 0;
-
-  const totalRx = nodes.reduce((acc, n) => acc + (n.latestRxBytes || 0), 0);
-  const totalTx = nodes.reduce((acc, n) => acc + (n.latestTxBytes || 0), 0);
-
-  const cpuStatusClass = avgCpu > 80 ? 'crit' : avgCpu > 60 ? 'warn' : 'ok';
-  const memStatusClass = avgMem > 85 ? 'crit' : avgMem > 70 ? 'warn' : 'purple';
+}) {
+  const online = nodes.filter(
+    (node) => node.status === "online" || node.status === "degraded",
+  );
+  const cpu = online.filter((node) => node.latestCpu !== undefined);
+  const mem = online.filter((node) => node.latestMemory !== undefined);
+  const avgCpu = cpu.length
+    ? cpu.reduce((sum, node) => sum + node.latestCpu!, 0) / cpu.length
+    : null;
+  const avgMem = mem.length
+    ? mem.reduce((sum, node) => sum + node.latestMemory!, 0) / mem.length
+    : null;
+  const rx = online.reduce((sum, node) => sum + (node.latestRxBytes ?? 0), 0);
+  const tx = online.reduce((sum, node) => sum + (node.latestTxBytes ?? 0), 0);
+  const warning = nodes.filter((node) => nodeHealth(node) === "warn").length;
+  const offline = nodes.filter((node) => node.status === "offline").length;
+  const waiting = nodes.filter((node) => node.status === "unenrolled").length;
+  const attention = warning + offline + waiting;
 
   return (
-    <div className="kpi-strip">
-      {/* 1. Trạng Thái Máy Chủ */}
-      <div className="kpi-strip-card">
-        <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Trạng Thái Máy Chủ</span>
-          <Server size={14} style={{ color: 'var(--text-muted)' }} />
+    <section
+      className="kpi-grid"
+      aria-label="Chỉ số tổng quan"
+      aria-busy={isLoading}
+    >
+      <article className="stat-card stat-online">
+        <div className="stat-top">
+          <Server size={14} />
+          <span>HOST TRỰC TUYẾN</span>
         </div>
-        <div className="kpi-strip-value-row">
-          <span className="kpi-strip-value">{onlineNodes.length}</span>
-          <span className="kpi-strip-unit">/ {totalNodes} Máy Chủ Hoạt Động</span>
+        <div className="stat-value">
+          {online.length}
+          <span>/ {nodes.length}</span>
+          <span className="stat-state">ONLINE</span>
         </div>
-        <div className="micro-meter" style={{ display: 'flex' }}>
-          <div
-            className="micro-meter-fill ok"
-            style={{ width: `${totalNodes ? (okNodes.length / totalNodes) * 100 : 0}%` }}
-          />
-          <div
-            className="micro-meter-fill warn"
-            style={{ width: `${totalNodes ? (warnNodes.length / totalNodes) * 100 : 0}%` }}
-          />
-          <div
-            className="micro-meter-fill crit"
-            style={{ width: `${totalNodes ? (offlineNodes.length / totalNodes) * 100 : 0}%` }}
-          />
+        <div className="stat-bottom">
+          <span>{offline} offline</span>
+          <span>{waiting} chờ đăng ký</span>
         </div>
-        <div className="kpi-strip-subtext">
-          <span style={{ color: 'var(--status-ok)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-            <CheckCircle2 size={11} /> {okNodes.length} Bình thường
-          </span>
-          {warnNodes.length > 0 && (
-            <span style={{ color: 'var(--status-warn)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <AlertTriangle size={11} /> {warnNodes.length} Cảnh báo
-            </span>
-          )}
-          {offlineNodes.length > 0 && (
-            <span style={{ color: 'var(--text-muted)' }}>
-              {offlineNodes.length} Chưa kết nối
-            </span>
-          )}
+      </article>
+      <article className={`stat-card ${attention ? "stat-attention" : ""}`}>
+        <div className="stat-top">
+          <TriangleAlert size={14} />
+          <span>HOST CẦN CHÚ Ý</span>
         </div>
-      </div>
-
-      {/* 2. Mức Tiêu Thụ CPU */}
-      <div className="kpi-strip-card">
-        <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Tải CPU Trung Bình</span>
-          <Cpu size={14} style={{ color: 'var(--text-muted)' }} />
+        <div className="stat-value">
+          {attention}
+          <span className="stat-state">{attention ? "ATTENTION" : "OK"}</span>
         </div>
-        <div className="kpi-strip-value-row">
-          <span className="kpi-strip-value">{avgCpu.toFixed(1)}%</span>
-          <span className="kpi-strip-unit">Toàn Cụm</span>
+        <div className="stat-bottom">
+          <span>{warning} vượt ngưỡng / degraded</span>
         </div>
-        <div className="micro-meter">
-          <div
-            className={`micro-meter-fill ${cpuStatusClass}`}
-            style={{ width: `${Math.min(100, avgCpu)}%` }}
+      </article>
+      <article className="stat-card stat-cpu">
+        <div className="stat-top">
+          <Cpu size={14} />
+          <span>CPU TRUNG BÌNH</span>
+        </div>
+        <div className="stat-value">
+          {avgCpu?.toFixed(1) ?? "—"}
+          <span>%</span>
+        </div>
+        <div className="stat-bottom">
+          {cpu.length
+            ? `${cpu.length} host có mẫu · ngưỡng 75%`
+            : "Chưa có dữ liệu CPU"}
+        </div>
+        <div className="stat-track">
+          <i
+            className={avgCpu !== null && avgCpu > 75 ? "warn" : "cpu"}
+            style={{ width: `${Math.min(100, avgCpu ?? 0)}%` }}
           />
         </div>
-        <div className="kpi-strip-subtext">
-          <span>Ngưỡng an toàn: &lt; 75.0%</span>
-          <span className="font-mono">{activeMetrics.length} máy chủ đo đạc</span>
+      </article>
+      <article className="stat-card stat-memory">
+        <div className="stat-top">
+          <MemoryStick size={14} />
+          <span>RAM TRUNG BÌNH</span>
         </div>
-      </div>
-
-      {/* 3. Mức Chiếm Dụng Bộ Nhớ RAM */}
-      <div className="kpi-strip-card">
-        <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Bộ Nhớ RAM Chiếm Dụng</span>
-          <HardDrive size={14} style={{ color: 'var(--text-muted)' }} />
+        <div className="stat-value">
+          {avgMem?.toFixed(1) ?? "—"}
+          <span>%</span>
         </div>
-        <div className="kpi-strip-value-row">
-          <span className="kpi-strip-value">{avgMem.toFixed(1)}%</span>
-          <span className="kpi-strip-unit">Đã Phân Bổ</span>
+        <div className="stat-bottom">
+          {mem.length
+            ? `${mem.length} host có mẫu · ngưỡng 85%`
+            : "Chưa có dữ liệu RAM"}
         </div>
-        <div className="micro-meter">
-          <div
-            className={`micro-meter-fill ${memStatusClass}`}
-            style={{ width: `${Math.min(100, avgMem)}%` }}
+        <div className="stat-track">
+          <i
+            className={avgMem !== null && avgMem > 85 ? "warn" : "memory"}
+            style={{ width: `${Math.min(100, avgMem ?? 0)}%` }}
           />
         </div>
-        <div className="kpi-strip-subtext">
-          <span>Khả dụng: {(100 - avgMem).toFixed(1)}%</span>
-          <span className="font-mono">{onlineNodes.length} trực tuyến</span>
+      </article>
+      <article className="stat-card stat-network">
+        <div className="stat-top">
+          <ArrowDownUp size={14} />
+          <span>Dữ liệu mạng tích lũy</span>
         </div>
-      </div>
-
-      {/* 4. Lưu Lượng Băng Thông Mạng */}
-      <div className="kpi-strip-card">
-        <div className="kpi-strip-header">
-          <span className="kpi-strip-title">Băng Thông Mạng (I/O)</span>
-          <ArrowDownUp size={14} style={{ color: 'var(--brand-cyan)' }} />
+        <div className="stat-value network-value">
+          {rx + tx ? formatBytes(rx + tx) : "—"}
         </div>
-        <div className="kpi-strip-value-row">
-          <span className="kpi-strip-value">{formatBytes(totalRx + totalTx)}</span>
-          <span className="kpi-strip-unit">Tổng Lưu Lượng</span>
+        <div className="stat-bottom">
+          <span>RX {formatBytes(rx)}</span>
+          <span>TX {formatBytes(tx)}</span>
         </div>
-        <div className="micro-meter">
-          <div className="micro-meter-fill cyan" style={{ width: '65%' }} />
-        </div>
-        <div className="kpi-strip-subtext">
-          <span className="font-mono">↓ Nhận: {formatBytes(totalRx)}</span>
-          <span className="font-mono">↑ Gửi: {formatBytes(totalTx)}</span>
-        </div>
-      </div>
-    </div>
+      </article>
+    </section>
   );
-};
+}

@@ -1,134 +1,143 @@
-import { useState } from 'react';
-import { X, Server, Key, Check, Copy } from 'lucide-react';
-import type { Node } from '../types';
-import { createEnrollmentToken } from '../api';
+import { useId, useState } from "react";
+import { Check, Copy, KeyRound, Server, X } from "lucide-react";
+import type { Node } from "../types";
+import { createEnrollmentToken } from "../api";
+import { healthLabels, nodeHealth, nodeRole } from "../presentation";
+import { Modal } from "./Modal";
 
-interface NodeDetailModalProps {
+interface Props {
   node: Node | null;
   isOpen: boolean;
   onClose: () => void;
+  isDemoMode: boolean;
 }
-
-export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({ node, isOpen, onClose }) => {
+export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
+  const id = useId();
   const [token, setToken] = useState<string | null>(null);
-  const [loadingToken, setLoadingToken] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-
+  const [error, setError] = useState<string | null>(null);
   if (!isOpen || !node) return null;
-
-  const handleGenerateToken = async () => {
+  const close = () => {
+    if (!loading) onClose();
+  };
+  const generate = async () => {
     try {
-      setLoadingToken(true);
-      const rawToken = await createEnrollmentToken(node.id, 24);
-      setToken(rawToken);
+      setLoading(true);
+      setError(null);
+      setCopied(false);
+      setToken(await createEnrollmentToken(node.id, 24));
     } catch {
-      alert('Không thể cấp token lúc này');
+      setError("Không cấp được token. Kiểm tra kết nối Controller và thử lại.");
     } finally {
-      setLoadingToken(false);
+      setLoading(false);
     }
   };
-
-  const handleCopy = () => {
-    if (token) {
-      navigator.clipboard.writeText(token);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(token!);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError(
+        "Không truy cập được clipboard. Chọn token và sao chép thủ công.",
+      );
     }
   };
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Server size={18} style={{ color: 'var(--primary)' }} />
-            <h3 className="text-title" style={{ fontSize: '16px' }}>
-              Chi Tiết Máy Chủ: {node.hostname}
-            </h3>
-          </div>
-          <button
-            className="btn btn-outline btn-sm"
-            style={{ padding: '4px', borderRadius: '50%' }}
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
+    <Modal onClose={close} labelledBy={`${id}-title`}>
+      <div className="modal-header">
+        <div>
+          <span className="modal-eyebrow">
+            <Server size={15} /> HOST DETAILS
+          </span>
+          <h2 id={`${id}-title`}>{node.hostname}</h2>
         </div>
-
-        {/* Node Properties Table */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span className="text-label">Node UUID</span>
-            <span className="font-mono" style={{ fontSize: '12px' }}>{node.id}</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span className="text-label">Địa chỉ IP</span>
-            <span className="font-mono">{node.ip_address}</span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span className="text-label">Trạng thái</span>
-            <span className={`status-badge ${node.status}`}>
-              {node.status === 'online' ? 'Trực tuyến' : node.status === 'unenrolled' ? 'Chưa đăng ký' : 'Mất kết nối'}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span className="text-label">Lần cuối phản hồi</span>
-            <span className="font-mono" style={{ fontSize: '12px' }}>
-              {node.last_seen ? new Date(node.last_seen).toLocaleString() : 'Chưa có dữ liệu'}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span className="text-label">CPU / RAM hiện thời</span>
-            <span className="font-mono">
-              {node.latestCpu !== undefined ? `${node.latestCpu}% CPU` : '--'} •{' '}
-              {node.latestMemory !== undefined ? `${node.latestMemory}% RAM` : '--'}
-            </span>
-          </div>
-        </div>
-
-        {/* Token Issuance Section */}
-        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span className="text-label">Cấp Mã Enrollment Token Mới</span>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={handleGenerateToken}
-              disabled={loadingToken}
-            >
-              <Key size={13} />
-              <span>{loadingToken ? 'Đang tạo...' : 'Tạo Token'}</span>
-            </button>
-          </div>
-
-          {token && (
-            <div style={{ marginTop: '8px' }}>
-              <div className="code-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ wordBreak: 'break-all' }}>{token}</span>
-                <button
-                  className="btn btn-outline btn-sm"
-                  style={{ marginLeft: '8px', color: '#fff', borderColor: '#475569' }}
-                  onClick={handleCopy}
-                >
-                  {copied ? <Check size={13} style={{ color: 'var(--status-online)' }} /> : <Copy size={13} />}
-                </button>
-              </div>
-              <p className="text-body" style={{ fontSize: '11px', marginTop: '4px' }}>
-                Token này có hiệu lực trong 24 giờ để Agent thực hiện handshake enrollment ban đầu.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-          <button className="btn btn-primary btn-sm" onClick={onClose}>
-            Đóng
-          </button>
-        </div>
+        <button
+          className="icon-button"
+          aria-label="Đóng chi tiết máy chủ"
+          onClick={close}
+          disabled={loading}
+        >
+          <X size={19} />
+        </button>
       </div>
-    </div>
+      <div className="host-detail-summary">
+        <span className={`status-badge ${nodeHealth(node)}`}>
+          <i />
+          {healthLabels[nodeHealth(node)]}
+        </span>
+        <span>{nodeRole(node.hostname)}</span>
+      </div>
+      <dl className="detail-properties">
+        <div>
+          <dt>Node ID</dt>
+          <dd className="font-mono">{node.id}</dd>
+        </div>
+        <div>
+          <dt>Địa chỉ IP</dt>
+          <dd className="font-mono">{node.ip_address}</dd>
+        </div>
+        <div>
+          <dt>Phản hồi gần nhất</dt>
+          <dd>
+            {node.last_seen
+              ? new Date(node.last_seen).toLocaleString("vi-VN")
+              : "Chưa có phản hồi"}
+          </dd>
+        </div>
+        <div>
+          <dt>CPU / RAM</dt>
+          <dd className="font-mono">
+            {node.latestCpu?.toFixed(1) ?? "—"}% /{" "}
+            {node.latestMemory?.toFixed(1) ?? "—"}%
+          </dd>
+        </div>
+        <div>
+          <dt>Ổ đĩa</dt>
+          <dd className="font-mono">{node.latestDisk?.toFixed(1) ?? "—"}%</dd>
+        </div>
+      </dl>
+      <div className="token-section">
+        <h3>
+          <KeyRound size={16} /> Enrollment token
+        </h3>
+        <p className="text-body">
+          {isDemoMode
+            ? "Máy chủ mẫu không cấp token thật. Kết nối Controller để đăng ký Agent."
+            : "Cấp token mới để kích hoạt Agent trên máy Linux. Token có hiệu lực 24 giờ."}
+        </p>
+        <button
+          className="btn btn-outline"
+          onClick={generate}
+          disabled={loading || isDemoMode}
+        >
+          <KeyRound size={14} />
+          {loading ? "Đang cấp token…" : token ? "Cấp lại token" : "Tạo token"}
+        </button>
+      </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {token && (
+        <div className="token-result">
+          <div className="code-box">{token}</div>
+          <button
+            className="btn btn-outline"
+            aria-label="Sao chép enrollment token"
+            onClick={copy}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Đã sao chép" : "Sao chép token"}
+          </button>
+        </div>
+      )}
+      <div className="modal-actions">
+        <button className="btn btn-primary" onClick={close} disabled={loading}>
+          Đóng chi tiết
+        </button>
+      </div>
+    </Modal>
   );
-};
+}
