@@ -1,111 +1,148 @@
-import React, { useState } from 'react';
-import { Terminal, Pause, Play, Search } from 'lucide-react';
-import type { RealtimeMessage } from '../types';
+import { useState } from "react";
+import { ArrowUpRight, Pause, Play, Search, Terminal } from "lucide-react";
+import type { Node, RealtimeMessage } from "../types";
 
-interface LiveEventStreamProps {
+interface Props {
   events: RealtimeMessage[];
+  nodes: Node[];
   isConnected: boolean;
+  isDemoMode: boolean;
+  preview?: boolean;
+  onOpenAll?: () => void;
 }
-
-export const LiveEventStream: React.FC<LiveEventStreamProps> = ({ events, isConnected }) => {
-  const [isPaused, setIsPaused] = useState(false);
-  const [logFilter, setLogFilter] = useState('');
-
-  const filteredEvents = events.filter((evt) => {
-    if (!logFilter) return true;
-    const q = logFilter.toLowerCase();
-    return (
-      evt.event.toLowerCase().includes(q) ||
-      (evt.data.node_id && String(evt.data.node_id).toLowerCase().includes(q)) ||
-      JSON.stringify(evt.data).toLowerCase().includes(q)
+export function LiveEventStream({
+  events,
+  nodes,
+  isConnected,
+  isDemoMode,
+  preview = false,
+  onOpenAll,
+}: Props) {
+  const [pausedEvents, setPausedEvents] = useState<RealtimeMessage[] | null>(
+    null,
+  );
+  const [filter, setFilter] = useState("");
+  const visible = (pausedEvents ?? events).filter((event) => {
+    const hostname =
+      nodes.find((node) => node.id === event.data.node_id)?.hostname ?? "";
+    return [event.event, hostname, JSON.stringify(event.data)].some((value) =>
+      value.toLowerCase().includes(filter.toLowerCase()),
     );
   });
-
   return (
-    <div className="log-panel">
-      {/* Tiêu Đề Bảng Nhật Ký */}
-      <div className="log-panel-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Terminal size={14} style={{ color: '#a5b4fc' }} />
-          <span
-            className="facet-status-indicator"
-            style={{ backgroundColor: isConnected ? 'var(--status-ok)' : 'var(--status-muted)' }}
-            title={isConnected ? 'Đang kết nối' : 'Mất kết nối'}
-          />
-          <span className="text-title" style={{ fontSize: '13px', color: '#f8fafc' }}>
-            Nhật Ký Sự Kiện Trực Tiếp (Tail -f)
-          </span>
-          <span className="facet-badge-count" style={{ background: '#0f172a', color: '#94a3b8', borderColor: '#334155' }}>
-            {filteredEvents.length} sự kiện
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Nút Tạm Dừng / Tiếp Tục */}
-          <button
-            className="btn btn-outline btn-sm"
-            style={{ padding: '2px 8px', fontSize: '11px', height: '24px', background: '#334155', color: '#f8fafc', borderColor: '#475569' }}
-            onClick={() => setIsPaused(!isPaused)}
-            title={isPaused ? 'Tiếp tục nhận luồng sự kiện' : 'Tạm dừng cuộn'}
-          >
-            {isPaused ? <Play size={11} /> : <Pause size={11} />}
-            <span>{isPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
+    <section className="panel event-panel" aria-label="Nhật ký sự kiện">
+      <div className="panel-heading">
+        <h2>
+          <Terminal size={15} />{" "}
+          {preview ? "Sự kiện gần nhất" : "Sự kiện hệ thống"}{" "}
+          <span className="count-badge">{visible.length}</span>
+        </h2>
+        {preview ? (
+          <button className="text-button" onClick={onOpenAll}>
+            Mở nhật ký <ArrowUpRight size={14} />
           </button>
-        </div>
+        ) : (
+          <div className="event-heading-actions">
+            <label className="event-search">
+              <Search size={14} />
+              <span className="sr-only">Lọc sự kiện</span>
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Lọc event, hostname…"
+              />
+            </label>
+            <button
+              className="btn btn-outline btn-sm"
+              aria-label={
+                pausedEvents ? "Tiếp tục nhật ký" : "Tạm dừng nhật ký"
+              }
+              aria-pressed={Boolean(pausedEvents)}
+              onClick={() => setPausedEvents(pausedEvents ? null : [...events])}
+            >
+              {pausedEvents ? <Play size={13} /> : <Pause size={13} />}
+              {pausedEvents ? "Tiếp tục" : "Tạm dừng"}
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Ô Lọc Nhật Ký */}
-      <div style={{ padding: '5px 12px', background: '#0a0f1d', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: '7px' }}>
-        <Search size={11} style={{ color: '#64748b' }} />
-        <input
-          type="text"
-          placeholder="Lọc sự kiện (vd: metric, node, warn, health)..."
-          value={logFilter}
-          onChange={(e) => setLogFilter(e.target.value)}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: '#f8fafc',
-            fontSize: '11px',
-            fontFamily: 'var(--font-mono)',
-            width: '100%',
-          }}
-        />
+      <div className="event-columns" aria-hidden="true">
+        <span>THỜI GIAN</span>
+        <span>EVENT</span>
+        <span>HOST</span>
+        <span>NỘI DUNG</span>
       </div>
-
-      {/* Dòng Chảy Sự Kiện (Console Output) */}
-      <div className="log-stream-body">
-        {filteredEvents.length === 0 ? (
-          <div style={{ padding: '30px 0', textAlign: 'center', color: '#64748b' }}>
-            Đang chờ gói tin telemetry WebSocket từ Controller...
+      <div
+        className="event-list"
+        role="log"
+        aria-live={pausedEvents ? "off" : "polite"}
+        aria-relevant="additions"
+      >
+        {!visible.length ? (
+          <div className="event-empty">
+            {filter
+              ? "Không có sự kiện khớp từ khóa."
+              : preview
+                ? "Chưa có sự kiện trạng thái trong bộ đệm hiện tại."
+                : "Chờ sự kiện từ máy chủ trong phạm vi đang chọn."}
           </div>
         ) : (
-          filteredEvents.slice(0, 30).map((evt, idx) => {
-            const time = new Date(evt.timestamp).toLocaleTimeString();
-            const nodeId = evt.data.node_id ? String(evt.data.node_id).substring(0, 10) : 'hệ-thống';
-            const sampleCount = evt.data.samples && Array.isArray(evt.data.samples) ? evt.data.samples.length : 1;
-            const isMetric = evt.event === 'metric_update';
-
-            const levelLabel = isMetric ? 'CHỈ SỐ' : evt.event.toUpperCase();
-
+          visible.slice(0, preview ? 5 : 40).map((event, index) => {
+            const metric = event.event === "metric_update";
+            const warning = event.event === "system_alert";
+            const hostname =
+              nodes.find((node) => node.id === event.data.node_id)?.hostname ??
+              String(event.data.hostname ?? event.data.node_id ?? "Controller");
+            const message = metric
+              ? `Nhận ${event.data.samples?.length ?? 0} mẫu CPU, RAM, ổ đĩa và mạng`
+              : String(
+                  event.data.message ??
+                    (event.data.status
+                      ? `Trạng thái: ${event.data.status}`
+                      : "Đã nhận sự kiện từ Controller"),
+                );
             return (
-              <div key={idx} className="log-row">
-                <span className="log-timestamp">{time}</span>
-                <span className={`log-level ${isMetric ? 'metric' : 'info'}`}>
-                  {levelLabel}
+              <article
+                className="event-item"
+                key={`${event.timestamp}-${event.event}-${index}`}
+              >
+                <time dateTime={event.timestamp}>
+                  {new Date(event.timestamp).toLocaleTimeString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </time>
+                <span
+                  className={`event-type ${warning ? "warn" : metric ? "metric" : "info"}`}
+                >
+                  {event.event}
                 </span>
-                <span className="log-host">[{nodeId}]</span>
-                <span className="log-msg">
-                  {isMetric
-                    ? `Đã nhận gói: ${sampleCount} mẫu đo (cpu/ram/disk/mạng)`
-                    : JSON.stringify(evt.data).substring(0, 80)}
-                </span>
-              </div>
+                <code>{hostname}</code>
+                <span className="event-message">{message}</span>
+              </article>
             );
           })
         )}
       </div>
-    </div>
+      <div className="event-foot">
+        <span
+          className={`health-dot ${pausedEvents ? "warn" : isConnected ? "ok" : "crit"}`}
+        />
+        {pausedEvents
+          ? "Đang tạm dừng · giữ nguyên dữ liệu hiển thị"
+          : isDemoMode
+            ? "Dữ liệu mô phỏng"
+            : isConnected
+              ? "WebSocket đã kết nối"
+              : "Đang chờ kết nối Controller"}
+        <span>
+          {preview
+            ? `${Math.min(5, visible.length)} / ${visible.length}`
+            : visible.length}{" "}
+          sự kiện
+        </span>
+      </div>
+    </section>
   );
-};
+}

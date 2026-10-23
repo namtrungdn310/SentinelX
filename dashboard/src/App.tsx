@@ -1,515 +1,636 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Sparkles, ArrowRight, Layers, Tag, Activity, ShieldCheck } from 'lucide-react';
-import { Header } from './components/Header';
-import { KPICards } from './components/KPICards';
-import { NodeMatrix } from './components/NodeMatrix';
-import { TelemetryChart } from './components/TelemetryChart';
-import { LiveEventStream } from './components/LiveEventStream';
-import { AddNodeModal } from './components/AddNodeModal';
-import { NodeDetailModal } from './components/NodeDetailModal';
-import { useWebSocket } from './useWebSocket';
-import { fetchProjects, fetchNodes, fetchNodeMetrics } from './api';
+import { useEffect, useRef, useState } from "react";
 import {
-  MOCK_PROJECTS,
-  MOCK_NODES,
-  MOCK_INITIAL_EVENTS,
-  generateMockTelemetryHistory,
-} from './mockData';
-import type { Project, Node, MetricSample, RealtimeMessage } from './types';
+  Activity,
+  ArrowUpRight,
+  Box,
+  ChevronRight,
+  CircleHelp,
+  FlaskConical,
+  LayoutDashboard,
+  ListFilter,
+  Plus,
+  Radio,
+  Server,
+  Terminal,
+  X,
+} from "lucide-react";
+import { InfrastructureOverview } from "./components/InfrastructureOverview";
+import {
+  formatBytes,
+  healthLabels,
+  nodeHealth,
+  nodeRole,
+} from "./presentation";
+import type { Health } from "./presentation";
+import { Header } from "./components/Header";
+import { KPICards } from "./components/KPICards";
+import { NodeMatrix } from "./components/NodeMatrix";
+import { TelemetryChart } from "./components/TelemetryChart";
+import { LiveEventStream } from "./components/LiveEventStream";
+import { AddNodeModal } from "./components/AddNodeModal";
+import { NodeDetailModal } from "./components/NodeDetailModal";
+import { Modal } from "./components/Modal";
+import { useInfrastructure } from "./useInfrastructure";
+import type { Node } from "./types";
+
+const views = ["overview", "hosts", "metrics", "events"];
+const currentView = () =>
+  views.includes(window.location.hash.slice(1))
+    ? window.location.hash.slice(1)
+    : "overview";
 
 export function App() {
-  const [isDemoMode, setIsDemoMode] = useState(true);
-
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-
-  const [nodes, setNodes] = useState<Node[]>(MOCK_NODES);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(MOCK_NODES[0]);
-
-  const [telemetrySamples, setTelemetrySamples] = useState<MetricSample[]>(() =>
-    generateMockTelemetryHistory(MOCK_NODES[0])
+  const {
+    projects,
+    nodes,
+    histories,
+    events,
+    notableEvents,
+    isDemoMode,
+    isRefreshing,
+    connectionError,
+    chartRequest,
+    isConnected,
+    latencyMs,
+    loadData,
+    loadHistory,
+    toggleDemo,
+    addNode,
+  } = useInfrastructure();
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
   );
-  const [events, setEvents] = useState<RealtimeMessage[]>(MOCK_INITIAL_EVENTS);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingChart, setIsLoadingChart] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // Bộ lọc tìm kiếm và Facets theo tiếng Việt
-  const [searchQuery, setSearchQuery] = useState('');
-  const [timeRange, setTimeRange] = useState('Trực tiếp 5p');
-  const [statusFacet, setStatusFacet] = useState<'all' | 'ok' | 'warn' | 'crit' | 'unenrolled'>('all');
-  const [roleFacet, setRoleFacet] = useState<'all' | 'lb' | 'worker' | 'db'>('all');
-
-  // 1. Xử lý gói tin WebSocket thời gian thực từ Controller
-  const handleWebSocketMessage = useCallback((msg: RealtimeMessage) => {
-    // Thêm vào dòng nhật ký sự kiện trực tiếp
-    setEvents((prev) => [msg, ...prev.slice(0, 39)]);
-
-    if (msg.event === 'metric_update' && msg.data.node_id && msg.data.samples) {
-      const nodeId = msg.data.node_id;
-      const latestSample = msg.data.samples[msg.data.samples.length - 1];
-
-      // Cập nhật trạng thái Node
-      setNodes((prevNodes) =>
-        prevNodes.map((n) => {
-          if (n.id === nodeId) {
-            return {
-              ...n,
-              status: 'online',
-              last_seen: msg.data.received_at || new Date().toISOString(),
-              latestCpu: latestSample.cpu_percent,
-              latestMemory: latestSample.memory_percent,
-              latestDisk: latestSample.disk_percent ?? n.latestDisk,
-              latestRxBytes: latestSample.network_rx_bytes ?? n.latestRxBytes,
-              latestTxBytes: latestSample.network_tx_bytes ?? n.latestTxBytes,
-            };
-          }
-          return n;
-        })
-      );
-
-      // Thêm mẫu đo mới vào đồ thị nếu node đang được chọn
-      setSelectedNode((curr) => {
-        if (curr && curr.id === nodeId) {
-          setTelemetrySamples((prev) => [...prev.slice(-29), latestSample]);
-          return {
-            ...curr,
-            status: 'online',
-            last_seen: msg.data.received_at || new Date().toISOString(),
-            latestCpu: latestSample.cpu_percent,
-            latestMemory: latestSample.memory_percent,
-          };
-        }
-        return curr;
-      });
-    }
-
-    if (msg.event === 'node_status' && msg.data.node_id && msg.data.status) {
-      const nodeId = msg.data.node_id;
-      const status = msg.data.status as Node['status'];
-      setNodes((prev) =>
-        prev.map((n) => (n.id === nodeId ? { ...n, status } : n))
-      );
-      setSelectedNode((curr) => (curr && curr.id === nodeId ? { ...curr, status } : curr));
-    }
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sampleLimit, setSampleLimit] = useState(30);
+  const [activeView, setActiveView] = useState(currentView);
+  const [showHelp, setShowHelp] = useState(false);
+  const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
+  const [roleFacet, setRoleFacet] = useState("all");
+  const mainRef = useRef<HTMLElement>(null);
+  const previousView = useRef(activeView);
+  useEffect(() => {
+    const onHash = () => setActiveView(currentView());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
-
-  const { isConnected, latencyMs } = useWebSocket({
-    onMessage: handleWebSocketMessage,
-  });
-
-  // 2. Tải danh sách dự án và máy chủ từ Controller REST API
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    setIsRefreshing(true);
-    try {
-      const [projList, nodeList] = await Promise.all([
-        fetchProjects(),
-        fetchNodes(selectedProjectId || undefined),
-      ]);
-
-      if (projList && projList.length > 0) {
-        setProjects(projList);
-        setNodes(nodeList);
-        setIsDemoMode(false); // Kết nối thành công tới Controller thật!
-
-        if (nodeList.length > 0) {
-          setSelectedNode((prev) => {
-            if (!prev) return nodeList[0];
-            const found = nodeList.find((n) => n.id === prev.id);
-            return found || nodeList[0];
-          });
-        }
-      }
-    } catch {
-      // Backend offline -> tiếp tục chế độ demo
-      setIsDemoMode(true);
-      setProjects(MOCK_PROJECTS);
-      setNodes(MOCK_NODES);
-      setSelectedNode((prev) => prev || MOCK_NODES[0]);
-      setTelemetrySamples((prev) => (prev.length > 0 ? prev : generateMockTelemetryHistory(MOCK_NODES[0])));
-      setEvents((prev) => (prev.length > 0 ? prev : MOCK_INITIAL_EVENTS));
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+  useEffect(() => {
+    if (previousView.current !== activeView) {
+      mainRef.current?.focus();
+      previousView.current = activeView;
     }
-  }, [selectedProjectId]);
+  }, [activeView]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // 3. Giả lập luồng telemetry động trong chế độ mẫu
-  useEffect(() => {
-    if (!isDemoMode) return;
-
-    const interval = setInterval(() => {
-      const nowIso = new Date().toISOString();
-
-      setNodes((prevNodes) =>
-        prevNodes.map((node) => {
-          if (node.status !== 'online') return node;
-          const cpuDelta = (Math.random() - 0.48) * 3.5;
-          const memDelta = (Math.random() - 0.5) * 1.2;
-          const newCpu = Math.round(Math.max(8, Math.min(97, (node.latestCpu ?? 30) + cpuDelta)) * 10) / 10;
-          const newMem = Math.round(Math.max(15, Math.min(98, (node.latestMemory ?? 50) + memDelta)) * 10) / 10;
-
-          return {
-            ...node,
-            latestCpu: newCpu,
-            latestMemory: newMem,
-            latestRxBytes: Math.max(1000000, (node.latestRxBytes ?? 5000000) + Math.round((Math.random() - 0.5) * 400000)),
-            latestTxBytes: Math.max(1000000, (node.latestTxBytes ?? 3000000) + Math.round((Math.random() - 0.5) * 400000)),
-            last_seen: nowIso,
-          };
-        })
-      );
-
-      setSelectedNode((curr) => {
-        if (!curr || curr.status !== 'online') return curr;
-        const cpuDelta = (Math.random() - 0.48) * 3.5;
-        const memDelta = (Math.random() - 0.5) * 1.2;
-        const newCpu = Math.round(Math.max(8, Math.min(97, (curr.latestCpu ?? 30) + cpuDelta)) * 10) / 10;
-        const newMem = Math.round(Math.max(15, Math.min(98, (curr.latestMemory ?? 50) + memDelta)) * 10) / 10;
-
-        const newSample: MetricSample = {
-          observed_at: nowIso,
-          cpu_percent: newCpu,
-          memory_percent: newMem,
-          disk_percent: curr.latestDisk ?? 35,
-          network_tx_bytes: curr.latestTxBytes ?? 1000000,
-          network_rx_bytes: curr.latestRxBytes ?? 2000000,
-        };
-
-        setTelemetrySamples((prev) => [...prev.slice(-29), newSample]);
-
-        return {
-          ...curr,
-          latestCpu: newCpu,
-          latestMemory: newMem,
-          last_seen: nowIso,
-        };
-      });
-    }, 2200);
-
-    return () => clearInterval(interval);
-  }, [isDemoMode]);
-
-  // 4. Nạp lịch sử telemetry khi đổi node
-  useEffect(() => {
-    if (!selectedNode) {
-      setTelemetrySamples([]);
-      return;
-    }
-
-    if (isDemoMode) {
-      setTelemetrySamples(generateMockTelemetryHistory(selectedNode));
-      setIsLoadingChart(false);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoadingChart(true);
-
-    fetchNodeMetrics(selectedNode.id, 30)
-      .then((res) => {
-        if (isMounted) {
-          setTelemetrySamples(res.samples || []);
-        }
-      })
-      .catch((err) => {
-        console.warn('Chưa có lịch sử metric cho node này:', err);
-        if (isMounted) setTelemetrySamples([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingChart(false);
-      });
-
-    return () => {
-      isMounted = false;
+    const viewTitles: Record<string, string> = {
+      overview: "Tổng Quan Hạ Tầng",
+      hosts: "Ma Trận Máy Chủ",
+      metrics: "Chỉ Số Đo Lường",
+      events: "Nhật Ký Sự Kiện",
     };
-  }, [selectedNode?.id, isDemoMode]);
-
-  const handleToggleDemoMode = () => {
-    if (isDemoMode) {
-      setIsDemoMode(false);
-      loadData();
-    } else {
-      setIsDemoMode(true);
-      setProjects(MOCK_PROJECTS);
-      setNodes(MOCK_NODES);
-      setSelectedNode(MOCK_NODES[0]);
-      setTelemetrySamples(generateMockTelemetryHistory(MOCK_NODES[0]));
-      setEvents(MOCK_INITIAL_EVENTS);
-    }
+    const subtitle =
+      viewTitles[activeView] || "Giám Sát Hạ Tầng & Bảo Vệ Tự Động";
+    document.title = `SentinelX — ${subtitle}`;
+  }, [activeView]);
+  const navigate = (view: string) => {
+    window.location.hash = view;
+    setActiveView(view);
   };
-
   const handleSelectNode = (node: Node) => {
-    setSelectedNode(node);
+    setSelectedNodeId(node.id);
+    navigate("metrics");
   };
-
-  const handleNodeCreated = (newNode: Node) => {
-    setNodes((prev) => [newNode, ...prev]);
-    setSelectedNode(newNode);
+  const handleNodeCreated = (node: Node) => {
+    addNode(node);
+    setSelectedNodeId(node.id);
   };
-
-  // Tính số lượng máy chủ theo từng trạng thái
-  const countOk = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) <= 75).length;
-  const countWarn = nodes.filter((n) => n.status === 'online' && (n.latestCpu ?? 0) > 75).length;
-  const countCrit = nodes.filter((n) => n.status === 'offline').length;
-  const countUnenrolled = nodes.filter((n) => n.status === 'unenrolled').length;
-
-  // Lọc máy chủ theo Dự án -> Trạng thái -> Vai trò -> Ô Tìm kiếm
-  const displayedNodes = nodes.filter((node) => {
-    if (selectedProjectId && node.project_id !== selectedProjectId) return false;
-
-    if (statusFacet === 'ok' && (node.status !== 'online' || (node.latestCpu ?? 0) > 75)) return false;
-    if (statusFacet === 'warn' && (node.status !== 'online' || (node.latestCpu ?? 0) <= 75)) return false;
-    if (statusFacet === 'crit' && node.status !== 'offline') return false;
-    if (statusFacet === 'unenrolled' && node.status !== 'unenrolled') return false;
-
-    const h = node.hostname.toLowerCase();
-    if (roleFacet === 'lb' && !(h.includes('ingress') || h.includes('lb') || h.includes('gateway'))) return false;
-    if (roleFacet === 'worker' && !(h.includes('worker') || h.includes('backend') || h.includes('api'))) return false;
-    if (roleFacet === 'db' && !(h.includes('db') || h.includes('pg') || h.includes('primary'))) return false;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const match =
-        node.hostname.toLowerCase().includes(q) ||
-        node.ip_address.toLowerCase().includes(q) ||
-        node.status.toLowerCase().includes(q) ||
-        (q.startsWith('host:') && node.hostname.toLowerCase().includes(q.replace('host:', ''))) ||
-        (q.startsWith('ip:') && node.ip_address.toLowerCase().includes(q.replace('ip:', '')));
-      if (!match) return false;
-    }
-
-    return true;
+  const projectNodes = nodes.filter(
+    (node) => !selectedProjectId || node.project_id === selectedProjectId,
+  );
+  const counts: Record<Health, number> = {
+    ok: 0,
+    warn: 0,
+    crit: 0,
+    unenrolled: 0,
+  };
+  projectNodes.forEach((node) => counts[nodeHealth(node)]++);
+  const displayedNodes = projectNodes.filter((node) => {
+    if (statusFacet !== "all" && nodeHealth(node) !== statusFacet) return false;
+    if (roleFacet !== "all" && nodeRole(node.hostname) !== roleFacet)
+      return false;
+    const query = searchQuery.trim().toLowerCase();
+    if (query.startsWith("host:"))
+      return node.hostname.toLowerCase().includes(query.slice(5));
+    if (query.startsWith("ip:"))
+      return node.ip_address.toLowerCase().includes(query.slice(3));
+    return (
+      !query ||
+      [node.hostname, node.ip_address, node.status].some((value) =>
+        value.toLowerCase().includes(query),
+      )
+    );
   });
-
+  const selectedNode =
+    displayedNodes.find((node) => node.id === selectedNodeId) ??
+    displayedNodes[0] ??
+    null;
+  const nodeId = selectedNode?.id;
+  const visibleNode = selectedNode;
+  const detailNode = nodes.find((node) => node.id === detailNodeId) ?? null;
+  useEffect(() => {
+    if (activeView === "metrics" && nodeId && !isDemoMode)
+      void loadHistory(nodeId, sampleLimit);
+  }, [activeView, nodeId, isDemoMode, sampleLimit, loadHistory]);
+  const telemetrySamples = nodeId ? (histories[nodeId] ?? []) : [];
+  const isLoadingChart =
+    chartRequest?.nodeId === nodeId && chartRequest.loading;
+  const isLoading = isRefreshing && nodes.length === 0;
+  const filtered = Boolean(
+    searchQuery ||
+    selectedProjectId ||
+    statusFacet !== "all" ||
+    roleFacet !== "all",
+  );
+  const pageNames: Record<string, string> = {
+    overview: "Tổng quan",
+    hosts: "Máy chủ",
+    metrics: "Telemetry",
+    events: "Nhật ký sự kiện",
+  };
+  const pageHeadings: Record<string, string> = {
+    overview: "Tổng quan hạ tầng",
+    hosts: "Danh sách máy chủ",
+    metrics: "Telemetry tài nguyên",
+    events: "Nhật ký hệ thống",
+  };
+  const latestObserved = displayedNodes
+    .map((node) => node.last_seen)
+    .filter((time): time is string => Boolean(time))
+    .sort()
+    .at(-1);
+  const openDetail = (node: Node) => {
+    setSelectedNodeId(node.id);
+    setDetailNodeId(node.id);
+  };
+  const matchesEventScope = (event: (typeof events)[number]) => {
+    if (event.event === "pong") return false;
+    if (!event.data.node_id) return !filtered;
+    return displayedNodes.some((node) => node.id === event.data.node_id);
+  };
+  const selectedEvents = events.filter(matchesEventScope);
+  const recentEvents = notableEvents.filter(matchesEventScope);
   return (
     <div className="app-container">
-      {/* 1. Thanh Điều Hướng Trên Cùng */}
-      <Header
-        projects={projects}
-        selectedProject={selectedProjectId}
-        onSelectProject={setSelectedProjectId}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        timeRange={timeRange}
-        onTimeRangeChange={setTimeRange}
-        isConnected={isConnected}
-        latencyMs={latencyMs}
-        isDemoMode={isDemoMode}
-        onToggleDemoMode={handleToggleDemoMode}
-        onOpenAddNode={() => setIsAddNodeOpen(true)}
-        onRefresh={loadData}
-        isRefreshing={isRefreshing}
-      />
-
-      {/* 2. Không Gian Quan Trắc Hạ Tầng (Sidebar + Màn Hình Chính) */}
-      <div className="observability-workspace">
-        {/* Thanh Bộ Lọc Bên Trái (Facets) */}
-        <aside className="facets-sidebar">
-          {/* Nhóm Lọc Trạng Thái */}
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          mainRef.current?.focus();
+        }}
+      >
+        Đi đến nội dung
+      </a>
+      <aside className="app-sidebar">
+        <a className="brand" href="#overview" aria-label="SentinelX tổng quan">
+          <span className="brand-mark">
+            <img
+              src={`${import.meta.env.BASE_URL}sentinelx-mark-v1.svg`}
+              alt=""
+              width={36}
+              height={36}
+              decoding="async"
+            />
+          </span>
+          <span>
+            Sentinel<span className="brand-x">X</span>
+            <small>OBSERVABILITY CONSOLE</small>
+          </span>
+        </a>
+        <div className="workspace-card">
+          <span className="workspace-icon">
+            <Box size={19} />
+          </span>
           <div>
-            <div className="facet-group-title">
-              <span>Trạng Thái</span>
-              <Activity size={12} />
-            </div>
-            <div
-              className={`facet-item ${statusFacet === 'all' ? 'active' : ''}`}
-              onClick={() => setStatusFacet('all')}
+            <strong>SentinelX Lab</strong>
+            <small>Linux infrastructure</small>
+          </div>
+          <span className="workspace-version">v0.1</span>
+        </div>
+        <span className="nav-label">GIÁM SÁT</span>
+        <nav aria-label="Điều hướng chính">
+          {[
+            { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
+            { id: "hosts", label: "Máy chủ", Icon: Server },
+            { id: "metrics", label: "Telemetry", Icon: Activity },
+            { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
+          ].map(({ id, label, Icon }) => (
+            <a
+              key={id}
+              className={`nav-item ${activeView === id ? "active" : ""}`}
+              href={`#${id}`}
+              aria-current={activeView === id ? "page" : undefined}
             >
-              <div className="facet-item-left">
-                <span>Tất cả máy chủ</span>
-              </div>
-              <span className="facet-badge-count">{nodes.length}</span>
+              <Icon size={18} />
+              <span>{label}</span>
+              {id === "hosts" && <small>{projectNodes.length}</small>}
+              {id === "overview" && <span className="nav-active-dot" />}
+            </a>
+          ))}
+        </nav>
+        <section className="sidebar-summary" aria-label="Phạm vi workspace">
+          <span className="nav-label">WORKSPACE</span>
+          <dl>
+            <div>
+              <dt>Dự án</dt>
+              <dd>{projects.length}</dd>
             </div>
-            <div
-              className={`facet-item ${statusFacet === 'ok' ? 'active' : ''}`}
-              onClick={() => setStatusFacet('ok')}
+            <div>
+              <dt>Máy chủ</dt>
+              <dd>{projectNodes.length}</dd>
+            </div>
+            <div>
+              <dt>Chờ đăng ký</dt>
+              <dd>{counts.unenrolled}</dd>
+            </div>
+          </dl>
+        </section>
+        <div className="sidebar-bottom">
+          <button className="nav-item" onClick={() => setShowHelp(true)}>
+            <CircleHelp size={18} />
+            <span>Hướng dẫn sử dụng</span>
+            <ArrowUpRight size={15} />
+          </button>
+          <div className="sidebar-status">
+            <span
+              className={`health-dot ${isDemoMode ? "unenrolled" : isConnected ? "ok" : "crit"}`}
+            />
+            <span>
+              {isDemoMode
+                ? "Dữ liệu mô phỏng"
+                : isConnected
+                  ? "Controller đã kết nối"
+                  : "Controller chưa kết nối"}
+            </span>
+            <span className="version-label">F14</span>
+          </div>
+        </div>
+      </aside>
+      <div className="app-workspace">
+        <Header
+          projects={projects}
+          selectedProject={selectedProjectId}
+          onSelectProject={setSelectedProjectId}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          isConnected={isConnected}
+          latencyMs={latencyMs}
+          isDemoMode={isDemoMode}
+          onToggleDemoMode={toggleDemo}
+          onRefresh={loadData}
+          isRefreshing={isRefreshing}
+        />
+        <main
+          ref={mainRef}
+          tabIndex={-1}
+          className="main-viewport"
+          id="main-content"
+        >
+          <div className="page-breadcrumb">
+            Infrastructure <ChevronRight size={12} />
+            <span>{pageNames[activeView]}</span>
+          </div>
+          <div className="page-heading">
+            <div>
+              <h1>{pageHeadings[activeView]}</h1>
+              <p>
+                {displayedNodes.length} máy chủ trong phạm vi ·{" "}
+                {selectedProjectId
+                  ? projects.find((project) => project.id === selectedProjectId)
+                      ?.name
+                  : `${projects.length} dự án`}
+              </p>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => setIsAddNodeOpen(true)}
             >
-              <div className="facet-item-left">
-                <span className="facet-status-indicator ok" />
-                <span>Bình thường (OK)</span>
-              </div>
-              <span className="facet-badge-count">{countOk}</span>
-            </div>
-            <div
-              className={`facet-item ${statusFacet === 'warn' ? 'active' : ''}`}
-              onClick={() => setStatusFacet('warn')}
-            >
-              <div className="facet-item-left">
-                <span className="facet-status-indicator warn" />
-                <span>Cảnh báo (&gt;75%)</span>
-              </div>
-              <span className="facet-badge-count">{countWarn}</span>
-            </div>
-            {countCrit > 0 && (
-              <div
-                className={`facet-item ${statusFacet === 'crit' ? 'active' : ''}`}
-                onClick={() => setStatusFacet('crit')}
+              <Plus size={17} />
+              Thêm máy chủ
+            </button>
+          </div>
+          <div className="scope-toolbar">
+            <div className="scope-filters">
+              <ListFilter size={15} />
+              <select
+                aria-label="Lọc trạng thái"
+                value={statusFacet}
+                onChange={(event) =>
+                  setStatusFacet(event.target.value as typeof statusFacet)
+                }
               >
-                <div className="facet-item-left">
-                  <span className="facet-status-indicator crit" />
-                  <span>Mất kết nối</span>
-                </div>
-                <span className="facet-badge-count">{countCrit}</span>
-              </div>
-            )}
-            <div
-              className={`facet-item ${statusFacet === 'unenrolled' ? 'active' : ''}`}
-              onClick={() => setStatusFacet('unenrolled')}
-            >
-              <div className="facet-item-left">
-                <span className="facet-status-indicator unenrolled" />
-                <span>Chưa đăng ký</span>
-              </div>
-              <span className="facet-badge-count">{countUnenrolled}</span>
-            </div>
-          </div>
-
-          {/* Nhóm Lọc Vai Trò Hạ Tầng */}
-          <div>
-            <div className="facet-group-title">
-              <span>Vai Trò Hạ Tầng</span>
-              <Layers size={12} />
-            </div>
-            <div
-              className={`facet-item ${roleFacet === 'all' ? 'active' : ''}`}
-              onClick={() => setRoleFacet('all')}
-            >
-              <div className="facet-item-left">
-                <span>Tất cả vai trò</span>
-              </div>
-            </div>
-            <div
-              className={`facet-item ${roleFacet === 'lb' ? 'active' : ''}`}
-              onClick={() => setRoleFacet('lb')}
-            >
-              <div className="facet-item-left">
-                <span className="host-tag role">cổng-lb</span>
-                <span>Cổng vào &amp; Cân bằng tải</span>
-              </div>
-            </div>
-            <div
-              className={`facet-item ${roleFacet === 'worker' ? 'active' : ''}`}
-              onClick={() => setRoleFacet('worker')}
-            >
-              <div className="facet-item-left">
-                <span className="host-tag role">worker</span>
-                <span>Máy chủ xử lý (Worker)</span>
-              </div>
-            </div>
-            <div
-              className={`facet-item ${roleFacet === 'db' ? 'active' : ''}`}
-              onClick={() => setRoleFacet('db')}
-            >
-              <div className="facet-item-left">
-                <span className="host-tag role">csdl</span>
-                <span>Cụm CSDL PostgreSQL</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Nhóm Lọc Môi Trường */}
-          <div>
-            <div className="facet-group-title">
-              <span>Môi Trường</span>
-              <Tag size={12} />
-            </div>
-            <div className="facet-item active">
-              <div className="facet-item-left">
-                <span className="host-tag env">mt:prod</span>
-                <span>Production Chính Thức</span>
-              </div>
-              <span className="facet-badge-count">{nodes.length}</span>
-            </div>
-          </div>
-
-          {/* Thông Số Kỹ Thuật Lõi */}
-          <div style={{ marginTop: 'auto', padding: '12px', background: '#ffffff', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '11px', color: 'var(--text-muted)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', fontWeight: 700, marginBottom: '5px' }}>
-              <ShieldCheck size={14} style={{ color: 'var(--brand-indigo)' }} />
-              <span>Lõi SentinelX v0.1</span>
-            </div>
-            <div>Quan trắc: psutil + /proc</div>
-            <div>Cân bằng tải: Eject &amp; Re-add</div>
-          </div>
-        </aside>
-
-        {/* Màn Hình Quan Trắc Chính */}
-        <main className="main-viewport">
-          {/* Thông Báo Bản Mẫu */}
-          {isDemoMode && (
-            <div className="demo-banner">
-              <div className="demo-banner-content">
-                <Sparkles size={14} color="#6366f1" />
-                <span>
-                  <strong>Chế Độ Giả Lập Telemetry Đang Bật:</strong> Đang mô phỏng luồng chỉ số tài nguyên và nhật ký sự kiện của 5 máy chủ Linux thời gian thực.
-                </span>
-              </div>
-              <div>
+                <option value="all">Tất cả trạng thái</option>
+                {Object.entries(healthLabels).map(([health, label]) => (
+                  <option key={health} value={health}>
+                    {label} ({counts[health as Health]})
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Lọc vai trò"
+                value={roleFacet}
+                onChange={(event) => setRoleFacet(event.target.value)}
+              >
+                <option value="all">Tất cả vai trò</option>
+                {["Gateway", "Database", "API server", "Worker"].map((role) => (
+                  <option key={role}>{role}</option>
+                ))}
+              </select>
+              {filtered && (
                 <button
-                  className="btn btn-outline btn-sm"
-                  style={{ borderColor: 'var(--border-strong)', color: 'var(--text-primary)' }}
-                  onClick={loadData}
+                  className="clear-filters"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedProjectId(null);
+                    setStatusFacet("all");
+                    setRoleFacet("all");
+                  }}
                 >
-                  <span>Kết nối Controller Thực Tế</span>
-                  <ArrowRight size={11} />
+                  <X size={12} />
+                  Xóa bộ lọc
                 </button>
-              </div>
+              )}
+            </div>
+            <span className="toolbar-live">
+              <Radio size={14} />
+              {isDemoMode
+                ? "Mô phỏng trực tiếp"
+                : isConnected
+                  ? "Cập nhật trực tiếp"
+                  : "Chờ kết nối"}
+            </span>
+          </div>
+          {connectionError && (
+            <div className="connection-error" role="alert">
+              <Radio size={16} />
+              <span>{connectionError}</span>
+              <button
+                className="text-button"
+                onClick={loadData}
+                disabled={isRefreshing}
+              >
+                Thử lại <ArrowUpRight size={14} />
+              </button>
+            </div>
+          )}
+          {isDemoMode && (
+            <div className="demo-notice">
+              <FlaskConical size={15} />
+              <span>
+                <strong>DEMO</strong> Đang hiển thị dữ liệu mô phỏng; chưa kết
+                nối Controller.
+              </span>
+              <button onClick={loadData} disabled={isRefreshing}>
+                Kết nối Controller <ArrowUpRight size={14} />
+              </button>
             </div>
           )}
 
-          {/* 3. Thanh Tổng Hợp Chỉ Số Toàn Cụm (KPI Bar) */}
-          <KPICards nodes={displayedNodes} isLoading={isLoading} />
-
-          {/* 4. Bản Đồ Ma Trận Máy Chủ */}
-          <NodeMatrix
-            nodes={displayedNodes}
-            selectedNodeId={selectedNode?.id || null}
-            onSelectNode={handleSelectNode}
-            isLoading={isLoading}
-            onOpenDetail={(node) => {
-              setSelectedNode(node);
-              setIsDetailOpen(true);
-            }}
-          />
-
-          {/* 5. Đồ Thị Chuỗi Thời Gian & Dòng Nhật Ký Trực Tiếp */}
-          <div className="telemetry-row">
-            <TelemetryChart
-              selectedNode={selectedNode}
-              samples={telemetrySamples}
-              isLoading={isLoadingChart}
+          {activeView === "overview" && (
+            <>
+              <KPICards nodes={displayedNodes} isLoading={isLoading} />
+              <InfrastructureOverview
+                nodes={displayedNodes}
+                projects={projects}
+                selectedProjectId={selectedProjectId}
+                onStatusSelect={(status) => {
+                  setStatusFacet(status);
+                  navigate("hosts");
+                }}
+                onProjectSelect={(projectId) => {
+                  setSelectedProjectId(projectId);
+                  navigate("hosts");
+                }}
+                onInspectNode={handleSelectNode}
+                onOpenDetail={openDetail}
+                onViewHosts={() => navigate("hosts")}
+              />
+              <LiveEventStream
+                key={JSON.stringify([
+                  selectedProjectId,
+                  statusFacet,
+                  roleFacet,
+                  searchQuery,
+                  isDemoMode,
+                ])}
+                events={recentEvents}
+                nodes={nodes}
+                isConnected={isConnected || isDemoMode}
+                isDemoMode={isDemoMode}
+                preview
+                onOpenAll={() => navigate("events")}
+              />
+            </>
+          )}
+          {activeView === "hosts" && (
+            <NodeMatrix
+              nodes={displayedNodes}
+              selectedNodeId={selectedNode?.id || null}
+              onSelectNode={handleSelectNode}
+              isLoading={isLoading}
+              onOpenDetail={openDetail}
             />
-            <LiveEventStream events={events} isConnected={isConnected || isDemoMode} />
-          </div>
+          )}
+          {activeView === "metrics" && (
+            <div className="telemetry-detail">
+              <div className="panel telemetry-host-toolbar">
+                <label htmlFor="telemetry-host">Máy chủ phân tích</label>
+                <select
+                  id="telemetry-host"
+                  value={nodeId ?? ""}
+                  onChange={(event) => setSelectedNodeId(event.target.value)}
+                  disabled={!displayedNodes.length}
+                >
+                  {!displayedNodes.length && (
+                    <option value="">Không có máy chủ phù hợp</option>
+                  )}
+                  {displayedNodes.map((node) => (
+                    <option key={node.id} value={node.id}>
+                      {node.hostname} · {node.ip_address}
+                    </option>
+                  ))}
+                </select>
+                {selectedNode && (
+                  <span className={`status-badge ${nodeHealth(selectedNode)}`}>
+                    <i />
+                    {healthLabels[nodeHealth(selectedNode)]}
+                  </span>
+                )}
+                {selectedNode && (
+                  <button
+                    className="text-button"
+                    onClick={() => openDetail(selectedNode)}
+                  >
+                    Chi tiết host <ArrowUpRight size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="telemetry-wrap">
+                <div className="telemetry-controls">
+                  <h2>
+                    Lịch sử CPU &amp; RAM <span className="panel-unit">%</span>
+                  </h2>
+                  <select
+                    aria-label="Số mẫu telemetry"
+                    value={sampleLimit}
+                    onChange={(event) =>
+                      setSampleLimit(Number(event.target.value))
+                    }
+                  >
+                    {[30, 60, 120].map((count) => (
+                      <option key={count} value={count}>
+                        {count} mẫu gần nhất
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <TelemetryChart
+                  key={nodeId}
+                  selectedNode={visibleNode}
+                  samples={telemetrySamples.slice(-sampleLimit)}
+                  isLoading={isLoadingChart}
+                  error={
+                    chartRequest?.nodeId === nodeId ? chartRequest.error : null
+                  }
+                  onRetry={() =>
+                    nodeId && void loadHistory(nodeId, sampleLimit)
+                  }
+                />
+              </div>
+              {selectedNode && (
+                <section
+                  className="telemetry-snapshot"
+                  aria-label="Mẫu tài nguyên host gần nhất"
+                >
+                  <article className="panel">
+                    <span>Ổ ĐĨA SỬ DỤNG</span>
+                    <strong>
+                      {selectedNode.latestDisk?.toFixed(1) ?? "—"}
+                      <small>%</small>
+                    </strong>
+                  </article>
+                  <article className="panel">
+                    <span>RX TÍCH LŨY</span>
+                    <strong>
+                      {selectedNode.latestRxBytes === undefined
+                        ? "—"
+                        : formatBytes(selectedNode.latestRxBytes)}
+                    </strong>
+                  </article>
+                  <article className="panel">
+                    <span>TX TÍCH LŨY</span>
+                    <strong>
+                      {selectedNode.latestTxBytes === undefined
+                        ? "—"
+                        : formatBytes(selectedNode.latestTxBytes)}
+                    </strong>
+                  </article>
+                </section>
+              )}
+            </div>
+          )}
+          {activeView === "events" && (
+            <LiveEventStream
+              key={JSON.stringify([
+                selectedProjectId,
+                statusFacet,
+                roleFacet,
+                searchQuery,
+                isDemoMode,
+              ])}
+              events={selectedEvents}
+              nodes={nodes}
+              isConnected={isConnected || isDemoMode}
+              isDemoMode={isDemoMode}
+            />
+          )}
+          <footer className="workspace-footer">
+            <span>
+              <span
+                className={`health-dot ${isDemoMode ? "unenrolled" : isConnected ? "ok" : "crit"}`}
+              />
+              {isDemoMode
+                ? "Nguồn: dữ liệu mô phỏng"
+                : "Nguồn: Controller / Agent"}
+            </span>
+            <span>
+              {latestObserved
+                ? `Agent phản hồi gần nhất: ${new Date(latestObserved).toLocaleTimeString("vi-VN")}`
+                : "Chưa có phản hồi từ Agent"}
+            </span>
+          </footer>
         </main>
       </div>
-
-      {/* Hộp Thoại */}
       <AddNodeModal
+        key={isAddNodeOpen ? (selectedProjectId ?? "all") : "closed"}
         projects={projects}
         selectedProjectId={selectedProjectId}
         isOpen={isAddNodeOpen}
         onClose={() => setIsAddNodeOpen(false)}
         onNodeCreated={handleNodeCreated}
+        isDemoMode={isDemoMode}
       />
-
-      <NodeDetailModal
-        node={selectedNode}
-        isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
-      />
+      {detailNode && (
+        <NodeDetailModal
+          isDemoMode={isDemoMode}
+          key={detailNode.id}
+          node={detailNode}
+          isOpen={Boolean(detailNode)}
+          onClose={() => setDetailNodeId(null)}
+        />
+      )}
+      {showHelp && (
+        <Modal
+          onClose={() => setShowHelp(false)}
+          labelledBy="help-title"
+          className="help-modal"
+        >
+          <div className="modal-header">
+            <h2 id="help-title">Hướng dẫn console</h2>
+            <button
+              className="icon-button"
+              aria-label="Đóng hướng dẫn"
+              onClick={() => setShowHelp(false)}
+            >
+              <X size={19} />
+            </button>
+          </div>
+          <div className="modal-body">
+            <p>
+              Chọn dự án, lọc theo trạng thái hoặc tìm hostname / IP để thu hẹp
+              phạm vi quan trắc.
+            </p>
+            <p>
+              Tổng quan tổng hợp toàn cụm. Chọn host trong mục tải cao hoặc danh
+              sách máy chủ để mở Telemetry và phân tích lịch sử CPU/RAM. Nút ↗
+              trong bảng mở thông tin chi tiết.
+            </p>
+            <p>
+              Dùng <kbd>/</kbd> để tìm nhanh. Chế độ demo dùng dữ liệu mô phỏng;
+              nút bình thí nghiệm trên thanh công cụ chuyển sang Controller.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowHelp(false)}
+            >
+              Đã hiểu <ArrowUpRight size={15} />
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
 export default App;

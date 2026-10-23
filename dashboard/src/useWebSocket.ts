@@ -1,109 +1,90 @@
-/**
- * React Hook managing WebSocket connection with auto-reconnect and latency ping.
- */
+import { useEffect, useState } from "react";
+import type { RealtimeMessage } from "./types";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RealtimeMessage } from './types';
-
-interface UseWebSocketOptions {
-  onMessage?: (msg: RealtimeMessage) => void;
+interface Options {
+  onMessage?: (message: RealtimeMessage) => void;
+  enabled?: boolean;
 }
-
-export function useWebSocket({ onMessage }: UseWebSocketOptions = {}) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+export function useWebSocket({ onMessage, enabled = true }: Options = {}) {
+  const [connection, setConnection] = useState<{
+    socket: WebSocket;
+    latencyMs: number | null;
+  } | null>(null);
   const [lastMessage, setLastMessage] = useState<RealtimeMessage | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number | null>(null);
-  const pingIntervalRef = useRef<number | null>(null);
-  const pingStartRef = useRef<number | null>(null);
-  const isMountedRef = useRef(true);
-
-  const connect = useCallback(() => {
-    if (!isMountedRef.current) return;
-
-    // Use current host and proxy to ws://.../api/v1/ws
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-
-      ws.onopen = () => {
-        if (!isMountedRef.current) return;
-        setIsConnected(true);
-
-        // Start periodic ping to track latency
-        pingIntervalRef.current = window.setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            pingStartRef.current = performance.now();
-            ws.send(JSON.stringify({ event: 'ping' }));
+  useEffect(() => {
+    if (!enabled) return;
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let retry: number | undefined;
+    let ping: number | undefined;
+    let started: number | null = null;
+    function connect() {
+      if (disposed) return;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const current = new WebSocket(
+        `${protocol}//${window.location.host}/api/v1/ws`,
+      );
+      socket = current;
+      current.onopen = () => {
+        if (disposed) return;
+        setConnection({ socket: current, latencyMs: null });
+        ping = window.setInterval(() => {
+          if (current.readyState === WebSocket.OPEN) {
+            started = performance.now();
+            current.send(JSON.stringify({ event: "ping" }));
           }
         }, 8000);
       };
-
-      ws.onmessage = (event) => {
-        if (!isMountedRef.current) return;
+      current.onmessage = (event) => {
+        if (disposed) return;
         try {
-          const parsed: RealtimeMessage = JSON.parse(event.data);
-
-          if (parsed.event === 'pong' && pingStartRef.current) {
-            const rtt = Math.round(performance.now() - pingStartRef.current);
-            setLatencyMs(rtt);
-            pingStartRef.current = null;
+          const message = JSON.parse(event.data) as RealtimeMessage;
+          if (
+            !message ||
+            typeof message.event !== "string" ||
+            !message.data ||
+            typeof message.data !== "object"
+          )
+            return;
+          if (message.event === "pong") {
+            if (started !== null) {
+              const latencyMs = Math.round(performance.now() - started);
+              setConnection({ socket: current, latencyMs });
+              started = null;
+            }
             return;
           }
-
-          setLastMessage(parsed);
-          if (onMessage) {
-            onMessage(parsed);
-          }
+          setLastMessage(message);
+          onMessage?.(message);
         } catch {
-          // Ignore non-JSON frame
+          /* Ignore malformed frames; keep the connection alive. */
         }
       };
-
-      ws.onclose = () => {
-        if (!isMountedRef.current) return;
-        setIsConnected(false);
-        setLatencyMs(null);
-        if (pingIntervalRef.current) {
-          clearInterval(pingIntervalRef.current);
-        }
-
-        // Auto-reconnect after 3 seconds
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          connect();
-        }, 3000);
+      current.onclose = () => {
+        if (disposed) return;
+        setConnection(null);
+        window.clearInterval(ping);
+        retry = window.setTimeout(connect, 3000);
       };
-
-      ws.onerror = () => {
-        ws.close();
-      };
-    } catch {
-      // Reconnect on initial error
-      reconnectTimeoutRef.current = window.setTimeout(connect, 3000);
+      current.onerror = () => current.close();
     }
-  }, [onMessage]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
     connect();
-
     return () => {
-      isMountedRef.current = false;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-      if (socketRef.current) socketRef.current.close();
+      disposed = true;
+      window.clearTimeout(retry);
+      window.clearInterval(ping);
+      socket?.close();
     };
-  }, [connect]);
+  }, [enabled, onMessage, attempt]);
 
+  const isConnected =
+    enabled && connection?.socket.readyState === WebSocket.OPEN;
   return {
     isConnected,
-    latencyMs,
+    latencyMs: isConnected ? (connection?.latencyMs ?? null) : null,
     lastMessage,
-    reconnect: connect,
+    reconnect: () => setAttempt((previous) => previous + 1),
   };
 }

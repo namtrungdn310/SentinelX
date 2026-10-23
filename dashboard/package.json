@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
+    "test:ui": "node scripts/check-ui.mjs",
+    "test:dev": "node scripts/check-dev.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
