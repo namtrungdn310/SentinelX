@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>SentinelX</title>
+  <style>
+    /* Browser chrome can be dark even though the dashboard is always light. */
+    @media (prefers-color-scheme: dark) {
+      .band { fill: #D3D8DE; }
+      .facet { fill: #5DB8AE; }
+    }
+  </style>
+  <path class="band" fill="#25282D" d="M256 32C246 32 239 35 228 39L102 90C80 99 70 112 70 134V221C70 243 78 257 93 271L255 415V460C211 442 172 403 148 360L128 323C120 309 105 302 91 309C76 315 74 330 82 346C119 405 177 452 240 476C250 481 260 481 270 476C321 449 371 405 407 351C416 338 411 324 400 319C390 314 381 317 372 324L349 344L101 129C97 125 94 121 98 117L256 209V32Z"/>
+  <path class="facet" fill="#147D73" d="M256 32C268 32 274 35 286 39L408 90C427 98 439 112 439 134V220C439 243 431 258 418 270L371 316L304 255L410 131C415 126 418 121 414 117L256 209V32Z"/>
+</svg>

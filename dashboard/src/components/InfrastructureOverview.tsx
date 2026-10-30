@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Activity, ArrowUpRight, Folder, Server } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Node, Project } from "../types";
-import { healthLabels, nodeHealth } from "../presentation";
+import { healthLabels, nodeHealth, validMetric } from "../presentation";
 import type { Health } from "../presentation";
 import { AttentionPanel } from "./AttentionPanel";
 
@@ -20,7 +20,7 @@ function average(nodes: Node[], key: "latestCpu" | "latestMemory"): string {
   const reporting = nodes.filter(
     (node) =>
       (node.status === "online" || node.status === "degraded") &&
-      node[key] !== undefined,
+      validMetric(node[key]),
   );
   return reporting.length
     ? `${(reporting.reduce((sum, node) => sum + node[key]!, 0) / reporting.length).toFixed(1)}%`
@@ -45,6 +45,7 @@ export function InfrastructureOverview({
     warn: 0,
     crit: 0,
     unenrolled: 0,
+    unknown: 0,
   };
   nodes.forEach((node) => counts[nodeHealth(node)]++);
   const healthPercentage = nodes.length
@@ -54,7 +55,7 @@ export function InfrastructureOverview({
     .filter(
       (node) =>
         (node.status === "online" || node.status === "degraded") &&
-        node[resource] !== undefined,
+        validMetric(node[resource]),
     )
     .sort((a, b) => b[resource]! - a[resource]!)
     .slice(0, 5);
@@ -66,25 +67,27 @@ export function InfrastructureOverview({
       <div className="overview-grid">
         <section
           className="panel fleet-health-panel"
-          aria-label="Sức khỏe toàn cụm"
+          aria-label="Tỷ lệ máy chủ ổn định"
         >
           <div className="panel-heading">
             <h2>
-              <Server size={16} /> Sức khỏe toàn cụm
+              Tỷ lệ máy chủ ổn định
             </h2>
-            <span className="count-badge">{nodes.length} hosts</span>
+            <button className="text-button" onClick={onViewHosts}>Xem máy chủ <ChevronRight size={14} /></button>
           </div>
+          <div className="fleet-health-body">
           <div className="fleet-health-summary">
             <strong>
               {healthPercentage === null ? "—" : `${healthPercentage}%`}
             </strong>
             <span>
-              host ổn định
+              máy chủ ổn định
               <small>
                 {counts.ok} / {nodes.length} máy chủ trong phạm vi
               </small>
             </span>
           </div>
+          <div className="fleet-health-distribution">
           <div
             className="health-distribution"
             role="img"
@@ -111,13 +114,12 @@ export function InfrastructureOverview({
                 <i className={`health-dot ${health}`} />
                 <span>{healthLabels[health as Health]}</span>
                 <b>{count}</b>
-                <ArrowUpRight size={13} />
+                <ChevronRight size={13} />
               </button>
             ))}
           </div>
-          <button className="map-footer" onClick={onViewHosts}>
-            Mở danh sách máy chủ <ArrowUpRight size={14} />
-          </button>
+          </div>
+          </div>
         </section>
         <AttentionPanel nodes={nodes} onOpenDetail={onOpenDetail} />
       </div>
@@ -128,7 +130,7 @@ export function InfrastructureOverview({
         >
           <div className="panel-heading">
             <h2>
-              <Folder size={16} /> Tổng hợp theo dự án
+              Tổng hợp theo dự án
             </h2>
             <span className="count-badge">{scopedProjects.length}</span>
           </div>
@@ -139,11 +141,11 @@ export function InfrastructureOverview({
               <table className="host-table project-summary-table">
                 <thead>
                   <tr>
-                    <th>DỰ ÁN</th>
-                    <th>ONLINE / TỔNG</th>
-                    <th>CẦN CHÚ Ý</th>
-                    <th>CPU TB</th>
-                    <th>RAM TB</th>
+                    <th>Dự án</th>
+                    <th>Trực tuyến / tổng</th>
+                    <th>Cần xử lý</th>
+                    <th>CPU trung bình</th>
+                    <th>RAM trung bình</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -156,7 +158,7 @@ export function InfrastructureOverview({
                         node.status === "online" || node.status === "degraded",
                     ).length;
                     const attention = members.filter(
-                      (node) => nodeHealth(node) !== "ok",
+                      (node) => ["warn", "crit", "unenrolled"].includes(nodeHealth(node)),
                     ).length;
                     return (
                       <tr key={project.id}>
@@ -166,7 +168,7 @@ export function InfrastructureOverview({
                             onClick={() => onProjectSelect(project.id)}
                           >
                             {project.name}
-                            <ArrowUpRight size={13} />
+                            <ChevronRight size={13} />
                           </button>
                         </td>
                         <td className="font-mono">
@@ -174,7 +176,7 @@ export function InfrastructureOverview({
                         </td>
                         <td>
                           <span
-                            className={`project-attention ${attention ? "has-attention" : ""}`}
+                            className={`project-attention ${members.some((node) => ["warn", "crit"].includes(nodeHealth(node))) ? "has-attention" : ""}`}
                           >
                             {attention}
                           </span>
@@ -195,11 +197,11 @@ export function InfrastructureOverview({
         </section>
         <section
           className="panel resource-ranking-panel"
-          aria-label="Máy chủ tải cao"
+          aria-label="Máy chủ sử dụng tài nguyên nhiều nhất"
         >
           <div className="panel-heading">
             <h2>
-              <Activity size={16} /> Máy chủ tải cao
+              Máy chủ sử dụng tài nguyên nhiều nhất
             </h2>
             <div className="segmented">
               <button
@@ -234,7 +236,9 @@ export function InfrastructureOverview({
                   <span className="rank-number">{index + 1}</span>
                   <span className="ranked-host-data">
                     <strong>{node.hostname}</strong>
-                    <span className="micro-meter">
+                    <small>{node.ip_address}</small>
+                  </span>
+                    <span className="micro-meter ranking-meter">
                       <i
                         className={
                           node[resource]! > (resource === "latestCpu" ? 75 : 85)
@@ -247,16 +251,19 @@ export function InfrastructureOverview({
                           width: `${Math.max(0, Math.min(100, node[resource]!))}%`,
                         }}
                       />
+                      <span className="threshold-mark" style={{ left: resource === "latestCpu" ? "75%" : "85%" }} />
                     </span>
-                  </span>
                   <b>{node[resource]!.toFixed(1)}%</b>
-                  <ArrowUpRight size={14} />
+                  <span className={`ranking-state ${node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "warning" : ""}`}>
+                    {node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "Vượt ngưỡng" : "Trong ngưỡng"}
+                  </span>
+                  <ChevronRight size={14} />
                 </button>
               ))}
             </div>
           )}
           <div className="panel-foot">
-            <span>Tối đa 5 host · mẫu đo gần nhất</span>
+            <span>Tối đa 5 máy chủ · mẫu gần nhất · Vạch ngưỡng {resource === "latestCpu" ? "75%" : "85%"}</span>
             <span>Chọn host để phân tích</span>
           </div>
         </section>

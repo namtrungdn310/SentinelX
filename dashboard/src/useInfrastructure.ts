@@ -8,6 +8,7 @@ import {
 } from "./mockData";
 import type { MetricSample, Node, Project, RealtimeMessage } from "./types";
 import { useWebSocket } from "./useWebSocket";
+import { mergeSamples } from "./telemetry";
 
 interface Snapshot {
   projects: Project[];
@@ -36,18 +37,6 @@ function demoSnapshot(): Snapshot {
   };
 }
 
-function mergeSamples(
-  existing: MetricSample[],
-  incoming: MetricSample[],
-): MetricSample[] {
-  const merged = new Map(
-    [...existing, ...incoming].map((sample) => [sample.observed_at, sample]),
-  );
-  return [...merged.values()]
-    .sort((a, b) => Date.parse(a.observed_at) - Date.parse(b.observed_at))
-    .slice(-120);
-}
-
 export function useInfrastructure() {
   const [snapshot, setSnapshot] = useState<Snapshot>(demoSnapshot);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -65,7 +54,7 @@ export function useInfrastructure() {
     if (modeRef.current || message.event === "pong") return;
     setSnapshot((previous) => {
       const { node_id: nodeId, samples } = message.data;
-      const latest = samples?.at(-1);
+      const latest = nodeId && samples?.length ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1) : undefined;
       const nodes = previous.nodes.map((node) => {
         if (node.id !== nodeId) return node;
         if (message.event === "metric_update" && latest)

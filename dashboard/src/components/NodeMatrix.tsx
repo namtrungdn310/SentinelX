@@ -1,14 +1,22 @@
 import { useState } from "react";
 import {
   ArrowDownUp,
-  ArrowUpRight,
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
   LayoutGrid,
   List,
   Server,
 } from "lucide-react";
 import type { Node } from "../types";
-import { healthLabels, nodeHealth, nodeRole } from "../presentation";
+import { nodeHealthLabel, nodeHealth, formatPercent, validMetric } from "../presentation";
+export interface HostTableState {
+  view: "table" | "grid";
+  sort: { key: "hostname" | "latestCpu" | "latestMemory"; ascending: boolean } | null;
+}
 interface Props {
+  state?: HostTableState;
+  onStateChange?: (state: HostTableState) => void;
   nodes: Node[];
   selectedNodeId: string | null;
   onSelectNode: (node: Node) => void;
@@ -21,12 +29,13 @@ export function NodeMatrix({
   onSelectNode,
   isLoading,
   onOpenDetail,
+  state,
+  onStateChange,
 }: Props) {
-  const [view, setView] = useState<"table" | "grid">("table");
-  const [sort, setSort] = useState<{
-    key: "hostname" | "latestCpu" | "latestMemory";
-    ascending: boolean;
-  } | null>(null);
+  const [localState, setLocalState] = useState<HostTableState>({ view: "table", sort: null });
+  const { view, sort } = state ?? localState;
+  const update = (next: HostTableState) => onStateChange ? onStateChange(next) : setLocalState(next);
+  const setView = (view: HostTableState["view"]) => update({ view, sort });
   const sorted = sort
     ? [...nodes].sort((a, b) => {
         const left = a[sort.key];
@@ -41,10 +50,7 @@ export function NodeMatrix({
       })
     : nodes;
   const toggleSort = (key: "hostname" | "latestCpu" | "latestMemory") =>
-    setSort((current) => ({
-      key,
-      ascending: current?.key === key ? !current.ascending : key === "hostname",
-    }));
+    update({ view, sort: { key, ascending: sort?.key === key ? !sort.ascending : key === "hostname" } });
   const sortDirection = (key: string) =>
     sort?.key === key
       ? sort.ascending
@@ -62,7 +68,7 @@ export function NodeMatrix({
           <h2>
             Máy chủ <span className="count-badge">{nodes.length}</span>
           </h2>
-          <p>Trạng thái Agent và mẫu tài nguyên gần nhất</p>
+
         </div>
         <div className="segmented">
           <button
@@ -101,16 +107,16 @@ export function NodeMatrix({
                     className="table-sort"
                     onClick={() => toggleSort("hostname")}
                   >
-                    HOSTNAME / IP <ArrowDownUp size={11} />
+                    Hostname / IP {sort?.key === "hostname" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
-                <th>TRẠNG THÁI</th>
+                <th>Trạng thái</th>
                 <th aria-sort={sortDirection("latestCpu")}>
                   <button
                     className="table-sort"
                     onClick={() => toggleSort("latestCpu")}
                   >
-                    CPU <ArrowDownUp size={11} />
+                    CPU {sort?.key === "latestCpu" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
                 <th aria-sort={sortDirection("latestMemory")}>
@@ -118,7 +124,7 @@ export function NodeMatrix({
                     className="table-sort"
                     onClick={() => toggleSort("latestMemory")}
                   >
-                    RAM <ArrowDownUp size={11} />
+                    RAM {sort?.key === "latestMemory" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
                 <th>
@@ -144,8 +150,7 @@ export function NodeMatrix({
                       <span>
                         <strong>{node.hostname}</strong>
                         <small>
-                          {node.ip_address}{" "}
-                          <span>· {nodeRole(node.hostname)}</span>
+                          {node.ip_address}
                         </small>
                       </span>
                     </button>
@@ -153,7 +158,7 @@ export function NodeMatrix({
                   <td>
                     <span className={`status-badge ${nodeHealth(node)}`}>
                       <i />
-                      {healthLabels[nodeHealth(node)]}
+                      {nodeHealthLabel(node)}
                     </span>
                   </td>
                   <td>
@@ -168,7 +173,7 @@ export function NodeMatrix({
                       aria-label={`Chi tiết ${node.hostname}`}
                       onClick={() => onOpenDetail?.(node)}
                     >
-                      <ArrowUpRight size={17} />
+                      <ChevronRight size={17} />
                     </button>
                   </td>
                 </tr>
@@ -191,17 +196,17 @@ export function NodeMatrix({
                 <Server size={19} />
                 <strong>{node.hostname}</strong>
                 <span className={`status-badge ${nodeHealth(node)}`}>
-                  {healthLabels[nodeHealth(node)]}
+                  {nodeHealthLabel(node)}
                 </span>
                 <small>
-                  {node.ip_address} · {nodeRole(node.hostname)}
+                  {node.ip_address}
                 </small>
                 <span className="tile-metrics">
                   <span>
-                    CPU <b>{node.latestCpu?.toFixed(1) ?? "—"}%</b>
+                    CPU <b>{formatPercent(node.latestCpu)}</b>
                   </span>
                   <span>
-                    RAM <b>{node.latestMemory?.toFixed(1) ?? "—"}%</b>
+                    RAM <b>{formatPercent(node.latestMemory)}</b>
                   </span>
                 </span>
               </button>
@@ -209,7 +214,7 @@ export function NodeMatrix({
                 className="tile-detail"
                 onClick={() => onOpenDetail?.(node)}
               >
-                Chi tiết máy chủ <ArrowUpRight size={14} />
+                Chi tiết máy chủ <ChevronRight size={14} />
               </button>
             </article>
           ))}
@@ -218,7 +223,7 @@ export function NodeMatrix({
       <div className="panel-foot">
         <span>Hiển thị {nodes.length} máy chủ</span>
         <span>
-          Chọn host để xem telemetry <ArrowUpRight size={12} />
+          Chọn host để xem telemetry <ChevronRight size={12} />
         </span>
       </div>
     </section>
@@ -233,17 +238,17 @@ function Metric({
 }) {
   return (
     <div className="table-metric">
-      <span>{value === undefined ? "—" : `${value.toFixed(1)}%`}</span>
+      <span>{formatPercent(value)}</span>
       <span className="micro-meter">
         <i
           className={
-            value !== undefined && value > (memory ? 85 : 75)
+            validMetric(value) && value > (memory ? 85 : 75)
               ? "warning"
               : memory
                 ? "memory"
                 : ""
           }
-          style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }}
+          style={{ width: `${validMetric(value) ? Math.min(100, value) : 0}%` }}
         />
       </span>
     </div>

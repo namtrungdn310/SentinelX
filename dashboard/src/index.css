@@ -1,46 +1,50 @@
 @import "./App.css";
 
 :root {
-    color-scheme: dark;
-    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-    color: #f1f1f1;
-    background: #080808;
+    color-scheme: light;
+    font-family: "Be Vietnam Pro", "Segoe UI", sans-serif;
+    color: #202124;
+    background: #f5f6f7;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
-    --font-mono: "JetBrains Mono", Consolas, monospace;
-    --bg-canvas: #080808;
-    --bg-panel: #141414;
-    --bg-raised: #1b1b1b;
-    --bg-panel-header: #1a1a1a;
-    --bg-subtle: #242424;
-    --bg-panel-hover: #272727;
-    --bg-terminal: #0d0d0d;
-    --border-subtle: #363636;
-    --border-strong: #505050;
-    --text-primary: #f1f1f1;
-    --text-secondary: #c8c8c8;
-    --text-muted: #a7a7a7;
-    --brand-indigo: #88adff;
-    --brand-indigo-hover: #aac4ff;
-    --brand-indigo-subtle: #1c3150;
-    --brand-cyan: #53cfb6;
-    --brand-cyan-subtle: #17352f;
-    --chart-cpu: #53cfb6;
-    --chart-memory: #92a8ff;
-    --status-ok: #67d9ac;
-    --status-ok-bg: #17332e;
-    --status-ok-border: #2c5b4f;
-    --status-warn: #f0ba67;
-    --status-warn-bg: #382d1e;
-    --status-warn-border: #69512c;
-    --status-crit: #ff8897;
-    --status-crit-bg: #38212c;
-    --status-crit-border: #72404d;
-    --status-neutral: #b5b5b5;
-    --status-neutral-bg: #292929;
-    --status-neutral-border: #505050;
+    --font-sans: "Be Vietnam Pro", "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, monospace;
+    --bg-canvas: #f5f6f7;
+    --bg-panel: #ffffff;
+    --bg-raised: #ffffff;
+    --bg-panel-header: #f8f9fa;
+    --bg-subtle: #eceef1;
+    --bg-panel-hover: #f1f3f5;
+    --bg-terminal: #f9fafb;
+    --border-subtle: #e1e3e6;
+    --border-strong: #7a838f;
+    --text-primary: #202124;
+    --text-secondary: #50565e;
+    --text-muted: #626a73;
+    --brand-indigo: #3459c7;
+    --brand-indigo-hover: #24469f;
+    --brand-indigo-subtle: #eef2fa;
+    --brand-cyan: #147d73;
+    --brand-cyan-subtle: #e8f4f1;
+    --chart-cpu: #147d73;
+    --chart-memory: #6554c0;
+    --status-ok: #17704d;
+    --status-ok-bg: #ecf6f0;
+    --status-ok-border: #b8d9c6;
+    --status-warn: #945d0b;
+    --status-warn-bg: #fff5e5;
+    --status-warn-border: #e7cca0;
+    --status-crit: #b93643;
+    --status-crit-bg: #fff0f1;
+    --status-crit-border: #e8b8be;
+    --status-neutral: #636b75;
+    --status-neutral-bg: #eff1f3;
+    --status-neutral-border: #cdd2d7;
+    --focus-ring: #4b5563;
+    --bg-selected: #eef1f5;
+    --action-primary: #25282d;
+    --action-primary-hover: #3e4249;
     --status-critical: var(--status-crit);
     --status-critical-bg: var(--status-crit-bg);
     --status-online: var(--status-ok);
@@ -58,7 +62,7 @@
 body {
     margin: 0;
     min-width: 320px;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.5;
 }
 button,
@@ -80,10 +84,10 @@ button,
 input,
 select,
 a {
-    outline-offset: 3px;
+    outline-offset: 0;
 }
 :focus-visible {
-    outline: 2px solid var(--brand-indigo);
+    outline: 2px solid var(--focus-ring);
 }
 button:disabled {
     cursor: not-allowed;
@@ -112,15 +116,15 @@ button:active:not(:disabled) {
     filter: brightness(0.9);
 }
 ::selection {
-    background: #315588;
-    color: #fff;
+    background: #dde5f5;
+    color: var(--text-primary);
 }
 ::-webkit-scrollbar {
     width: 7px;
     height: 7px;
 }
 ::-webkit-scrollbar-thumb {
-    background: #505050;
+    background: #7a838f;
     border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-track {
@@ -136,7 +140,7 @@ button:active:not(:disabled) {
     color: var(--text-primary);
 }
 .text-body {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-secondary);
 }
 .text-label {
@@ -149,21 +153,22 @@ button:active:not(:disabled) {
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 36px;
+    min-height: 40px;
     padding: 6px 12px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     white-space: nowrap;
 }
 .btn-primary {
-    background: #3460a9;
-    border-color: #4a78c0;
+    background: var(--action-primary);
+    border-color: var(--action-primary);
     color: #fff;
+    font-weight: 600;
 }
 .btn-primary:hover {
-    background: #416eb9;
+    background: var(--action-primary-hover);
 }
 .btn-outline {
     background: var(--bg-panel);
@@ -175,7 +180,7 @@ button:active:not(:disabled) {
     color: var(--text-primary);
 }
 .btn-sm {
-    min-height: 36px;
+    min-height: 40px;
     padding: 4px 9px;
 }
 .icon-button {
@@ -183,8 +188,8 @@ button:active:not(:disabled) {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border: 1px solid transparent;
     background: transparent;
     border-radius: var(--radius-sm);
@@ -225,7 +230,8 @@ button:active:not(:disabled) {
     z-index: 200;
     padding: 10px;
     background: var(--bg-panel);
-    border: 2px solid var(--brand-indigo);
+    border: 2px solid var(--focus-ring);
+    border-radius: var(--radius-sm);
 }
 .skip-link:focus {
     top: 8px;
@@ -268,6 +274,7 @@ button:active:not(:disabled) {
     background: var(--status-crit-bg);
     border-color: var(--status-crit-border);
 }
+.status-badge.unknown,
 .status-badge.unenrolled {
     color: var(--status-neutral);
     background: var(--status-neutral-bg);
@@ -289,7 +296,7 @@ button:active:not(:disabled) {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: #000000d9;
+    background: rgb(32 33 36 / 32%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -304,7 +311,7 @@ button:active:not(:disabled) {
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
     padding: 22px;
-    box-shadow: 0 18px 60px #0008;
+    box-shadow: 0 16px 48px rgb(32 33 36 / 16%);
 }
 .modal-header {
     display: flex;
@@ -347,7 +354,7 @@ button:active:not(:disabled) {
     gap: 6px;
 }
 .form-group label {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
 }
 .form-group label span {
@@ -355,7 +362,7 @@ button:active:not(:disabled) {
 }
 .form-input {
     width: 100%;
-    min-height: 38px;
+    min-height: 40px;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     padding: 7px 10px;
@@ -363,7 +370,7 @@ button:active:not(:disabled) {
     color: var(--text-primary);
 }
 .form-input:focus {
-    border-color: var(--brand-indigo);
+    border-color: var(--focus-ring);
 }
 .field-hint {
     font-size: 13px;

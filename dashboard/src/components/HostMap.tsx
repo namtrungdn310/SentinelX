@@ -1,4 +1,4 @@
-import { ArrowUpRight, Server } from "lucide-react";
+import { ChevronRight, Server } from "lucide-react";
 import type { Node } from "../types";
 import { healthLabels, nodeHealth } from "../presentation";
 
@@ -14,7 +14,7 @@ export function HostMap({
   onSelectNode,
   onViewHosts,
 }: Props) {
-  const counts = { ok: 0, warn: 0, crit: 0, unenrolled: 0 };
+  const counts = { ok: 0, warn: 0, crit: 0, unenrolled: 0, unknown: 0 };
   nodes.forEach((node) => counts[nodeHealth(node)]++);
   return (
     <section
@@ -80,7 +80,7 @@ export function HostMap({
         )}
       </div>
       <button className="map-footer" onClick={onViewHosts}>
-        Xem danh sách máy chủ <ArrowUpRight size={14} />
+        Xem danh sách máy chủ <ChevronRight size={14} />
       </button>
     </section>
   );

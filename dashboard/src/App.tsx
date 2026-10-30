@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
-  ArrowUpRight,
-  Box,
   ChevronRight,
+  Box,
   CircleHelp,
-  FlaskConical,
   LayoutDashboard,
   ListFilter,
   Plus,
@@ -17,14 +15,16 @@ import {
 import { InfrastructureOverview } from "./components/InfrastructureOverview";
 import {
   formatBytes,
+  formatPercent,
   healthLabels,
   nodeHealth,
-  nodeRole,
+  nodeHealthLabel,
 } from "./presentation";
 import type { Health } from "./presentation";
 import { Header } from "./components/Header";
 import { KPICards } from "./components/KPICards";
 import { NodeMatrix } from "./components/NodeMatrix";
+import type { HostTableState } from "./components/NodeMatrix";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { LiveEventStream } from "./components/LiveEventStream";
 import { AddNodeModal } from "./components/AddNodeModal";
@@ -60,7 +60,7 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,7 +68,7 @@ export function App() {
   const [activeView, setActiveView] = useState(currentView);
   const [showHelp, setShowHelp] = useState(false);
   const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
-  const [roleFacet, setRoleFacet] = useState("all");
+  const [tableState, setTableState] = useState<HostTableState>({ view: "table", sort: null });
   const mainRef = useRef<HTMLElement>(null);
   const previousView = useRef(activeView);
   useEffect(() => {
@@ -114,12 +114,11 @@ export function App() {
     warn: 0,
     crit: 0,
     unenrolled: 0,
+    unknown: 0,
   };
   projectNodes.forEach((node) => counts[nodeHealth(node)]++);
   const displayedNodes = projectNodes.filter((node) => {
     if (statusFacet !== "all" && nodeHealth(node) !== statusFacet) return false;
-    if (roleFacet !== "all" && nodeRole(node.hostname) !== roleFacet)
-      return false;
     const query = searchQuery.trim().toLowerCase();
     if (query.startsWith("host:"))
       return node.hostname.toLowerCase().includes(query.slice(5));
@@ -133,8 +132,8 @@ export function App() {
     );
   });
   const selectedNode =
-    displayedNodes.find((node) => node.id === selectedNodeId) ??
-    displayedNodes[0] ??
+    projectNodes.find((node) => node.id === selectedNodeId) ??
+    projectNodes[0] ??
     null;
   const nodeId = selectedNode?.id;
   const visibleNode = selectedNode;
@@ -149,38 +148,48 @@ export function App() {
   const isLoading = isRefreshing && nodes.length === 0;
   const filtered = Boolean(
     searchQuery ||
-    selectedProjectId ||
-    statusFacet !== "all" ||
-    roleFacet !== "all",
+    statusFacet !== "all",
   );
-  const pageNames: Record<string, string> = {
-    overview: "Tổng quan",
-    hosts: "Máy chủ",
-    metrics: "Telemetry",
-    events: "Nhật ký sự kiện",
-  };
   const pageHeadings: Record<string, string> = {
     overview: "Tổng quan hạ tầng",
     hosts: "Danh sách máy chủ",
     metrics: "Telemetry tài nguyên",
     events: "Nhật ký hệ thống",
   };
-  const latestObserved = displayedNodes
-    .map((node) => node.last_seen)
-    .filter((time): time is string => Boolean(time))
-    .sort()
-    .at(-1);
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
     setDetailNodeId(node.id);
   };
   const matchesEventScope = (event: (typeof events)[number]) => {
     if (event.event === "pong") return false;
-    if (!event.data.node_id) return !filtered;
-    return displayedNodes.some((node) => node.id === event.data.node_id);
+    if (!event.data.node_id) return !selectedProjectId;
+    return projectNodes.some((node) => node.id === event.data.node_id);
   };
   const selectedEvents = events.filter(matchesEventScope);
   const recentEvents = notableEvents.filter(matchesEventScope);
+  const statusFilter = (activeView === "overview" || activeView === "hosts") && (
+    <div className="scope-filters">
+      <ListFilter size={15} aria-hidden="true" />
+      <select
+        aria-label="Lọc trạng thái"
+        value={statusFacet}
+        onChange={(event) => setStatusFacet(event.target.value as typeof statusFacet)}
+      >
+        <option value="all">Tất cả trạng thái</option>
+        {Object.entries(healthLabels).map(([health, label]) => (
+          <option key={health} value={health}>{label} ({counts[health as Health]})</option>
+        ))}
+      </select>
+      {filtered && (
+        <button className="clear-filters" onClick={() => {
+          setSearchQuery("");
+          setStatusFacet("all");
+        }}>
+          <X size={12} /> Xóa bộ lọc
+        </button>
+      )}
+    </div>
+  );
   return (
     <div className="app-container">
       <a
@@ -197,7 +206,7 @@ export function App() {
         <a className="brand" href="#overview" aria-label="SentinelX tổng quan">
           <span className="brand-mark">
             <img
-              src={`${import.meta.env.BASE_URL}sentinelx-mark-v1.svg`}
+              src={`${import.meta.env.BASE_URL}sentinelx-mark-v2.svg`}
               alt=""
               width={36}
               height={36}
@@ -206,7 +215,6 @@ export function App() {
           </span>
           <span>
             Sentinel<span className="brand-x">X</span>
-            <small>OBSERVABILITY CONSOLE</small>
           </span>
         </a>
         <div className="workspace-card">
@@ -217,7 +225,6 @@ export function App() {
             <strong>SentinelX Lab</strong>
             <small>Linux infrastructure</small>
           </div>
-          <span className="workspace-version">v0.1</span>
         </div>
         <span className="nav-label">GIÁM SÁT</span>
         <nav aria-label="Điều hướng chính">
@@ -240,42 +247,12 @@ export function App() {
             </a>
           ))}
         </nav>
-        <section className="sidebar-summary" aria-label="Phạm vi workspace">
-          <span className="nav-label">WORKSPACE</span>
-          <dl>
-            <div>
-              <dt>Dự án</dt>
-              <dd>{projects.length}</dd>
-            </div>
-            <div>
-              <dt>Máy chủ</dt>
-              <dd>{projectNodes.length}</dd>
-            </div>
-            <div>
-              <dt>Chờ đăng ký</dt>
-              <dd>{counts.unenrolled}</dd>
-            </div>
-          </dl>
-        </section>
         <div className="sidebar-bottom">
           <button className="nav-item" onClick={() => setShowHelp(true)}>
             <CircleHelp size={18} />
             <span>Hướng dẫn sử dụng</span>
-            <ArrowUpRight size={15} />
+            <ChevronRight size={15} />
           </button>
-          <div className="sidebar-status">
-            <span
-              className={`health-dot ${isDemoMode ? "unenrolled" : isConnected ? "ok" : "crit"}`}
-            />
-            <span>
-              {isDemoMode
-                ? "Dữ liệu mô phỏng"
-                : isConnected
-                  ? "Controller đã kết nối"
-                  : "Controller chưa kết nối"}
-            </span>
-            <span className="version-label">F14</span>
-          </div>
         </div>
       </aside>
       <div className="app-workspace">
@@ -285,6 +262,7 @@ export function App() {
           onSelectProject={setSelectedProjectId}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          onSearchSubmit={() => navigate("hosts")}
           isConnected={isConnected}
           latencyMs={latencyMs}
           isDemoMode={isDemoMode}
@@ -298,79 +276,27 @@ export function App() {
           className="main-viewport"
           id="main-content"
         >
-          <div className="page-breadcrumb">
-            Infrastructure <ChevronRight size={12} />
-            <span>{pageNames[activeView]}</span>
-          </div>
           <div className="page-heading">
             <div>
               <h1>{pageHeadings[activeView]}</h1>
+              <div className="page-heading-context">
               <p>
-                {displayedNodes.length} máy chủ trong phạm vi ·{" "}
+                {projectNodes.length} máy chủ trong phạm vi ·{" "}
                 {selectedProjectId
                   ? projects.find((project) => project.id === selectedProjectId)
                       ?.name
                   : `${projects.length} dự án`}
               </p>
+              {statusFilter}
+              </div>
             </div>
-            <button
-              className="btn btn-primary"
+            {(activeView === "overview" || activeView === "hosts") && <button
+              className={`btn ${activeView === "hosts" ? "btn-primary" : "btn-outline"}`}
               onClick={() => setIsAddNodeOpen(true)}
             >
               <Plus size={17} />
               Thêm máy chủ
-            </button>
-          </div>
-          <div className="scope-toolbar">
-            <div className="scope-filters">
-              <ListFilter size={15} />
-              <select
-                aria-label="Lọc trạng thái"
-                value={statusFacet}
-                onChange={(event) =>
-                  setStatusFacet(event.target.value as typeof statusFacet)
-                }
-              >
-                <option value="all">Tất cả trạng thái</option>
-                {Object.entries(healthLabels).map(([health, label]) => (
-                  <option key={health} value={health}>
-                    {label} ({counts[health as Health]})
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Lọc vai trò"
-                value={roleFacet}
-                onChange={(event) => setRoleFacet(event.target.value)}
-              >
-                <option value="all">Tất cả vai trò</option>
-                {["Gateway", "Database", "API server", "Worker"].map((role) => (
-                  <option key={role}>{role}</option>
-                ))}
-              </select>
-              {filtered && (
-                <button
-                  className="clear-filters"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedProjectId(null);
-                    setStatusFacet("all");
-                    setRoleFacet("all");
-                  }}
-                >
-                  <X size={12} />
-                  Xóa bộ lọc
-                </button>
-              )}
-            </div>
-            <span className="toolbar-live">
-              <Radio size={14} />
-              {isDemoMode
-                ? "Mô phỏng trực tiếp"
-                : isConnected
-                  ? "Cập nhật trực tiếp"
-                  : "Chờ kết nối"}
-            </span>
+            </button>}
           </div>
           {connectionError && (
             <div className="connection-error" role="alert">
@@ -381,19 +307,7 @@ export function App() {
                 onClick={loadData}
                 disabled={isRefreshing}
               >
-                Thử lại <ArrowUpRight size={14} />
-              </button>
-            </div>
-          )}
-          {isDemoMode && (
-            <div className="demo-notice">
-              <FlaskConical size={15} />
-              <span>
-                <strong>DEMO</strong> Đang hiển thị dữ liệu mô phỏng; chưa kết
-                nối Controller.
-              </span>
-              <button onClick={loadData} disabled={isRefreshing}>
-                Kết nối Controller <ArrowUpRight size={14} />
+                Thử lại <ChevronRight size={14} />
               </button>
             </div>
           )}
@@ -421,7 +335,6 @@ export function App() {
                 key={JSON.stringify([
                   selectedProjectId,
                   statusFacet,
-                  roleFacet,
                   searchQuery,
                   isDemoMode,
                 ])}
@@ -441,6 +354,8 @@ export function App() {
               onSelectNode={handleSelectNode}
               isLoading={isLoading}
               onOpenDetail={openDetail}
+              state={tableState}
+              onStateChange={setTableState}
             />
           )}
           {activeView === "metrics" && (
@@ -451,12 +366,12 @@ export function App() {
                   id="telemetry-host"
                   value={nodeId ?? ""}
                   onChange={(event) => setSelectedNodeId(event.target.value)}
-                  disabled={!displayedNodes.length}
+                  disabled={!projectNodes.length}
                 >
-                  {!displayedNodes.length && (
+                  {!projectNodes.length && (
                     <option value="">Không có máy chủ phù hợp</option>
                   )}
-                  {displayedNodes.map((node) => (
+                  {projectNodes.map((node) => (
                     <option key={node.id} value={node.id}>
                       {node.hostname} · {node.ip_address}
                     </option>
@@ -465,7 +380,7 @@ export function App() {
                 {selectedNode && (
                   <span className={`status-badge ${nodeHealth(selectedNode)}`}>
                     <i />
-                    {healthLabels[nodeHealth(selectedNode)]}
+                    {nodeHealthLabel(selectedNode)}
                   </span>
                 )}
                 {selectedNode && (
@@ -473,7 +388,7 @@ export function App() {
                     className="text-button"
                     onClick={() => openDetail(selectedNode)}
                   >
-                    Chi tiết host <ArrowUpRight size={14} />
+                    Chi tiết host <ChevronRight size={14} />
                   </button>
                 )}
               </div>
@@ -515,14 +430,13 @@ export function App() {
                   aria-label="Mẫu tài nguyên host gần nhất"
                 >
                   <article className="panel">
-                    <span>Ổ ĐĨA SỬ DỤNG</span>
+                    <span>Ổ đĩa sử dụng</span>
                     <strong>
-                      {selectedNode.latestDisk?.toFixed(1) ?? "—"}
-                      <small>%</small>
+                      {formatPercent(selectedNode.latestDisk)}
                     </strong>
                   </article>
                   <article className="panel">
-                    <span>RX TÍCH LŨY</span>
+                    <span>RX tích lũy</span>
                     <strong>
                       {selectedNode.latestRxBytes === undefined
                         ? "—"
@@ -530,7 +444,7 @@ export function App() {
                     </strong>
                   </article>
                   <article className="panel">
-                    <span>TX TÍCH LŨY</span>
+                    <span>TX tích lũy</span>
                     <strong>
                       {selectedNode.latestTxBytes === undefined
                         ? "—"
@@ -546,7 +460,6 @@ export function App() {
               key={JSON.stringify([
                 selectedProjectId,
                 statusFacet,
-                roleFacet,
                 searchQuery,
                 isDemoMode,
               ])}
@@ -556,21 +469,6 @@ export function App() {
               isDemoMode={isDemoMode}
             />
           )}
-          <footer className="workspace-footer">
-            <span>
-              <span
-                className={`health-dot ${isDemoMode ? "unenrolled" : isConnected ? "ok" : "crit"}`}
-              />
-              {isDemoMode
-                ? "Nguồn: dữ liệu mô phỏng"
-                : "Nguồn: Controller / Agent"}
-            </span>
-            <span>
-              {latestObserved
-                ? `Agent phản hồi gần nhất: ${new Date(latestObserved).toLocaleTimeString("vi-VN")}`
-                : "Chưa có phản hồi từ Agent"}
-            </span>
-          </footer>
         </main>
       </div>
       <AddNodeModal
@@ -608,13 +506,14 @@ export function App() {
             </button>
           </div>
           <div className="modal-body">
+            <p>SentinelX v0.1 · Foundation F14</p>
             <p>
               Chọn dự án, lọc theo trạng thái hoặc tìm hostname / IP để thu hẹp
               phạm vi quan trắc.
             </p>
             <p>
-              Tổng quan tổng hợp toàn cụm. Chọn host trong mục tải cao hoặc danh
-              sách máy chủ để mở Telemetry và phân tích lịch sử CPU/RAM. Nút ↗
+              Tổng quan tổng hợp toàn cụm. Chọn host trong bảng xếp hạng tài nguyên hoặc danh
+              sách máy chủ để mở Telemetry và phân tích lịch sử CPU/RAM. Nút mũi tên
               trong bảng mở thông tin chi tiết.
             </p>
             <p>
@@ -625,7 +524,7 @@ export function App() {
               className="btn btn-primary"
               onClick={() => setShowHelp(false)}
             >
-              Đã hiểu <ArrowUpRight size={15} />
+              Đã hiểu <ChevronRight size={15} />
             </button>
           </div>
         </Modal>
