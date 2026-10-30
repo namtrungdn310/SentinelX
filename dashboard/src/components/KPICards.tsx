@@ -6,7 +6,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { Node } from "../types";
-import { formatBytes, nodeHealth } from "../presentation";
+import { formatBytes, nodeHealth, validMetric } from "../presentation";
 
 export function KPICards({
   nodes,
@@ -18,16 +18,18 @@ export function KPICards({
   const online = nodes.filter(
     (node) => node.status === "online" || node.status === "degraded",
   );
-  const cpu = online.filter((node) => node.latestCpu !== undefined);
-  const mem = online.filter((node) => node.latestMemory !== undefined);
+  const cpu = online.filter((node) => validMetric(node.latestCpu));
+  const mem = online.filter((node) => validMetric(node.latestMemory));
   const avgCpu = cpu.length
     ? cpu.reduce((sum, node) => sum + node.latestCpu!, 0) / cpu.length
     : null;
   const avgMem = mem.length
     ? mem.reduce((sum, node) => sum + node.latestMemory!, 0) / mem.length
     : null;
-  const rx = online.reduce((sum, node) => sum + (node.latestRxBytes ?? 0), 0);
-  const tx = online.reduce((sum, node) => sum + (node.latestTxBytes ?? 0), 0);
+  const rxNodes = online.filter((node) => validMetric(node.latestRxBytes));
+  const txNodes = online.filter((node) => validMetric(node.latestTxBytes));
+  const rx = rxNodes.reduce((sum, node) => sum + node.latestRxBytes!, 0);
+  const tx = txNodes.reduce((sum, node) => sum + node.latestTxBytes!, 0);
   const warning = nodes.filter((node) => nodeHealth(node) === "warn").length;
   const offline = nodes.filter((node) => node.status === "offline").length;
   const waiting = nodes.filter((node) => node.status === "unenrolled").length;
@@ -42,39 +44,38 @@ export function KPICards({
       <article className="stat-card stat-online">
         <div className="stat-top">
           <Server size={14} />
-          <span>HOST TRỰC TUYẾN</span>
+          <span>Máy chủ trực tuyến</span>
         </div>
         <div className="stat-value">
           {online.length}
           <span>/ {nodes.length}</span>
-          <span className="stat-state">ONLINE</span>
         </div>
         <div className="stat-bottom">
-          <span>{offline} offline</span>
+          <span>{offline} mất kết nối</span>
           <span>{waiting} chờ đăng ký</span>
         </div>
       </article>
-      <article className={`stat-card ${attention ? "stat-attention" : ""}`}>
+      <article className={`stat-card ${warning + offline > 0 ? "stat-attention" : ""}`}>
         <div className="stat-top">
           <TriangleAlert size={14} />
-          <span>HOST CẦN CHÚ Ý</span>
+          <span>Cần xử lý</span>
         </div>
         <div className="stat-value">
           {attention}
-          <span className="stat-state">{attention ? "ATTENTION" : "OK"}</span>
         </div>
         <div className="stat-bottom">
-          <span>{warning} vượt ngưỡng / degraded</span>
+          <span>{warning} cảnh báo{offline > 0 ? ` · ${offline} mất kết nối` : ""}</span>
+          <span>{waiting} chờ đăng ký</span>
         </div>
       </article>
       <article className="stat-card stat-cpu">
         <div className="stat-top">
           <Cpu size={14} />
-          <span>CPU TRUNG BÌNH</span>
+          <span>CPU trung bình</span>
         </div>
         <div className="stat-value">
           {avgCpu?.toFixed(1) ?? "—"}
-          <span>%</span>
+          {avgCpu !== null && <span>%</span>}
         </div>
         <div className="stat-bottom">
           {cpu.length
@@ -86,16 +87,17 @@ export function KPICards({
             className={avgCpu !== null && avgCpu > 75 ? "warn" : "cpu"}
             style={{ width: `${Math.min(100, avgCpu ?? 0)}%` }}
           />
+          <span className="threshold-mark" style={{ left: "75%" }} />
         </div>
       </article>
       <article className="stat-card stat-memory">
         <div className="stat-top">
           <MemoryStick size={14} />
-          <span>RAM TRUNG BÌNH</span>
+          <span>RAM trung bình</span>
         </div>
         <div className="stat-value">
           {avgMem?.toFixed(1) ?? "—"}
-          <span>%</span>
+          {avgMem !== null && <span>%</span>}
         </div>
         <div className="stat-bottom">
           {mem.length
@@ -107,6 +109,7 @@ export function KPICards({
             className={avgMem !== null && avgMem > 85 ? "warn" : "memory"}
             style={{ width: `${Math.min(100, avgMem ?? 0)}%` }}
           />
+          <span className="threshold-mark" style={{ left: "85%" }} />
         </div>
       </article>
       <article className="stat-card stat-network">
@@ -115,12 +118,13 @@ export function KPICards({
           <span>Dữ liệu mạng tích lũy</span>
         </div>
         <div className="stat-value network-value">
-          {rx + tx ? formatBytes(rx + tx) : "—"}
+          {rxNodes.length || txNodes.length ? formatBytes(rx + tx) : "—"}
         </div>
         <div className="stat-bottom">
-          <span>RX {formatBytes(rx)}</span>
-          <span>TX {formatBytes(tx)}</span>
+          <span>RX {rxNodes.length ? formatBytes(rx) : "—"}</span>
+          <span>TX {txNodes.length ? formatBytes(tx) : "—"}</span>
         </div>
+        {(rxNodes.length !== online.length || txNodes.length !== online.length) && <small className="metric-coverage">Dữ liệu chưa đủ toàn phạm vi</small>}
       </article>
     </section>
   );

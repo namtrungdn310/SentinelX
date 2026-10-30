@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { Check, Copy, KeyRound, Server, X } from "lucide-react";
 import type { Node } from "../types";
 import { createEnrollmentToken } from "../api";
-import { healthLabels, nodeHealth, nodeRole } from "../presentation";
+import { healthLabels, nodeHealth, formatPercent } from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -48,7 +48,7 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
       <div className="modal-header">
         <div>
           <span className="modal-eyebrow">
-            <Server size={15} /> HOST DETAILS
+            <Server size={15} /> Chi tiết máy chủ
           </span>
           <h2 id={`${id}-title`}>{node.hostname}</h2>
         </div>
@@ -66,7 +66,6 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
           <i />
           {healthLabels[nodeHealth(node)]}
         </span>
-        <span>{nodeRole(node.hostname)}</span>
       </div>
       <dl className="detail-properties">
         <div>
@@ -88,13 +87,12 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
         <div>
           <dt>CPU / RAM</dt>
           <dd className="font-mono">
-            {node.latestCpu?.toFixed(1) ?? "—"}% /{" "}
-            {node.latestMemory?.toFixed(1) ?? "—"}%
+            {formatPercent(node.latestCpu)} / {formatPercent(node.latestMemory)}
           </dd>
         </div>
         <div>
           <dt>Ổ đĩa</dt>
-          <dd className="font-mono">{node.latestDisk?.toFixed(1) ?? "—"}%</dd>
+          <dd className="font-mono">{formatPercent(node.latestDisk)}</dd>
         </div>
       </dl>
       <div className="token-section">

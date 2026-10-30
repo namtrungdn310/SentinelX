@@ -108,7 +108,7 @@ export function AddNodeModal({
       <div className="modal-header">
         <div>
           <span className="modal-eyebrow">
-            <Server size={15} /> NODE REGISTRY
+            <Server size={15} /> {createdNode ? "Bước 2 · Kết nối Agent" : "Bước 1 · Thông tin máy chủ"}
           </span>
           <h2 id={`${id}-title`}>
             {createdNode ? "Đã đăng ký máy chủ" : "Đăng ký máy chủ"}

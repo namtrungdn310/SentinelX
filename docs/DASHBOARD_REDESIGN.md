@@ -70,6 +70,11 @@ an accessible link label and explicit image dimensions, including its collapsed
 layout. A 32px PNG favicon is rendered from the SVG as a fallback. Both asset
 references honor Vite's base path, and versioned filenames avoid the old favicon
 cache. Previous favicon files and the approved concept PNG are preserved.
+The light-console recolor (2026-10-27) now uses `sentinelx-mark-v2.svg`: identical
+geometry, flat graphite `#25282D` and teal `#147D73`, with a matching teal wordmark
+suffix. `sentinelx-favicon-v2.svg` uses the same paths and adapts to dark browser
+chrome with lighter graphite/teal fills. The active icon link is SVG-only; the
+old V1 PNG and SVG assets remain untouched but are no longer referenced by the UI.
 The concept was generated with imagegen; its prompt remains in
 `output/imagegen/sentinelx-logo-concept-v1.prompt.md`. Raster background-removal
 trials were not used in the application because their cutouts contained noise.

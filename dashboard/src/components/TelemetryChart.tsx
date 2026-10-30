@@ -1,5 +1,7 @@
-import { useId, useState } from "react";
-import { Activity, ArrowUpRight, Server } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { mergeSamples, timeTicks } from "../telemetry";
+import { formatPercent } from "../presentation";
+import { Activity, ChevronRight, Server } from "lucide-react";
 import type { MetricSample, Node } from "../types";
 
 interface Props {
@@ -23,18 +25,25 @@ export function TelemetryChart({
   error,
   onRetry,
 }: Props) {
-  const id = useId().replace(/:/g, "");
+  const containerRef = useRef<HTMLElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipWidth, setTooltipWidth] = useState(260);
+  const [width, setWidth] = useState(720);
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(240, entry.contentRect.width)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const [showCpu, setShowCpu] = useState(true);
   const [showMem, setShowMem] = useState(true);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [activeTime, setActiveTime] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const data = [...samples].sort(
-    (a, b) => Date.parse(a.observed_at) - Date.parse(b.observed_at),
-  );
+  const data = mergeSamples([], samples);
   const count = data.length;
-  const width = 720;
-  const height = 260;
-  const pad = { top: 22, right: 20, bottom: 38, left: 64 };
+  const height = width < 600 ? 240 : 300;
+  const pad = { top: 22, right: 16, bottom: 32, left: 52 };
   const graphWidth = width - pad.left - pad.right;
   const graphHeight = height - pad.top - pad.bottom;
   const firstTime = count ? Date.parse(data[0].observed_at) : 0;
@@ -50,25 +59,28 @@ export function TelemetryChart({
     pad.top + (1 - Math.max(0, Math.min(100, value)) / 100) * graphHeight;
   const points = (key: "cpu_percent" | "memory_percent") =>
     data.map((sample, index) => `${x(index)},${y(sample[key])}`).join(" ");
-  const area = (key: "cpu_percent" | "memory_percent") =>
-    count
-      ? `M ${x(0)},${y(0)} L ${points(key)} L ${x(count - 1)},${y(0)} Z`
-      : "";
-  const activeIndex =
-    hoverIndex === null ? count - 1 : Math.min(hoverIndex, count - 1);
+  const activeIndex = activeTime === null ? count - 1 : data.findIndex((sample) => sample.observed_at === activeTime);
+  const hoverIndex = activeTime === null || activeIndex < 0 ? null : activeIndex;
+  const setHoverIndex = (index: number | null) => setActiveTime(index === null ? null : data[index]?.observed_at ?? null);
   const active = data[activeIndex];
-  const cpu = active?.cpu_percent ?? selectedNode?.latestCpu;
-  const memory = active?.memory_percent ?? selectedNode?.latestMemory;
+  const latest = data.at(-1);
+  const cpu = latest?.cpu_percent ?? selectedNode?.latestCpu;
+  const memory = latest?.memory_percent ?? selectedNode?.latestMemory;
+  const tooltipVisible = hoverIndex !== null && Boolean(active);
+  useEffect(() => {
+    const element = tooltipRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setTooltipWidth(entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [tooltipVisible]);
+  const tooltipLeft = hoverIndex === null ? 8 : Math.max(8, Math.min(width - tooltipWidth - 8,
+    x(hoverIndex) + 14 + tooltipWidth <= width - 8 ? x(hoverIndex) + 14 : x(hoverIndex) - tooltipWidth - 14));
 
   return (
-    <section className="chart-panel" aria-label="Biểu đồ tài nguyên">
+    <section ref={containerRef} className="chart-panel" aria-label="Biểu đồ tài nguyên">
       <div className="chart-panel-header">
-        <div className="chart-node-identity">
-          <strong>{selectedNode?.hostname ?? "Tài nguyên máy chủ"}</strong>
-          <small>
-            {selectedNode?.ip_address ?? "Chọn một host để bắt đầu"}
-          </small>
-        </div>
+        <span className="chart-reading-label">Giá trị mới nhất{latest && ` · ${clock(latest.observed_at)}`}</span>
         <div className="chart-legends">
           <button
             className={`legend-pill ${showCpu ? "" : "series-hidden"}`}
@@ -76,7 +88,7 @@ export function TelemetryChart({
             onClick={() => setShowCpu(!showCpu)}
           >
             <span className="legend-color-dot cpu" />
-            CPU <b>{cpu?.toFixed(1) ?? "—"}%</b>
+            CPU <b>{formatPercent(cpu)}</b>
           </button>
           <button
             className={`legend-pill ${showMem ? "" : "series-hidden"}`}
@@ -84,7 +96,7 @@ export function TelemetryChart({
             onClick={() => setShowMem(!showMem)}
           >
             <span className="legend-color-dot memory" />
-            RAM <b>{memory?.toFixed(1) ?? "—"}%</b>
+            RAM <b>{formatPercent(memory)}</b>
           </button>
         </div>
       </div>
@@ -114,18 +126,19 @@ export function TelemetryChart({
       ) : (
         <div className="chart-canvas-container">
           {hoverIndex !== null && active && (
-            <div className="chart-tooltip-box">
-              <span>{clock(active.observed_at)}</span>
-              <span>CPU {active.cpu_percent.toFixed(1)}%</span>
-              <span>RAM {active.memory_percent.toFixed(1)}%</span>
+            <div ref={tooltipRef} className="chart-tooltip-box" style={{ left: tooltipLeft }}>
+              <time dateTime={active.observed_at}>{clock(active.observed_at)}</time>
+              {showCpu && <span>CPU <b>{active.cpu_percent.toFixed(1)}%</b></span>}
+              {showMem && <span>RAM <b>{active.memory_percent.toFixed(1)}%</b></span>}
             </div>
           )}
           <svg
             className="telemetry-svg"
             viewBox={`0 0 ${width} ${height}`}
+            style={{ height }}
             role="img"
             tabIndex={0}
-            aria-label={`${count} mẫu tài nguyên của ${selectedNode.hostname}. CPU ${cpu?.toFixed(1)}%, RAM ${memory?.toFixed(1)}%. Dùng phím mũi tên để xem từng mẫu.`}
+            aria-label={`${count} mẫu tài nguyên của ${selectedNode.hostname}. CPU ${formatPercent(cpu)}, RAM ${formatPercent(memory)} mới nhất. Dùng phím mũi tên để xem từng mẫu.`}
             onMouseLeave={() => setHoverIndex(null)}
             onKeyDown={(event) => {
               if (
@@ -135,11 +148,9 @@ export function TelemetryChart({
               )
                 event.preventDefault();
               if (event.key === "ArrowLeft")
-                setHoverIndex((index) => Math.max(0, (index ?? count) - 1));
+                setHoverIndex(Math.max(0, (hoverIndex ?? count) - 1));
               if (event.key === "ArrowRight")
-                setHoverIndex((index) =>
-                  Math.min(count - 1, (index ?? -1) + 1),
-                );
+                setHoverIndex(Math.min(count - 1, (hoverIndex ?? -1) + 1));
               if (event.key === "Home") setHoverIndex(0);
               if (event.key === "End") setHoverIndex(count - 1);
               if (event.key === "Escape") setHoverIndex(null);
@@ -147,32 +158,6 @@ export function TelemetryChart({
             onBlur={() => setHoverIndex(null)}
           >
             <title>CPU và RAM theo thời gian</title>
-            <defs>
-              <linearGradient id={`${id}-cpu`} x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="0%"
-                  stopColor="var(--chart-cpu)"
-                  stopOpacity=".16"
-                />
-                <stop
-                  offset="100%"
-                  stopColor="var(--chart-cpu)"
-                  stopOpacity="0"
-                />
-              </linearGradient>
-              <linearGradient id={`${id}-mem`} x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="0%"
-                  stopColor="var(--chart-memory)"
-                  stopOpacity=".10"
-                />
-                <stop
-                  offset="100%"
-                  stopColor="var(--chart-memory)"
-                  stopOpacity="0"
-                />
-              </linearGradient>
-            </defs>
             {[0, 25, 50, 75, 100].map((value) => (
               <g key={value}>
                 <line
@@ -195,7 +180,6 @@ export function TelemetryChart({
             ))}
             {showMem && (
               <>
-                <path d={area("memory_percent")} fill={`url(#${id}-mem)`} />
                 <polyline
                   points={points("memory_percent")}
                   fill="none"
@@ -208,7 +192,6 @@ export function TelemetryChart({
             )}
             {showCpu && (
               <>
-                <path d={area("cpu_percent")} fill={`url(#${id}-cpu)`} />
                 <polyline
                   points={points("cpu_percent")}
                   fill="none"
@@ -218,25 +201,16 @@ export function TelemetryChart({
                 />
               </>
             )}
-            {[...new Set([0, Math.floor((count - 1) / 2), count - 1])].map(
-              (index) => (
-                <text
-                  key={index}
-                  x={x(index)}
-                  y={height - 7}
-                  className="chart-axis"
-                  textAnchor={
-                    index === 0
-                      ? "start"
-                      : index === count - 1
-                        ? "end"
-                        : "middle"
-                  }
-                >
-                  {clock(data[index].observed_at)}
-                </text>
-              ),
-            )}
+            {timeTicks(firstTime, firstTime + duration, graphWidth).map((time, index, ticks) => (
+              <text key={time} x={duration ? pad.left + (time - firstTime) / duration * graphWidth : x(0)}
+                y={height - 7} className="chart-axis" textAnchor={ticks.length === 1 ? "middle" : index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}>
+                {clock(new Date(time).toISOString())}
+              </text>
+            ))}
+            {count === 1 && <g>
+              {showCpu && <circle cx={x(0)} cy={y(data[0].cpu_percent)} r={4} fill="var(--chart-cpu)" />}
+              {showMem && <circle cx={x(0)} cy={y(data[0].memory_percent)} r={4} fill="var(--chart-memory)" />}
+            </g>}
             {data.map((sample, index) => (
               <rect
                 key={`${sample.observed_at}-${index}`}
@@ -288,12 +262,14 @@ export function TelemetryChart({
               </g>
             )}
           </svg>
+          <span className="sr-only" role="status">
+            {hoverIndex !== null && active ? `Đang xem ${clock(active.observed_at)}.${showCpu ? ` CPU ${formatPercent(active.cpu_percent)}.` : ""}${showMem ? ` RAM ${formatPercent(active.memory_percent)}.` : ""}` : ""}
+          </span>
         </div>
       )}
       <div className="chart-foot">
         <span>
-          <span className={`health-dot ${count ? "ok" : "unenrolled"}`} />{" "}
-          {count} mẫu · CPU / RAM (%)
+          {count} mẫu · CPU / RAM (%) {count > 0 && `· Mẫu mới nhất ${clock(data[count - 1].observed_at)}`}
         </span>
         <button
           className="text-button"
@@ -302,7 +278,7 @@ export function TelemetryChart({
           disabled={!count}
         >
           {showTable ? "Ẩn dữ liệu" : "Xem dữ liệu"}
-          <ArrowUpRight size={13} />
+          <ChevronRight size={13} />
         </button>
       </div>
       {showTable && count > 0 && (
