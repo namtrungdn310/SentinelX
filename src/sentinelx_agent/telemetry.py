@@ -28,5 +28,11 @@ class TelemetryBatcher:
         """Check if buffer has accumulated at least batch_size samples."""
         return len(self._buffer) >= batch_size
 
+    def requeue(self, samples: list[MetricSample]) -> None:
+        """Restore a failed batch before newer samples; keep newest on overflow."""
+        restored = [*samples, *self._buffer]
+        self._buffer.clear()
+        self._buffer.extend(restored[-self._max_buffer_size :])
+
     def __len__(self) -> int:
         return len(self._buffer)

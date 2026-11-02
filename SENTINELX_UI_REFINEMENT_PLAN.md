@@ -144,7 +144,7 @@ Mono dành cho dữ liệu kỹ thuật có chọn lọc, không cho toàn bộ 
 
 ### 3.4 Copy và icon
 
-- Dùng tiếng Việt nhất quán: Máy chủ trực tuyến, Cần chú ý, CPU trung bình, RAM trung bình, Mạng tích lũy.
+- Dùng tiếng Việt nhất quán: Máy chủ trực tuyến, Cần chú ý, CPU trung bình, RAM trung bình, Mạng · mẫu gần nhất (nhãn mạng đã cập nhật theo contract M1).
 - Giữ các thuật ngữ CPU, RAM, RX, TX, Telemetry, hostname và event code khi chúng có ý nghĩa kỹ thuật.
 - Bỏ nhãn ONLINE/ATTENTION khi nhãn và màu đã diễn đạt cùng thông tin. Không đổi event code gốc; có thể kèm mô tả tiếng Việt.
 - Icon điều hướng có ý nghĩa được giữ. Icon trang trí lặp trong mỗi header/card có thể bỏ hoặc chuyển trung tính.
@@ -201,7 +201,7 @@ Thứ tự cố định: header/toolbar gọn → demo notice nếu có → KPI 
 - Máy chủ trực tuyến: số online/tổng; dòng phụ nêu offline và chờ đăng ký, không dùng progress bar giả.
 - Cần chú ý: giữ rõ tổng số host cần xử lý có thể gồm chờ đăng ký; dòng phụ tách số vượt ngưỡng/degraded và số chờ đăng ký. Không khiến người dùng hiểu tất cả là sự cố đang chạy.
 - CPU/RAM trung bình: hiển thị số host có mẫu hợp lệ; track nhẹ, nhất quán màu CPU/RAM và marker ngưỡng thật 75%/85%; không bịa trend so với hôm qua.
-- Mạng tích lũy: tổng RX + TX của dữ liệu hợp lệ, cùng đơn vị thích hợp; dòng phụ RX/TX. Không gọi là băng thông hoặc MB/s.
+- Cập nhật M1 02/11/2026: “Mạng · mẫu gần nhất” là tổng RX + TX của mẫu hợp lệ gần nhất từng host, với dòng giải thích byte giữa hai lần đo. Các host có thể khác thời điểm/chu kỳ; không gọi là tích lũy, băng thông hoặc MB/s.
 - Card warning giữ nền trung tính hoặc tint amber rất nhẹ khoảng 3–4%; không dùng toàn nền vàng nâu như điểm nhấn trang trí. Màu số và label trạng thái đủ làm nổi bật.
 
 #### B. Sức khỏe toàn cụm
@@ -289,7 +289,7 @@ Thứ tự cố định: header/toolbar gọn → demo notice nếu có → KPI 
 - Host đang phân tích không tự đổi chỉ vì filter trạng thái hoặc metric mới thay đổi. Resolve host theo project scope; đổi dự án thì xử lý host không còn trong scope một cách tường minh.
 - Không có host: empty state theo scope. Có host chưa có mẫu: nêu Chưa có mẫu telemetry, không vẽ đường 0%.
 - Một mẫu: marker thật và timestamp, không có đường lịch sử giả. Số 0% hợp lệ vẫn hiển thị là 0%.
-- RX/TX là counter tích lũy. Hiển thị dữ liệu một phần nếu một counter thiếu, không coi thiếu bằng 0 và không gắn /s.
+- Cập nhật M1 02/11/2026: RX/TX là byte giữa hai lần đo, hiển thị nhãn đúng contract. Hiển thị dữ liệu một phần nếu một trường thiếu, không coi thiếu bằng 0 và không gắn /s.
 - Mốc mới nhất lấy từ timestamp metric, không lấy heartbeat để tuyên bố metric vừa cập nhật.
 
 ### 5.4 Nhật ký sự kiện: vùng đọc log chuyên dụng

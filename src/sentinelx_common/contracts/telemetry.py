@@ -33,19 +33,19 @@ class MetricSample(SentinelXBaseModel):
         default=None,
         ge=0.0,
         le=100.0,
-        description="Optional disk usage percentage from 0.0 to 100.0",
+        description="Disk usage percentage from 0.0 to 100.0; null if unavailable",
     )
 
     network_tx_bytes: int | None = Field(
         default=None,
         ge=0,
-        description="Bytes sent since last check",
+        description="Bytes sent since previous check; null if unavailable or rebasing",
     )
 
     network_rx_bytes: int | None = Field(
         default=None,
         ge=0,
-        description="Bytes received since last check",
+        description="Bytes received since previous check; null if unavailable or rebasing",
     )
 
 
@@ -118,4 +118,3 @@ class MetricQueryResponse(SentinelXBaseModel):
         default_factory=list,
         description="Time-series samples ordered by observed_at descending",
     )
-

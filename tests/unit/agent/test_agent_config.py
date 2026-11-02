@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from sentinelx_agent.config import AgentSettings
 
@@ -34,3 +35,28 @@ def test_agent_settings_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.node_id == "11111111-2222-3333-4444-555555555555"
     assert settings.enrollment_token == "my-secret-token"
     assert settings.heartbeat_interval_seconds == 15
+
+
+def test_agent_settings_rejects_unknown_collector() -> None:
+    with pytest.raises(ValidationError, match="telemetry_collector_type"):
+        AgentSettings.model_validate({"telemetry_collector_type": "typo"})
+
+
+def test_collector_yaml_and_environment_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "agent.yaml"
+    config.write_text(
+        "agent:\n  telemetry_collector_type: fake\n  telemetry_disk_path: /data\n"
+        "  telemetry_batch_size: 2\n",
+        encoding="utf-8",
+    )
+    settings = AgentSettings.load(config)
+    assert settings.telemetry_collector_type == "fake"
+    assert settings.telemetry_disk_path == "/data"
+    assert settings.telemetry_batch_size == 2
+    monkeypatch.setenv("SENTINELX_TELEMETRY_COLLECTOR_TYPE", "real")
+    monkeypatch.setenv("SENTINELX_TELEMETRY_DISK_PATH", "/srv")
+    overridden = AgentSettings.load(config)
+    assert overridden.telemetry_collector_type == "real"
+    assert overridden.telemetry_disk_path == "/srv"

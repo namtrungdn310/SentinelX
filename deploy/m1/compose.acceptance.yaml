@@ -1,0 +1,41 @@
+# Isolated acceptance: no host ports, named shared networks, host mounts or privileges.
+# Always pass a dedicated project name (-p sentinelx-m1-acceptance).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: m1_test
+      POSTGRES_PASSWORD: m1_isolated_lab_only
+      POSTGRES_DB: m1_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U m1_test -d m1_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  controller:
+    build:
+      context: ../..
+      dockerfile: deploy/m1/Dockerfile
+    environment:
+      SENTINELX_DATABASE__URL: postgresql+asyncpg://m1_test:m1_isolated_lab_only@postgres:5432/m1_test
+      SENTINELX_SERVER__HOST: 0.0.0.0
+      SENTINELX_SERVER__PORT: 8000
+      SENTINELX_LOGGING__LEVEL: WARNING
+    command: ["sh", "-c", "uv run --frozen alembic upgrade head && exec uv run --frozen python -m sentinelx_controller.main"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "uv", "run", "--frozen", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/health', timeout=2)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  agent-check:
+    build:
+      context: ../..
+      dockerfile: deploy/m1/Dockerfile
+    environment:
+      SENTINELX_M1_CONTROLLER_URL: http://controller:8000
+    depends_on:
+      controller:
+        condition: service_healthy

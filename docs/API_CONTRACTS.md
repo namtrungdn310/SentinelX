@@ -111,6 +111,30 @@ Target shape ở F3/F8:
 
 Schema cuối cùng được khóa khi triển khai F3.
 
+### M1 resource semantics (02/11/2026)
+
+The actual `/api/v1/telemetry/metrics` payload uses `samples` with
+`observed_at`, `cpu_percent`, `memory_percent`, `disk_percent`,
+`network_rx_bytes` and `network_tx_bytes` (see `MetricSample`).
+
+- CPU is sampled over a bounded 100ms window inside the Agent worker, independent
+  of thread-local psutil history. The configured interval is the wait between collections.
+- Disk is nullable: unreadable/missing mounts produce `null`, never a fabricated `0%`.
+- RX/TX are bytes between checks, not since boot, session totals or bytes/second.
+  Missing network counters and the first observation after a gap produce `null`;
+  the next observation uses the new baseline. Counter reset yields a nonnegative
+  zero delta and rebases. A measured zero remains valid data.
+- Preserve optional `null` through persistence, REST and WebSocket. No wire field
+  is added/renamed. The ORM no longer replaces missing byte fields with client-side
+  zero defaults; SQL columns already allow explicit NULL, so no migration is needed.
+- Fleet network KPI sums the latest available deltas per online host; their
+  timestamps and intervals may differ. This is not synchronized fleet throughput.
+- Project/node/telemetry DB dependencies use function scope: commit/rollback
+  finishes before a REST success response is sent. This prevents immediate
+  create-project → create-node → issue-token requests from racing uncommitted data.
+  Commit failure must return an error rather than a previously sent success.
+  The minimum FastAPI requirement is 0.121.0; the locked version remains unchanged.
+
 ---
 
 ## 8. Agent command principle

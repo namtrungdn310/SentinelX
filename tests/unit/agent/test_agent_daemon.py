@@ -1,9 +1,10 @@
 """Unit tests for AgentDaemon."""
 
 import asyncio
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,6 +13,11 @@ from sentinelx_agent.config import AgentSettings
 from sentinelx_agent.daemon import AgentDaemon
 from sentinelx_agent.identity import AgentIdentity, AgentIdentityManager
 from sentinelx_common.contracts.agents import AgentEnrollResponse, HeartbeatResponse
+from sentinelx_common.contracts.telemetry import (
+    MetricBatchRequest,
+    MetricBatchResponse,
+    MetricSample,
+)
 
 
 @pytest.mark.asyncio
@@ -169,3 +175,69 @@ def test_daemon_initializes_fake_collector_when_configured() -> None:
     daemon = AgentDaemon(settings=settings, client=mock_client)
     assert isinstance(daemon.collector, FakeMetricGenerator)
 
+
+@pytest.mark.asyncio
+async def test_collection_failure_and_send_retry_preserve_batch_order(tmp_path: Path) -> None:
+    """A transient OS failure doesn't stop heartbeats or corrupt a retried batch."""
+    from sentinelx_agent.client import ControllerClientError
+    from sentinelx_agent.telemetry import TelemetryBatcher
+
+    identity = AgentIdentity(
+        node_id="11111111-2222-3333-4444-555555555555",
+        agent_id="22222222-3333-4444-5555-666666666666",
+        status="enrolled",
+        enrolled_at=datetime.now(UTC),
+    )
+    path = tmp_path / "identity.json"
+    AgentIdentityManager.save(path, identity)
+    settings = AgentSettings(
+        identity_path=path,
+        telemetry_interval_seconds=0.01,
+        telemetry_batch_size=2,
+        retry_initial_delay_seconds=0.1,
+    )
+    collector = MagicMock()
+    count = 0
+    loop_thread = threading.get_ident()
+    collection_threads: list[int] = []
+
+    def collect() -> MetricSample:
+        nonlocal count
+        collection_threads.append(threading.get_ident())
+        count += 1
+        if count == 1:
+            raise OSError("Transient collector error")
+        return MetricSample(
+            observed_at=datetime.now(UTC),
+            cpu_percent=float(count),
+            memory_percent=50,
+        )
+
+    collector.collect.side_effect = collect
+    stop = asyncio.Event()
+    client = AsyncMock(spec=ControllerClient)
+    client.send_heartbeat.return_value = HeartbeatResponse(
+        status="ok",
+        received_at=datetime.now(UTC),
+        next_interval_seconds=1,
+    )
+    sent: list[MetricBatchRequest] = []
+
+    async def send(request: MetricBatchRequest) -> MetricBatchResponse:
+        sent.append(request)
+        if len(sent) == 1:
+            raise ControllerClientError(503, "Temporary outage")
+        stop.set()
+        return MetricBatchResponse(processed_count=2, received_at=datetime.now(UTC))
+
+    client.send_metrics.side_effect = send
+    batcher = TelemetryBatcher()
+    daemon = AgentDaemon(settings, client=client, collector=collector, batcher=batcher)
+    assert daemon.batcher is batcher
+    await asyncio.wait_for(daemon.run(stop), timeout=3)
+    assert len(sent) == 2
+    assert sent[0].sequence == sent[1].sequence == 1
+    assert sent[0].samples == sent[1].samples
+    assert [sample.cpu_percent for sample in sent[1].samples] == [2, 3]
+    assert client.send_heartbeat.await_count >= 1
+    assert collection_threads and all(thread != loop_thread for thread in collection_threads)

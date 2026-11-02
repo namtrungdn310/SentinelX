@@ -416,6 +416,13 @@ Required:
 
 # Sau Foundation
 
+Checkpoint 02/11/2026: M1 đã hoàn thành sửa lỗi và nghiệm thu tự động, gồm
+Linux Agent → Controller → PostgreSQL → REST/WebSocket trong các container riêng.
+Đặc tả, lệnh tái lập, kết quả và checklist LAN chưa xác nhận:
+[M1 Resource Monitoring](M1_RESOURCE_MONITORING.md).
+M2 chưa triển khai trong đợt sửa này. Docker trên một máy không thay thế
+bằng chứng demo LAN trên nhiều máy/VM.
+
 Thứ tự business implementation:
 
 ```text

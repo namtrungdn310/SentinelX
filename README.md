@@ -74,13 +74,13 @@ sentinelx/
 - **F9 — Realtime WebSocket** `(DONE)`
 - **F10 — Dashboard Skeleton** `(DONE)`
 - **F11 — Docker PBL Lab** `(DONE)`
-- **F12 — Load Balancer Skeleton** `(HIỆN TẠI)`
-- **F13 — Health Check**
-- **F14 — Multi-Host Acceptance**
-- **FOUNDATION FREEZE**
+- **F12 — Load Balancer Skeleton** `(DONE)`
+- **F13 — Health Check** `(DONE)`
+- **F14 — Multi-Host Acceptance** `(DONE — Foundation baseline)`
+- **FOUNDATION FREEZE** `(ACHIEVED)`
 
 ### Core Business Logic Milestones (Sau Foundation Freeze)
-- **M1 — Real Resource Monitoring**
+- **M1 — Real Resource Monitoring** `(Code + automated acceptance DONE — 02/11/2026)`
 - **M2 — Network Collection + Aggregation**
 - **M3 — Resource Detection**
 - **M4 — Network Detection**
@@ -89,6 +89,11 @@ sentinelx/
 - **M7 — nftables Executor**
 - **M8 — Recovery / Cooldown**
 - **CORE FREEZE**
+
+Chi tiết sửa lỗi, bằng chứng Windows/Linux/PostgreSQL và giới hạn nghiệm thu M1:
+[`docs/M1_RESOURCE_MONITORING.md`](docs/M1_RESOURCE_MONITORING.md).
+Demo M1 trên hai máy Linux/LAN thật chưa được xác nhận trong lượt kiểm tra này;
+không coi Docker single-host là bằng chứng thay thế cho demo mạng cuối kỳ.
 
 ---
 

@@ -69,12 +69,63 @@ def test_real_collector_network_counter_reset_recovery(monkeypatch: pytest.Monke
     assert sample_next.network_tx_bytes == 400
 
 
-def test_real_collector_disk_permission_error_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test collector degrades gracefully to 0.0 when disk inspection raises an error."""
+@pytest.mark.parametrize("error", [PermissionError, FileNotFoundError, OSError])
+def test_real_collector_disk_error_is_missing(
+    monkeypatch: pytest.MonkeyPatch, error: type[OSError]
+) -> None:
+    """Unreadable disk is absent, never reported as an empty disk."""
     monkeypatch.setattr(
         "psutil.disk_usage",
-        MagicMock(side_effect=PermissionError("Permission denied")),
+        MagicMock(side_effect=error("Unavailable")),
     )
     collector = RealResourceCollector()
     sample = collector.collect()
-    assert sample.disk_percent == 0.0
+    assert sample.disk_percent is None
+
+
+def test_cpu_uses_an_independent_sampling_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    cpu = MagicMock(return_value=42.5)
+    monkeypatch.setattr("psutil.cpu_percent", cpu)
+    collector = RealResourceCollector()
+    assert collector.collect().cpu_percent == 42.5
+    cpu.assert_called_once_with(interval=0.1)
+
+
+@pytest.mark.parametrize("missing", [None, OSError("Unavailable")])
+def test_network_gap_rebases_instead_of_fabricating_traffic(
+    monkeypatch: pytest.MonkeyPatch, missing: object
+) -> None:
+    net = MagicMock(
+        side_effect=[
+            MagicMock(bytes_recv=1000, bytes_sent=500),
+            missing,
+            MagicMock(bytes_recv=9000, bytes_sent=7000),
+            MagicMock(bytes_recv=9500, bytes_sent=7200),
+        ]
+    )
+    monkeypatch.setattr("psutil.net_io_counters", net)
+    collector = RealResourceCollector()
+    gap = collector.collect()
+    assert gap.network_rx_bytes is None and gap.network_tx_bytes is None
+    baseline = collector.collect()
+    assert baseline.network_rx_bytes is None and baseline.network_tx_bytes is None
+    recovered = collector.collect()
+    assert recovered.network_rx_bytes == 500
+    assert recovered.network_tx_bytes == 200
+
+
+def test_network_unavailable_at_start_is_not_since_boot_traffic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "psutil.net_io_counters",
+        MagicMock(
+            side_effect=[
+                OSError("Unavailable"),
+                MagicMock(bytes_recv=100000, bytes_sent=50000),
+            ]
+        ),
+    )
+    sample = RealResourceCollector().collect()
+    assert sample.network_rx_bytes is None
+    assert sample.network_tx_bytes is None

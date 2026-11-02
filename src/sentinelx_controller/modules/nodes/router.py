@@ -27,7 +27,7 @@ router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 
 def get_node_service(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     project_service: Annotated[ProjectService, Depends(get_project_service)],
 ) -> NodeService:
     """Dependency providing NodeService."""
