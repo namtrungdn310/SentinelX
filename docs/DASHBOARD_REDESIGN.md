@@ -88,7 +88,7 @@ Overview and Telemetry have separate responsibilities:
   their Telemetry view. Overview contains no single-host time-series chart.
 - Hosts provides the full searchable, sortable inventory and enrollment details.
 - Telemetry analyzes one selected host: explicit host selection, CPU/RAM history,
-  sample-count controls, exact sample data, disk usage and cumulative RX/TX.
+  sample-count controls, exact sample data, disk usage and per-sample RX/TX deltas.
   The full history is fetched only when this view is active.
 - Events provides the complete buffered event stream with filtering and pause.
 
@@ -108,7 +108,7 @@ There are no new production dependencies.
 - CPU / RAM history is sorted by observation time and limited to 30 / 60 / 120 samples.
 - Legends toggle series; keyboard arrows inspect points; a table exposes exact values.
 - Host tables sort by hostname, CPU and RAM; missing metrics remain unavailable.
-- Network byte counters are labeled cumulative bytes, not fabricated throughput.
+- Network bytes are deltas between checks, labeled per latest sample, never cumulative or throughput.
 - Pausing events freezes a snapshot; resume restores the current feed.
 - Demo never issues real enrollment tokens or mixes Controller events with fixtures.
 - Dialogs handle focus, Tab containment, Escape and focus restoration.

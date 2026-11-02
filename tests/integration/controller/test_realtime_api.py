@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from sentinelx_agent.collectors.real import RealResourceCollector
 from sentinelx_controller.app import create_app
 from sentinelx_controller.config import ControllerSettings, DatabaseSettings
 from sentinelx_controller.infrastructure.database.base import Base
@@ -82,7 +83,10 @@ def test_websocket_ping_pong_protocol(app_with_db: FastAPI) -> None:
     assert status_after.json()["active_connections"] == 0
 
 
-def test_realtime_metric_broadcast_to_websocket(app_with_db: FastAPI) -> None:
+@pytest.mark.parametrize("source", ["fixture", "real", "unavailable"])
+def test_realtime_metric_broadcast_to_websocket(
+    app_with_db: FastAPI, source: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test full Milestone F9 vertical slice:
 
     1. Connect dashboard client via WebSocket
@@ -147,6 +151,18 @@ def test_realtime_metric_broadcast_to_websocket(app_with_db: FastAPI) -> None:
             ],
         }
 
+        if source != "fixture":
+            if source == "unavailable":
+
+                def unavailable_network() -> None:
+                    raise OSError("Network counters unavailable")
+
+                monkeypatch.setattr("psutil.net_io_counters", unavailable_network)
+            collector = RealResourceCollector(
+                disk_path="/sentinelx-m1-missing-mount" if source == "unavailable" else None
+            )
+            batch_payload["samples"] = [collector.collect().model_dump(mode="json")]
+
         metric_res = client.post("/api/v1/telemetry/metrics", json=batch_payload)
         assert metric_res.status_code == 200
         assert metric_res.json()["processed_count"] == 1
@@ -158,5 +174,27 @@ def test_realtime_metric_broadcast_to_websocket(app_with_db: FastAPI) -> None:
         assert ws_msg["data"]["node_id"] == node_id
         assert len(ws_msg["data"]["samples"]) == 1
         sample_received = ws_msg["data"]["samples"][0]
-        assert sample_received["cpu_percent"] == 68.5
-        assert sample_received["memory_percent"] == 82.0
+        expected = batch_payload["samples"][0]
+        for field in [
+            "cpu_percent",
+            "memory_percent",
+            "disk_percent",
+            "network_rx_bytes",
+            "network_tx_bytes",
+        ]:
+            assert sample_received[field] == expected[field]
+        query = client.get(f"/api/v1/telemetry/nodes/{node_id}/metrics")
+        assert query.status_code == 200
+        persisted = query.json()["samples"][0]
+        for field in [
+            "cpu_percent",
+            "memory_percent",
+            "disk_percent",
+            "network_rx_bytes",
+            "network_tx_bytes",
+        ]:
+            assert persisted[field] == expected[field]
+        if source == "unavailable":
+            assert persisted["disk_percent"] is None
+            assert persisted["network_rx_bytes"] is None
+            assert persisted["network_tx_bytes"] is None

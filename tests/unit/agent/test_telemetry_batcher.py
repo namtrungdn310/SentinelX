@@ -61,3 +61,19 @@ def test_batcher_max_buffer_overflow() -> None:
     # Oldest (10.0) was dropped
     assert drained[0].cpu_percent == 20.0
     assert drained[1].cpu_percent == 30.0
+
+
+def test_failed_batch_is_restored_before_newer_samples() -> None:
+    batcher = TelemetryBatcher(max_buffer_size=3)
+    for cpu in [10.0, 20.0, 30.0]:
+        batcher.add(_sample(cpu))
+    failed = batcher.drain(2)
+    batcher.requeue(failed)
+    assert [sample.cpu_percent for sample in batcher.drain()] == [10.0, 20.0, 30.0]
+
+
+def test_retry_overflow_keeps_newest_samples() -> None:
+    batcher = TelemetryBatcher(max_buffer_size=2)
+    batcher.add(_sample(30.0))
+    batcher.requeue([_sample(10.0), _sample(20.0)])
+    assert [sample.cpu_percent for sample in batcher.drain()] == [20.0, 30.0]

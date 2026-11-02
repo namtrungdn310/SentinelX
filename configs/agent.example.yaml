@@ -1,27 +1,14 @@
-# SentinelX Agent Configuration Template
-service_name: sentinelx-agent
-version: "0.1.0"
-
+# Copy locally and fill node_id/token issued by the Controller; do not commit secrets.
 controller:
-  url: "http://controller:8000"
-  enrollment_token: "sentinelx-lab-default-token"
+  url: "http://192.168.1.10:8000"
   timeout_seconds: 5
 
 agent:
-  node_name: "node-auto"
+  # node_id: "UUID issued when creating the node"
+  # Supply enrollment token via SENTINELX_ENROLLMENT_TOKEN.
   heartbeat_interval_seconds: 5
   telemetry_interval_seconds: 5
-  batch_size: 50
-
-collectors:
-  system_resources:
-    enabled: true
-    interval_seconds: 2
-  network_traffic:
-    enabled: true
-    interface: "eth0"
-    pcap_aggregation_window_seconds: 5
-
-logging:
-  level: "INFO"
-  json_format: true
+  telemetry_batch_size: 5
+  telemetry_collector_type: real  # real | fake
+  telemetry_disk_path: "/"
+  identity_path: "data/agent_identity.json"

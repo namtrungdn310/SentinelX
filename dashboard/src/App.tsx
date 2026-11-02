@@ -19,6 +19,7 @@ import {
   healthLabels,
   nodeHealth,
   nodeHealthLabel,
+  validMetric,
 } from "./presentation";
 import type { Health } from "./presentation";
 import { Header } from "./components/Header";
@@ -434,9 +435,10 @@ export function App() {
                     <strong>
                       {formatPercent(selectedNode.latestDisk)}
                     </strong>
+                    {!validMetric(selectedNode.latestDisk) && <small>Không có dữ liệu ổ đĩa</small>}
                   </article>
                   <article className="panel">
-                    <span>RX tích lũy</span>
+                    <span>RX giữa hai lần đo</span>
                     <strong>
                       {selectedNode.latestRxBytes === undefined
                         ? "—"
@@ -444,7 +446,7 @@ export function App() {
                     </strong>
                   </article>
                   <article className="panel">
-                    <span>TX tích lũy</span>
+                    <span>TX giữa hai lần đo</span>
                     <strong>
                       {selectedNode.latestTxBytes === undefined
                         ? "—"

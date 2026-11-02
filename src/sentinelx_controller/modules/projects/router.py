@@ -14,7 +14,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 def get_project_service(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
 ) -> ProjectService:
     """Dependency that provides ProjectService with active database session."""
     repository = ProjectRepository(session)

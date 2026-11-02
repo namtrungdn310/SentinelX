@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 
 import aiohttp
+import psutil
 
 from sentinelx_agent.client import ControllerClient, ControllerClientError
 from sentinelx_agent.collectors.base import MetricCollector
@@ -44,7 +45,7 @@ class AgentDaemon:
         else:
             self._collector = RealResourceCollector(disk_path=settings.telemetry_disk_path)
 
-        self._batcher = batcher or TelemetryBatcher()
+        self._batcher = batcher if batcher is not None else TelemetryBatcher()
         self._identity: AgentIdentity | None = None
         self._stop_event = asyncio.Event()
         self._telemetry_sequence: int = 1
@@ -220,7 +221,11 @@ class AgentDaemon:
                 break
 
             # Thu thập metric trong worker thread - không bao giờ chặn asyncio event loop
-            sample = await asyncio.to_thread(self._collector.collect)
+            try:
+                sample = await asyncio.to_thread(self._collector.collect)
+            except (OSError, psutil.Error) as err:
+                logger.warning("Resource collection failed; retrying next interval: %s", err)
+                continue
             self._batcher.add(sample)
 
             if self._batcher.is_ready(self.settings.telemetry_batch_size):
@@ -247,8 +252,7 @@ class AgentDaemon:
                         self._telemetry_sequence,
                         err,
                     )
-                    for s in reversed(samples_to_send):
-                        self._batcher.add(s)
+                    self._batcher.requeue(samples_to_send)
                     try:
                         await asyncio.wait_for(self._stop_event.wait(), timeout=current_delay)
                     except TimeoutError:

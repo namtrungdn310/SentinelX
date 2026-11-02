@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { Check, Copy, KeyRound, Server, X } from "lucide-react";
 import type { Node } from "../types";
 import { createEnrollmentToken } from "../api";
-import { healthLabels, nodeHealth, formatPercent } from "../presentation";
+import { healthLabels, nodeHealth, formatPercent, validMetric } from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -92,7 +92,7 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
         </div>
         <div>
           <dt>Ổ đĩa</dt>
-          <dd className="font-mono">{formatPercent(node.latestDisk)}</dd>
+          <dd>{validMetric(node.latestDisk) ? formatPercent(node.latestDisk) : "— · Không có dữ liệu ổ đĩa"}</dd>
         </div>
       </dl>
       <div className="token-section">

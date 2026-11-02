@@ -208,8 +208,8 @@ export function useInfrastructure() {
             cpu_percent: cpu,
             memory_percent: memory,
             disk_percent: node.latestDisk ?? null,
-            network_rx_bytes: (node.latestRxBytes ?? 0) + 250000,
-            network_tx_bytes: (node.latestTxBytes ?? 0) + 150000,
+            network_rx_bytes: Math.round(250000 + Math.random() * 500000),
+            network_tx_bytes: Math.round(150000 + Math.random() * 300000),
           };
           histories[node.id] = [
             ...(histories[node.id] ?? []).slice(-119),

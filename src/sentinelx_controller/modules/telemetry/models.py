@@ -13,9 +13,7 @@ class TelemetryMetricSampleModel(Base):
     """Database table storing time-series metric measurements from nodes."""
 
     __tablename__ = "telemetry_metric_samples"
-    __table_args__ = (
-        Index("idx_telemetry_node_time", "node_id", "observed_at"),
-    )
+    __table_args__ = (Index("idx_telemetry_node_time", "node_id", "observed_at"),)
 
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"),
@@ -49,11 +47,9 @@ class TelemetryMetricSampleModel(Base):
     )
     network_rx_bytes: Mapped[int | None] = mapped_column(
         BigInteger,
-        default=0,
         nullable=True,
     )
     network_tx_bytes: Mapped[int | None] = mapped_column(
         BigInteger,
-        default=0,
         nullable=True,
     )

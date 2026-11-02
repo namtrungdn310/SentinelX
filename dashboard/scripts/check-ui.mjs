@@ -62,6 +62,7 @@ try {
     const { KPICards } = await server.ssrLoadModule(
         "/src/components/KPICards.tsx",
     );
+    const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
     const { nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
     const { filterEvents, eventLabel, eventMatchesCategory } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
@@ -247,11 +248,13 @@ try {
         assert.ok(html.includes("Chưa có dữ liệu CPU"));
         assert.ok(html.includes("Chưa có dữ liệu RAM"));
     });
-    check("Network counters are not mislabeled as bytes per second", () => {
+    check("Network deltas explain their scope without claiming throughput or cumulative totals", () => {
         const html = renderToStaticMarkup(
             createElement(KPICards, { nodes: MOCK_NODES, isLoading: false }),
         );
-        assert.ok(html.includes("Dữ liệu mạng tích lũy"));
+        assert.ok(html.includes("Mạng · mẫu gần nhất"));
+        assert.ok(html.includes("Byte giữa hai lần đo của từng host"));
+        assert.ok(!html.includes("tích lũy"));
         assert.ok(!html.includes("B/s"));
     });
     const api = await server.ssrLoadModule("/src/api.ts");
@@ -280,6 +283,14 @@ try {
         const html = renderToStaticMarkup(createElement(KPICards, { nodes: [{ ...node, latestRxBytes: 0, latestTxBytes: 0 }], isLoading: false }));
         assert.ok(html.includes("0 B"));
         assert.ok(!html.includes("Dữ liệu chưa đủ"));
+    });
+    check("Unreadable disk is distinguishable from a measured zero in host details", () => {
+        const render = (latestDisk) => renderToStaticMarkup(createElement(NodeDetailModal, {
+            node: { ...node, latestDisk }, isOpen: true, isDemoMode: true, onClose: noop,
+        }));
+        assert.ok(render(undefined).includes("Không có dữ liệu ổ đĩa"));
+        assert.ok(!render(0).includes("Không có dữ liệu ổ đĩa"));
+        assert.ok(render(0).includes("0.0%"));
     });
     const originalFetch = globalThis.fetch;
     try {

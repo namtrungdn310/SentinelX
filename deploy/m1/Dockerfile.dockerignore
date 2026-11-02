@@ -1,0 +1,13 @@
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!alembic.ini
+!src/
+!src/**
+!tests/
+!tests/**
+!migrations/
+!migrations/**
+**/__pycache__/
+**/*.pyc

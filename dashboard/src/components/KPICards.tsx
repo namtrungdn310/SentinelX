@@ -115,7 +115,7 @@ export function KPICards({
       <article className="stat-card stat-network">
         <div className="stat-top">
           <ArrowDownUp size={14} />
-          <span>Dữ liệu mạng tích lũy</span>
+          <span>Mạng · mẫu gần nhất</span>
         </div>
         <div className="stat-value network-value">
           {rxNodes.length || txNodes.length ? formatBytes(rx + tx) : "—"}
@@ -124,6 +124,7 @@ export function KPICards({
           <span>RX {rxNodes.length ? formatBytes(rx) : "—"}</span>
           <span>TX {txNodes.length ? formatBytes(tx) : "—"}</span>
         </div>
+        <small className="metric-coverage">Byte giữa hai lần đo của từng host</small>
         {(rxNodes.length !== online.length || txNodes.length !== online.length) && <small className="metric-coverage">Dữ liệu chưa đủ toàn phạm vi</small>}
       </article>
     </section>

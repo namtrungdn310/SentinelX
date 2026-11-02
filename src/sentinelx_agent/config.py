@@ -4,7 +4,7 @@ import os
 import platform
 import socket
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -51,7 +51,7 @@ class AgentSettings(BaseSettings):
         le=1000,
         description="Number of samples to batch before sending to Controller",
     )
-    telemetry_collector_type: str = Field(
+    telemetry_collector_type: Literal["real", "fake"] = Field(
         default="real",
         description="Type of metric collector to use ('real' or 'fake')",
     )
@@ -163,9 +163,7 @@ class AgentSettings(BaseSettings):
                 os.environ["SENTINELX_TELEMETRY_INTERVAL"]
             )
         if "SENTINELX_TELEMETRY_BATCH_SIZE" in os.environ:
-            env_kwargs["telemetry_batch_size"] = int(
-                os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"]
-            )
+            env_kwargs["telemetry_batch_size"] = int(os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"])
         if "SENTINELX_TELEMETRY_COLLECTOR_TYPE" in os.environ:
             env_kwargs["telemetry_collector_type"] = os.environ[
                 "SENTINELX_TELEMETRY_COLLECTOR_TYPE"

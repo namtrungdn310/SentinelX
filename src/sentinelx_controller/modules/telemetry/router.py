@@ -23,7 +23,7 @@ router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 
 def get_telemetry_service(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     node_service: Annotated[NodeService, Depends(get_node_service)],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
 ) -> TelemetryService:

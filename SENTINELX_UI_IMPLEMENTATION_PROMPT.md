@@ -44,7 +44,7 @@ CÁC QUYẾT ĐỊNH ĐÃ CHỐT
 - Telemetry: số lớn phía trên luôn là giá trị mới nhất; hover/focus lịch sử chỉ hiện giá trị tại mẫu trong tooltip gần x/crosshair, clamp trong khung, không che hoặc thay nghĩa readout mới nhất. Có đường đọc mẫu bằng bàn phím và thông báo ngữ cảnh phù hợp; giữ miền Y 0–100%.
 - Nhật ký: bộ lọc Tất cả / Trạng thái & cảnh báo / Telemetry, mặc định Tất cả. Giữ event chưa biết trong Tất cả; nhãn dễ hiểu kèm raw event code. Search ghép với nhóm lọc; trạng thái cập nhật/tạm dừng hiện gần điều khiển. Full-page dùng một cuộn trang, controls/tên cột sticky có kiểm soát trên desktop; mobile không lồng cuộn. Preview chỉ cao theo số hàng. Pause chỉ đóng băng buffer hiển thị, ingestion vẫn chạy; đổi scope reset snapshot.
 - Giữ wire contracts, REST/WS/demo, enrollment, Controller URL cấu hình và race guards. Không chỉnh backend, migrations hoặc milestone M1–M8.
-- Missing là —, không phải 0; 0 thật hợp lệ. RX/TX là counter tích lũy, không gắn /s. Số mẫu 30/60/120 không gọi là số phút.
+- Missing là —, không phải 0; 0 thật hợp lệ. Chốt M1 ngày 02/11/2026: RX/TX là byte giữa hai lần đo, không phải counter tích lũy hoặc byte/s. KPI tổng hợp ghi “Mạng · mẫu gần nhất”, kèm “Byte giữa hai lần đo của từng host”; host ghi “RX/TX giữa hai lần đo”. Số mẫu 30/60/120 không gọi là số phút.
 - Host Telemetry không tự đổi theo filter/realtime; reset filter không xóa project. Metric timestamp không thay bằng heartbeat.
 
 CÁCH THỰC HIỆN
