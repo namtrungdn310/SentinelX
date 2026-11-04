@@ -35,17 +35,12 @@ class AgentIdentityManager:
             with open(identity_path, encoding="utf-8") as f:
                 raw_data = json.load(f)
             identity = AgentIdentity.model_validate(raw_data)
-            logger.info(
-                "Loaded local agent identity: node_id=%s, agent_id=%s",
-                identity.node_id,
-                identity.agent_id,
-            )
+            logger.info("Loaded local agent identity for node_id=%s", identity.node_id)
             return identity
-        except Exception as err:
+        except (OSError, ValueError):
             logger.warning(
-                "Failed to parse existing identity file (%s). Will re-enroll: %s",
+                "Cannot read or validate identity file (%s); credentials were not logged",
                 identity_path,
-                err,
             )
             return None
 

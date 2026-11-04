@@ -69,7 +69,11 @@ class AgentDaemon:
         """Load existing identity from disk or perform enrollment handshake."""
         # 1. Attempt to load existing credentials
         existing = AgentIdentityManager.load(self.settings.identity_path)
+        if self.settings.identity_path.exists() and existing is None:
+            raise ValueError("Identity file is invalid; restore it before starting the Agent")
         if existing is not None:
+            if self.settings.node_id and existing.node_id != self.settings.node_id:
+                raise ValueError("Configured node_id does not match the saved identity")
             self._identity = existing
             return existing
 
@@ -102,7 +106,7 @@ class AgentDaemon:
 
         AgentIdentityManager.save(self.settings.identity_path, identity)
         self._identity = identity
-        logger.info("Agent enrolled successfully. Issued agent_id: %s", identity.agent_id)
+        logger.info("Agent enrolled successfully")
         return identity
 
     async def run(self, stop_event: asyncio.Event | None = None) -> None:
@@ -116,38 +120,40 @@ class AgentDaemon:
             self.settings.hostname,
         )
 
-        # Bootstrap identity with retry if controller is not yet ready
-        retry_delay = self.settings.retry_initial_delay_seconds
-        while not self._stop_event.is_set():
-            try:
-                await self.bootstrap_identity()
-                break
-            except (ControllerClientError, aiohttp.ClientError, OSError) as err:
-                logger.warning(
-                    "Identity bootstrap failed (%s). Retrying in %.1fs...",
-                    err,
-                    retry_delay,
-                )
-                try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=retry_delay)
-                except TimeoutError:
-                    pass
-                retry_delay = min(
-                    retry_delay * self.settings.retry_backoff_factor,
-                    self.settings.retry_max_delay_seconds,
-                )
-
-        if self._stop_event.is_set() or self._identity is None:
-            await self.shutdown()
-            return
-
-        # Concurrently run heartbeat loop and telemetry collection loop
+        tasks: list[asyncio.Task[None]] = []
         try:
-            await asyncio.gather(
-                self._heartbeat_loop(),
-                self._telemetry_loop(),
-            )
+            retry_delay = self.settings.retry_initial_delay_seconds
+            while not self._stop_event.is_set():
+                try:
+                    await self.bootstrap_identity()
+                    break
+                except (ControllerClientError, aiohttp.ClientError, TimeoutError, OSError) as err:
+                    # A remote error body may echo the enrollment token or agent credential.
+                    logger.warning(
+                        "Identity bootstrap failed (%s). Retrying in %.1fs...",
+                        type(err).__name__,
+                        retry_delay,
+                    )
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=retry_delay)
+                    except TimeoutError:
+                        pass
+                    retry_delay = min(
+                        retry_delay * self.settings.retry_backoff_factor,
+                        self.settings.retry_max_delay_seconds,
+                    )
+            if self._stop_event.is_set() or self._identity is None:
+                return
+            tasks = [
+                asyncio.create_task(self._heartbeat_loop()),
+                asyncio.create_task(self._telemetry_loop()),
+            ]
+            await asyncio.gather(*tasks)
         finally:
+            self._stop_event.set()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             await self.shutdown()
 
     async def _heartbeat_loop(self) -> None:
@@ -186,7 +192,7 @@ class AgentDaemon:
                 logger.warning(
                     "Heartbeat failed [seq=%d]: %s. Retrying in %.1fs...",
                     sequence,
-                    err,
+                    type(err).__name__,
                     current_delay,
                 )
                 try:
@@ -250,7 +256,7 @@ class AgentDaemon:
                     logger.warning(
                         "Telemetry batch dispatch failed [seq=%d]: %s. Re-buffering...",
                         self._telemetry_sequence,
-                        err,
+                        type(err).__name__,
                     )
                     self._batcher.requeue(samples_to_send)
                     try:

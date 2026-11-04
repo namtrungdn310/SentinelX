@@ -6,6 +6,9 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 RUN uv sync --frozen --all-extras --no-editable
 COPY tests/ ./tests/
+COPY scripts/build_agent_bundle.py ./scripts/build_agent_bundle.py
+COPY deploy/agent/ ./deploy/agent/
+COPY docs/AGENT_INSTALLATION.md ./docs/AGENT_INSTALLATION.md
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
 CMD ["uv", "run", "--frozen", "pytest", "tests/e2e/test_m1_live.py", "-v"]

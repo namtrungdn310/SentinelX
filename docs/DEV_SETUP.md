@@ -69,6 +69,14 @@ Không cần kích hoạt virtual environment thủ công, `uv run` sẽ tự đ
   uv run python -m sentinelx_controller.main
   ```
 
+- **Build/cài Agent trên Linux server cần giám sát (M1)**:
+  ```bash
+  uv run python scripts/build_agent_bundle.py
+  ```
+  Chuyển bundle tới server, enrollment và vận hành systemd theo
+  [AGENT_INSTALLATION.md](AGENT_INSTALLATION.md). Không cài Controller/DB lên
+  từng Agent host. Lệnh `check` chỉ kiểm tra config/identity cục bộ.
+
 ---
 
 ## 4. Thêm thư viện mới (Add Dependency)

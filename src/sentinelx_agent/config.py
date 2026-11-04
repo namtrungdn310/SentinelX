@@ -5,6 +5,8 @@ import platform
 import socket
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +33,7 @@ class AgentSettings(BaseSettings):
     )
     enrollment_token: str | None = Field(
         default=None,
+        repr=False,
         description="One-time secret token for agent enrollment",
     )
     heartbeat_interval_seconds: int = Field(
@@ -101,7 +104,23 @@ class AgentSettings(BaseSettings):
     @classmethod
     def clean_controller_url(cls, v: str) -> str:
         """Strip trailing slash from Controller URL."""
+        parsed = urlsplit(v)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("Controller URL must be HTTP(S), without credentials/query/fragment")
         return v.rstrip("/")
+
+    @field_validator("node_id")
+    @classmethod
+    def valid_node_id(cls, value: str | None) -> str | None:
+        """Service enrollment requires an actual Controller-issued UUID."""
+        return str(UUID(value)) if value else None
 
     @classmethod
     def load(cls, config_path: str | Path | None = None) -> "AgentSettings":
@@ -109,6 +128,8 @@ class AgentSettings(BaseSettings):
         yaml_data: dict[str, Any] = {}
         if config_path is not None:
             path = Path(config_path)
+            if not path.is_file():
+                raise ValueError("Configured Agent YAML file does not exist")
             if path.is_file():
                 raw = load_yaml_config(path)
                 if isinstance(raw, dict):
@@ -155,15 +176,11 @@ class AgentSettings(BaseSettings):
         if "SENTINELX_ENROLLMENT_TOKEN" in os.environ:
             env_kwargs["enrollment_token"] = os.environ["SENTINELX_ENROLLMENT_TOKEN"]
         if "SENTINELX_HEARTBEAT_INTERVAL" in os.environ:
-            env_kwargs["heartbeat_interval_seconds"] = int(
-                os.environ["SENTINELX_HEARTBEAT_INTERVAL"]
-            )
+            env_kwargs["heartbeat_interval_seconds"] = os.environ["SENTINELX_HEARTBEAT_INTERVAL"]
         if "SENTINELX_TELEMETRY_INTERVAL" in os.environ:
-            env_kwargs["telemetry_interval_seconds"] = float(
-                os.environ["SENTINELX_TELEMETRY_INTERVAL"]
-            )
+            env_kwargs["telemetry_interval_seconds"] = os.environ["SENTINELX_TELEMETRY_INTERVAL"]
         if "SENTINELX_TELEMETRY_BATCH_SIZE" in os.environ:
-            env_kwargs["telemetry_batch_size"] = int(os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"])
+            env_kwargs["telemetry_batch_size"] = os.environ["SENTINELX_TELEMETRY_BATCH_SIZE"]
         if "SENTINELX_TELEMETRY_COLLECTOR_TYPE" in os.environ:
             env_kwargs["telemetry_collector_type"] = os.environ[
                 "SENTINELX_TELEMETRY_COLLECTOR_TYPE"
