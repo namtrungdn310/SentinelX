@@ -416,8 +416,12 @@ Required:
 
 # Sau Foundation
 
-Checkpoint 02/11/2026: M1 đã hoàn thành sửa lỗi và nghiệm thu tự động, gồm
+Checkpoint 04/11/2026: M1 đã hoàn thành sửa lỗi và nghiệm thu tự động, gồm
 Linux Agent → Controller → PostgreSQL → REST/WebSocket trong các container riêng.
+Đã bổ sung bundle Agent độc lập, enrollment CLI, systemd chạy user riêng,
+update/rollback/uninstall và kiểm tra vòng đời trên Ubuntu 22.04/systemd 249.
+Hướng dẫn: [Agent installation](AGENT_INSTALLATION.md). Kiểm thử systemd dùng
+HTTP contract fixture; kiểm thử Controller/PostgreSQL thật chạy riêng trong Docker.
 Đặc tả, lệnh tái lập, kết quả và checklist LAN chưa xác nhận:
 [M1 Resource Monitoring](M1_RESOURCE_MONITORING.md).
 M2 chưa triển khai trong đợt sửa này. Docker trên một máy không thay thế

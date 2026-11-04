@@ -9,5 +9,13 @@
 !tests/**
 !migrations/
 !migrations/**
+!scripts/
+!scripts/build_agent_bundle.py
+!deploy/
+!deploy/agent/
+!deploy/agent/manage.py
+!deploy/agent/sentinelx-agent.service.in
+!docs/
+!docs/AGENT_INSTALLATION.md
 **/__pycache__/
 **/*.pyc

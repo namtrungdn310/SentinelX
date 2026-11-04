@@ -80,7 +80,7 @@ sentinelx/
 - **FOUNDATION FREEZE** `(ACHIEVED)`
 
 ### Core Business Logic Milestones (Sau Foundation Freeze)
-- **M1 — Real Resource Monitoring** `(Code + automated acceptance DONE — 02/11/2026)`
+- **M1 — Real Resource Monitoring** `(Code + Agent deployment + automated acceptance DONE — 04/11/2026)`
 - **M2 — Network Collection + Aggregation**
 - **M3 — Resource Detection**
 - **M4 — Network Detection**
@@ -92,6 +92,8 @@ sentinelx/
 
 Chi tiết sửa lỗi, bằng chứng Windows/Linux/PostgreSQL và giới hạn nghiệm thu M1:
 [`docs/M1_RESOURCE_MONITORING.md`](docs/M1_RESOURCE_MONITORING.md).
+Agent Linux đã có bundle riêng, enrollment một lần, systemd service,
+update/rollback/uninstall: [`docs/AGENT_INSTALLATION.md`](docs/AGENT_INSTALLATION.md).
 Demo M1 trên hai máy Linux/LAN thật chưa được xác nhận trong lượt kiểm tra này;
 không coi Docker single-host là bằng chứng thay thế cho demo mạng cuối kỳ.
 

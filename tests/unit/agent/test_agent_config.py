@@ -23,6 +23,32 @@ def test_agent_settings_strips_trailing_slash() -> None:
     assert settings.controller_url == "http://192.168.1.50:8000"
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://controller",
+        "controller:8000",
+        "https://user:secret@controller",
+        "https://controller?token=secret",
+        "http://controller/#secret",
+    ],
+)
+def test_agent_rejects_unsafe_controller_url(url: str) -> None:
+    with pytest.raises(ValidationError):
+        AgentSettings(controller_url=url)
+
+
+def test_agent_requires_uuid_and_explicit_config_must_exist(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError):
+        AgentSettings(node_id="node-backend01")
+    with pytest.raises(ValueError, match="does not exist"):
+        AgentSettings.load(tmp_path / "missing.yaml")
+
+
+def test_enrollment_token_is_not_in_settings_repr() -> None:
+    assert "private-secret" not in repr(AgentSettings(enrollment_token="private-secret"))
+
+
 def test_agent_settings_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test environment variable overrides."""
     monkeypatch.setenv("SENTINELX_CONTROLLER_URL", "http://prod-controller:9000")

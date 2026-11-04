@@ -1,0 +1,42 @@
+[Unit]
+Description=SentinelX Linux resource monitoring Agent
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=__NAME__
+Group=__NAME__
+WorkingDirectory=__STATE__
+Environment=PYTHONPATH=__PREFIX__/current/src
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__PREFIX__/current/.venv/bin/python -m sentinelx_agent.main --config __CONFIG__/agent.yaml run
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+StateDirectory=__NAME__
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=__STATE__
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=__NAME__
+
+[Install]
+WantedBy=multi-user.target
