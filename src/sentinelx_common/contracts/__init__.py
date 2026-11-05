@@ -10,6 +10,14 @@ from sentinelx_common.contracts.agents import (
     HeartbeatResponse,
 )
 from sentinelx_common.contracts.base import SentinelXBaseModel
+from sentinelx_common.contracts.detection import (
+    DetectionEventContract,
+    DetectionEventListResponse,
+    DetectionEventResponse,
+    DetectionSeverity,
+    DetectorType,
+    ResourceAnomalyDetail,
+)
 from sentinelx_common.contracts.nodes import (
     NodeRegisterRequest,
     NodeResponse,
@@ -34,6 +42,11 @@ from sentinelx_common.contracts.telemetry import (
 __all__ = [
     "AgentEnrollRequest",
     "AgentEnrollResponse",
+    "DetectionEventContract",
+    "DetectionEventListResponse",
+    "DetectionEventResponse",
+    "DetectionSeverity",
+    "DetectorType",
     "EnrollmentStatus",
     "EnrollmentTokenCreateRequest",
     "EnrollmentTokenResponse",
@@ -51,6 +64,6 @@ __all__ = [
     "RealtimeEventType",
     "RealtimeMessage",
     "RealtimeMetricPayload",
+    "ResourceAnomalyDetail",
     "SentinelXBaseModel",
 ]
-

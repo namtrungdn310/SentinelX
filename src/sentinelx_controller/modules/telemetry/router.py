@@ -14,6 +14,8 @@ from sentinelx_common.contracts.telemetry import (
 from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.modules.detection.router import get_detection_service
+from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.nodes.router import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
@@ -26,6 +28,7 @@ def get_telemetry_service(
     session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     node_service: Annotated[NodeService, Depends(get_node_service)],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
+    detection_service: Annotated[DetectionService, Depends(get_detection_service)],
 ) -> TelemetryService:
     """Dependency providing TelemetryService."""
     telemetry_repo = TelemetryRepository(session)
@@ -33,6 +36,7 @@ def get_telemetry_service(
         telemetry_repo=telemetry_repo,
         node_service=node_service,
         realtime_hub=realtime_hub,
+        detection_service=detection_service,
     )
 
 

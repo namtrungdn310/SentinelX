@@ -1,5 +1,6 @@
 """Service layer for Telemetry operations."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -18,8 +19,11 @@ from sentinelx_common.contracts.telemetry import (
 )
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
+
+logger = logging.getLogger(__name__)
 
 
 class TelemetryService:
@@ -30,10 +34,12 @@ class TelemetryService:
         telemetry_repo: TelemetryRepository,
         node_service: NodeService,
         realtime_hub: RealtimeHub | None = None,
+        detection_service: DetectionService | None = None,
     ) -> None:
         self._telemetry_repo = telemetry_repo
         self._node_service = node_service
         self._realtime_hub = realtime_hub
+        self._detection_service = detection_service
 
     async def ingest_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
         """Validate agent credentials and persist incoming metric batch."""
@@ -74,6 +80,15 @@ class TelemetryService:
                 timestamp=now,
             )
             await self._realtime_hub.broadcast(message)
+
+        if self._detection_service is not None:
+            try:
+                await self._detection_service.evaluate_metrics(
+                    node_id=node_uuid,
+                    samples=request.samples,
+                )
+            except Exception as exc:
+                logger.error("Detection evaluation failed for node %s: %s", node_uuid, exc)
 
         return MetricBatchResponse(
             status="ok",
