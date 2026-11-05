@@ -15,6 +15,7 @@ class RealtimeEventType(StrEnum):
 
     METRIC_UPDATE = "metric_update"
     NODE_STATUS = "node_status"
+    DETECTION_ALERT = "detection_alert"
     PING = "ping"
     PONG = "pong"
 
