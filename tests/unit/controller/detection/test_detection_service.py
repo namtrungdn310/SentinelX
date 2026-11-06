@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -43,7 +43,10 @@ async def test_detection_service_evaluate_and_broadcast() -> None:
         ),
         detected_at=now,
     )
-    mock_engine.process_samples.return_value = [mock_event]
+    state = MagicMock()
+    state.state = {}
+    mock_repo.lock_state.return_value = state
+    mock_engine.evaluate_state.return_value = ([mock_event], {"samples": [], "alerts": {}})
 
     service = DetectionService(
         repository=mock_repo,

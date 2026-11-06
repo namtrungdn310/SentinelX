@@ -42,6 +42,14 @@ class DatabaseSettings(BaseModel):
     echo: bool = Field(default=False, description="Log SQL statements")
 
 
+class DetectionSettings(BaseModel):
+    window_size: int = Field(default=10, ge=3, le=100)
+    cooldown_seconds: int = Field(default=60, ge=0, le=3600)
+    max_gap_seconds: int = Field(default=60, ge=1, le=3600)
+    max_sample_age_seconds: int = Field(default=86400, ge=1, le=604800)
+    future_skew_seconds: int = Field(default=30, ge=0, le=300)
+
+
 class ControllerSettings(BaseSettings):
     """Main settings for Controller.
 
@@ -68,6 +76,7 @@ class ControllerSettings(BaseSettings):
     server: ServerSettings = Field(default_factory=ServerSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    detection: DetectionSettings = Field(default_factory=DetectionSettings)
 
     @classmethod
     def settings_customise_sources(

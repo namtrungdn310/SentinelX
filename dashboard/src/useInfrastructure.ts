@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchNodeMetrics, fetchNodes, fetchProjects } from "./api";
+import { fetchDetectionEvents, fetchNodeMetrics, fetchNodes, fetchProjects } from "./api";
+import { mergeEvents } from "./events";
 import {
   generateMockTelemetryHistory,
   MOCK_INITIAL_EVENTS,
@@ -51,7 +52,12 @@ export function useInfrastructure() {
   const modeRef = useRef(true);
 
   const handleMessage = useCallback((message: RealtimeMessage) => {
-    if (modeRef.current || message.event === "pong") return;
+    // Network windows use a separate contract; keep them out of M1 resource/event buffers.
+    if (
+      modeRef.current ||
+      message.event === "pong" ||
+      message.event === "network_feature_update"
+    ) return;
     setSnapshot((previous) => {
       const { node_id: nodeId, samples } = message.data;
       const latest = nodeId && samples?.length ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1) : undefined;
@@ -80,11 +86,11 @@ export function useInfrastructure() {
       return {
         ...previous,
         nodes,
-        events: [message, ...previous.events].slice(0, 40),
+        events: mergeEvents([message], previous.events),
         notableEvents:
           message.event === "metric_update"
             ? previous.notableEvents
-            : [message, ...previous.notableEvents].slice(0, 20),
+            : mergeEvents([message], previous.notableEvents).slice(0, 20),
         histories:
           nodeId && samples?.length
             ? {
@@ -114,9 +120,10 @@ export function useInfrastructure() {
         fetchNodes(),
       ]);
       if (ticket !== requestId.current) return;
-      const metrics = await Promise.allSettled(
-        nodes.map((node) => fetchNodeMetrics(node.id, 1)),
-      );
+      const [metrics, detections] = await Promise.all([
+        Promise.allSettled(nodes.map((node) => fetchNodeMetrics(node.id, 1))),
+        fetchDetectionEvents().catch(() => null),
+      ]);
       if (ticket !== requestId.current) return;
       const histories: Record<string, MetricSample[]> = {};
       const hydratedNodes = nodes.map((node, index) => {
@@ -150,10 +157,11 @@ export function useInfrastructure() {
             ),
           ]),
         ),
-        events: wasDemoMode ? [] : previous.events,
-        notableEvents: wasDemoMode ? [] : previous.notableEvents,
+        events: mergeEvents(detections ?? [], wasDemoMode ? [] : previous.events),
+        notableEvents: mergeEvents(detections ?? [], wasDemoMode ? [] : previous.notableEvents).slice(0, 20),
         isDemoMode: false,
       }));
+      if (detections === null) setConnectionError("Đã kết nối Controller nhưng chưa tải được lịch sử cảnh báo. Thử làm mới.");
     } catch {
       if (ticket === requestId.current && !quiet)
         setConnectionError(
@@ -163,6 +171,22 @@ export function useInfrastructure() {
       if (ticket === requestId.current) setIsRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isConnected || snapshot.isDemoMode) return;
+    let disposed = false;
+    void fetchDetectionEvents().then((events) => {
+      if (disposed || modeRef.current) return;
+      setSnapshot((previous) => ({
+        ...previous,
+        events: mergeEvents(events, previous.events),
+        notableEvents: mergeEvents(events, previous.notableEvents).slice(0, 20),
+      }));
+    }).catch(() => {
+      if (!disposed) setConnectionError("Chưa đồng bộ được lịch sử cảnh báo sau kết nối lại. Thử làm mới.");
+    });
+    return () => { disposed = true; };
+  }, [isConnected, snapshot.isDemoMode]);
 
   const cancelRequests = useCallback(() => {
     requestId.current++;

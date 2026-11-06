@@ -19,6 +19,7 @@ from sentinelx_controller.modules.projects.models import ProjectModel  # noqa: F
 from sentinelx_controller.modules.telemetry.models import (  # noqa: F401
     TelemetryMetricSampleModel,
 )
+from sentinelx_controller.modules.telemetry.network_models import NetworkWindowModel  # noqa: F401
 
 config = context.config
 

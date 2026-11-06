@@ -3,16 +3,19 @@
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from sentinelx_common.contracts.realtime import RealtimeMessage
 from sentinelx_controller.app import create_app
 from sentinelx_controller.config import ControllerSettings, DatabaseSettings
 from sentinelx_controller.infrastructure.database.base import Base
 from sentinelx_controller.infrastructure.database.session import get_db_session
+from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 
 
 @pytest.fixture
@@ -46,6 +49,113 @@ async def test_app() -> AsyncGenerator[tuple[FastAPI, async_sessionmaker[AsyncSe
     yield app, session_factory
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_network_ingestion_auth_deduplication_query_and_broadcast(
+    test_app: tuple[FastAPI, async_sessionmaker[AsyncSession]],
+) -> None:
+    app, _ = test_app
+    hub = AsyncMock()
+    app.dependency_overrides[get_realtime_hub] = lambda: hub
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        project = (await client.post("/api/v1/projects", json={"name": "M2-Network"})).json()
+        node = (
+            await client.post(
+                "/api/v1/nodes",
+                json={
+                    "project_id": project["project_id"],
+                    "hostname": "m2-host",
+                    "ip_address": "192.0.2.2",
+                },
+            )
+        ).json()
+        node_id = node["node_id"]
+        token = (
+            await client.post(
+                f"/api/v1/nodes/{node_id}/enrollment-tokens", json={"expires_in_hours": 1}
+            )
+        ).json()["enrollment_token"]
+        enrolled = (
+            await client.post(
+                "/api/v1/nodes/enroll",
+                json={
+                    "node_id": node_id,
+                    "enrollment_token": token,
+                    "agent_version": "0.1.0",
+                    "hostname": "m2-host",
+                },
+            )
+        ).json()
+        window = {
+            "window_id": str(uuid.uuid4()),
+            "window_start": "2026-11-04T00:00:00Z",
+            "window_end": "2026-11-04T00:00:10Z",
+            "interface": "eth0",
+            "omitted_packets": 1,
+            "features": [
+                {
+                    "source_ip": "192.0.2.1",
+                    "destination_ip": "192.0.2.2",
+                    "protocol": "tcp",
+                    "packet_count": 3,
+                    "byte_count": 180,
+                    "syn_count": 2,
+                    "ack_count": 1,
+                    "destination_ports": [80, 443],
+                }
+            ],
+        }
+        batch = {
+            "node_id": node_id,
+            "agent_id": enrolled["agent_id"],
+            "sequence": 1,
+            "sent_at": "2026-11-04T00:00:11Z",
+            "windows": [window],
+        }
+        endpoint = "/api/v1/telemetry/network-features"
+        assert (
+            await client.post(endpoint, json={**batch, "agent_id": str(uuid.uuid4())})
+        ).status_code == 403
+        assert (
+            await client.post(endpoint, json={**batch, "node_id": "invalid"})
+        ).status_code == 422
+        assert (await client.post(endpoint, json={**batch, "windows": []})).status_code == 422
+        assert (
+            await client.post(endpoint, json={**batch, "windows": [window, window]})
+        ).status_code == 422
+        response = await client.post(endpoint, json=batch)
+        assert response.status_code == 200 and response.json()["processed_count"] == 1
+        message = hub.broadcast.await_args.args[0]
+        assert isinstance(message, RealtimeMessage) and message.event == "network_feature_update"
+        assert message.data["windows"][0]["features"][0]["syn_count"] == 2
+        hub.broadcast.reset_mock()
+        # Lost ACK retry is an idempotent insert; no second row or duplicate broadcast.
+        assert (await client.post(endpoint, json=batch)).json()["processed_count"] == 0
+        hub.broadcast.assert_not_awaited()
+        query_url = f"/api/v1/telemetry/nodes/{node_id}/network-features"
+        query = (await client.get(query_url)).json()
+        assert query["count"] == 1 and query["windows"][0]["omitted_packets"] == 1
+        assert query["windows"][0]["features"][0]["destination_ports"] == [80, 443]
+        assert (await client.get(query_url, params={"limit": 101})).status_code == 422
+        assert (await client.get(query_url, params={"start_time": "2026-11-04T00:00:11Z"})).json()[
+            "count"
+        ] == 0
+        assert (
+            await client.get(
+                query_url,
+                params={
+                    "start_time": "2026-11-05T00:00:00Z",
+                    "end_time": "2026-11-04T00:00:00Z",
+                },
+            )
+        ).status_code == 422
+        assert (
+            await client.get(query_url, params={"start_time": "2026-11-04T00:00:00"})
+        ).status_code == 422
+        assert (
+            await client.get(f"/api/v1/telemetry/nodes/{uuid.uuid4()}/network-features")
+        ).status_code == 404
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,38 @@
+# Isolated lab only. No host ports, host networking, PCAP files or privileged containers.
+services:
+  postgres:
+    extends:
+      file: ../m1/compose.acceptance.yaml
+      service: postgres
+  controller:
+    extends:
+      file: ../m1/compose.acceptance.yaml
+      service: controller
+    build:
+      args:
+        INSTALL_NETWORK_CAPTURE: "1"
+  agent-check:
+    extends:
+      file: ../m1/compose.acceptance.yaml
+      service: agent-check
+    build:
+      args:
+        INSTALL_NETWORK_CAPTURE: "1"
+    environment:
+      SENTINELX_M1_CONTROLLER_URL: ""
+      SENTINELX_M2_CONTROLLER_URL: http://controller:8000
+    cap_drop: [ALL]
+    # The launcher needs SET* only to drop UID/capabilities; pytest/Agent keep ONLY NET_RAW.
+    cap_add: [NET_RAW, SETUID, SETGID, SETPCAP]
+    entrypoint:
+      - setpriv
+      - --reuid=10001
+      - --regid=10001
+      - --clear-groups
+      - --inh-caps=+net_raw
+      - --ambient-caps=+net_raw
+      - --bounding-set=-all,+net_raw
+      - /app/.venv/bin/python
+      - -m
+      - pytest
+    command: [tests/e2e/test_m2_live.py, -v, -p, "no:cacheprovider", "--basetemp=/tmp/sentinelx-m2-qa"]

@@ -64,7 +64,7 @@ try {
     );
     const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
     const { nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
-    const { filterEvents, eventLabel, eventMatchesCategory } = await server.ssrLoadModule("/src/events.ts");
+    const { filterEvents, eventLabel, eventMatchesCategory, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { MOCK_NODES } = await server.ssrLoadModule("/src/mockData.ts");
     const node = MOCK_NODES[0];
@@ -199,6 +199,26 @@ try {
         assert.ok(!html.includes("stat-attention"));
         const warning = renderToStaticMarkup(createElement(KPICards, { nodes: [{ ...node, status: "offline" }], isLoading: false }));
         assert.ok(warning.includes("stat-attention"));
+    });
+    const detection = { event: "detection_alert", timestamp: "2026-11-06T10:00:00Z", data: {
+        id: "detection-1", node_id: node.id, severity: "CRITICAL", detector_name: "cpu_threshold_detector",
+        details: { metric_name: "cpu_percent", current_value: 98, threshold_value: 95, consecutive_samples: 3 },
+    }};
+    check("Detection alerts show severity and resource details with text, and belong to Status", () => {
+        const html = renderToStaticMarkup(createElement(LiveEventStream, { events: [detection], nodes: [node], isConnected: true, isDemoMode: false }));
+        assert.ok(html.includes("Nghiêm trọng"));
+        assert.ok(html.includes("CPU 98% ≥ 95%"));
+        assert.ok(html.includes("3 mẫu liên tiếp"));
+        assert.ok(html.includes("Bất thường tài nguyên"));
+        assert.ok(html.includes('event-type warn'));
+        assert.equal(eventMatchesCategory("detection_alert", "status"), true);
+        assert.deepEqual(filterEvents([detection], [node], "status", "cpu_percent"), [detection]);
+    });
+    check("REST detection history merges with WebSocket replay by stable event ID", () => {
+        const older = { ...detection, timestamp: "2026-11-06T09:00:00Z", data: { ...detection.data, id: "detection-2" } };
+        const merged = mergeEvents([older, detection], [detection]);
+        assert.deepEqual(merged, [detection, older]);
+        assert.equal(mergeEvents(Array.from({ length: 100 }, (_, i) => ({ ...detection, data: { ...detection.data, id: String(i) } }))).length, 50);
     });
     const eventFixture = ["metric_update", "system_alert", "node_status", "heartbeat", "node_enrolled", "future_event"].map((event, i) => ({ event, timestamp: `2026-10-23T10:00:0${i}Z`, data: { node_id: node.id, message: "Thông tin thử nghiệm" } }));
     check("Event categories keep All exhaustive and filter without reordering or mutating", () => {
