@@ -424,8 +424,16 @@ Hướng dẫn: [Agent installation](AGENT_INSTALLATION.md). Kiểm thử system
 HTTP contract fixture; kiểm thử Controller/PostgreSQL thật chạy riêng trong Docker.
 Đặc tả, lệnh tái lập, kết quả và checklist LAN chưa xác nhận:
 [M1 Resource Monitoring](M1_RESOURCE_MONITORING.md).
-M2 chưa triển khai trong đợt sửa này. Docker trên một máy không thay thế
-bằng chứng demo LAN trên nhiều máy/VM.
+Checkpoint M2 04/11/2026: network collection + sliding-window aggregation,
+REST/WS và PostgreSQL đã có triển khai và kiểm thử tự động, gồm capture thật dưới
+UID không root với chỉ CAP_NET_RAW. Migration upgrade/downgrade và profile
+systemd cũng đã được kiểm chứng. Xem [M2 Network Collection](M2_NETWORK_COLLECTION.md).
+Checkpoint tích hợp 06/11/2026: M3 Resource Detection đã có trên dev; M2 được
+ghép và sửa lỗi batch/retry/transaction với M3. Migration giữ nguyên hai revision
+0004, nối bằng 0005 và bổ sung state bền vững ở 0006. Xem
+[M2/M3 integration](M2_M3_INTEGRATION.md) để tái lập kiểm thử và nâng cấp.
+Chưa triển khai M4, firewall, trang mạng riêng hoặc nghiệm thu LAN M2 trên
+nhiều máy/VM. Docker trên một máy không thay thế bằng chứng demo LAN.
 
 Thứ tự business implementation:
 

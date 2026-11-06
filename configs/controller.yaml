@@ -17,3 +17,11 @@ database:
   max_overflow: 10
   pool_timeout: 30.0
   echo: false
+
+# M3: consecutive observations must be fresh and close enough in time.
+detection:
+  window_size: 10
+  cooldown_seconds: 60
+  max_gap_seconds: 60
+  max_sample_age_seconds: 86400
+  future_skew_seconds: 30

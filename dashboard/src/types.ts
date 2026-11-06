@@ -52,3 +52,12 @@ export interface RealtimeMessage {
   };
   timestamp: string;
 }
+
+export interface DetectionEvent {
+  id: string;
+  node_id: string;
+  detector_name: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  detected_at: string;
+  details: Record<string, unknown>;
+}

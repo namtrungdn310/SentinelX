@@ -117,6 +117,10 @@ The actual `/api/v1/telemetry/metrics` payload uses `samples` with
 `observed_at`, `cpu_percent`, `memory_percent`, `disk_percent`,
 `network_rx_bytes` and `network_tx_bytes` (see `MetricSample`).
 
+Integration checkpoint 06/11/2026: each metric `observed_at` must include a
+timezone (`Z` or an explicit offset), normalized to UTC; naive timestamps return
+422. Each batch contains 1..1000 samples. Existing Agents already send UTC.
+
 - CPU is sampled over a bounded 100ms window inside the Agent worker, independent
   of thread-local psutil history. The configured interval is the wait between collections.
 - Disk is nullable: unreadable/missing mounts produce `null`, never a fabricated `0%`.
@@ -149,3 +153,58 @@ Command tương lai phải có:
 - acknowledgement/result
 
 Không triển khai command firewall thật trong Foundation.
+
+---
+
+## 9. M2 network aggregate windows
+
+| Endpoint | Contract |
+|---|---|
+| `POST /api/v1/telemetry/network-features` | `NetworkBatchRequest` -> `NetworkBatchResponse` |
+| `GET /api/v1/telemetry/nodes/{node_id}/network-features` | `NetworkQueryResponse` |
+
+Wire definitions: `sentinelx_common/contracts/network.py`. POST contains UUID
+node_id/agent_id, sequence >=1, timezone-aware sent_at and 1..16 windows. Each
+window has a stable UUID, UTC start/end (duration <=300s), interface, up to 1024
+directional IP/protocol features, omitted_packets and skipped_windows. No raw
+packet/payload/PCAP fields are allowed. Feature counters include IP bytes,
+packets and TCP flag counts; bounded destination_ports has a truncation flag.
+
+Only enrolled node credentials may ingest. `(node_id, window_id)` is idempotent:
+retries return processed_count=0 for already stored windows and do not rebroadcast.
+New windows broadcast `network_feature_update`, with node_id, received_at and
+windows in data. This event is observation telemetry, not a detection/incident.
+The HTTP ingest paths for M1 metric_update, M2 network_feature_update and M3
+detection_alert now enqueue WebSocket delivery after the shared function-scoped
+transaction commits. Failed persistence/commit returns an error and does not
+broadcast these messages. Delivery is best effort, without a persistent outbox;
+query REST history after a disconnect. HTTP success confirms durable DB state,
+not delivery to every WebSocket subscriber.
+
+GET accepts timezone-aware start_time/end_time (filter window_end), limit 1..100
+(default 20); windows sort by window_end descending then window_id. Invalid UUID,
+naive timestamps, reversed time range or invalid limits return 422; missing node
+returns 404. Overlapping windows must not be summed as disjoint totals. An empty
+valid window differs from capture being unavailable/stale. See
+[M2_NETWORK_COLLECTION.md](M2_NETWORK_COLLECTION.md) for exact limits and privileges.
+
+## 10. M3 resource detection integration (06/11/2026)
+
+- `GET /api/v1/detection-events`: node_id, severity (`LOW`, `MEDIUM`, `HIGH`,
+  `CRITICAL`), timezone-aware start_time/end_time, limit 1..100 (default 50),
+  offset >=0. Reversed ranges, invalid UUID/severity or naive times return 422.
+- Response `total` counts all matching rows before pagination; `items` sorts by
+  detected_at descending then id. `GET /api/v1/detection-events/{event_id}` returns
+  one event (404 when absent, 422 when UUID is invalid).
+- `detection_alert` carries the persisted DetectionEventContract, including stable
+  `id`, node_id, detector_name, severity, details and detected_at. REST/WS consumers
+  deduplicate by event id. The dashboard restores the latest 50 events on initial
+  load/reconnect; this is recent history, not a complete audit export.
+- Each metric batch is sorted and evaluated sample by sample. Duplicate/late
+  observed_at values do not progress detector state, although M1 metric storage
+  itself still accepts duplicate rows. State, metric rows and new detection
+  events commit atomically; per-node PostgreSQL row locks serialize evaluations.
+- Default detection limits: 10 retained samples, 60s cooldown, 60s maximum gap,
+  24h maximum sample age and 30s future skew. Samples outside the age/skew limits
+  remain telemetry but do not affect detection; gaps reset consecutive counters.
+  See [M2/M3 integration](M2_M3_INTEGRATION.md) for migration and configuration.

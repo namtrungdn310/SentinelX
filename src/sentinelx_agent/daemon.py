@@ -148,6 +148,19 @@ class AgentDaemon:
                 asyncio.create_task(self._heartbeat_loop()),
                 asyncio.create_task(self._telemetry_loop()),
             ]
+            if self.settings.network_capture_enabled:
+                from sentinelx_agent.network.runtime import run_network
+
+                tasks.append(
+                    asyncio.create_task(
+                        run_network(
+                            self.settings,
+                            self._identity,
+                            self._client,
+                            self._stop_event,
+                        )
+                    )
+                )
             await asyncio.gather(*tasks)
         finally:
             self._stop_event.set()

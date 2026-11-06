@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nftables \
     iproute2 \
     tcpdump \
+    libpcap0.8 \
     procps \
     && rm -rf /var/lib/apt/lists/*
 

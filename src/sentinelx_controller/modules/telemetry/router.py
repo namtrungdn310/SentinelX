@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.telemetry import (
@@ -14,6 +14,7 @@ from sentinelx_common.contracts.telemetry import (
 from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.router import get_detection_service
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.nodes.router import get_node_service
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 
 def get_telemetry_service(
+    background_tasks: BackgroundTasks,
     session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     node_service: Annotated[NodeService, Depends(get_node_service)],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
@@ -37,6 +39,7 @@ def get_telemetry_service(
         node_service=node_service,
         realtime_hub=realtime_hub,
         detection_service=detection_service,
+        publisher=CommittedPublisher(background_tasks, realtime_hub),
     )
 
 

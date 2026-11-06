@@ -2,9 +2,20 @@
  * REST API Client for SentinelX Controller.
  */
 
-import type { MetricQueryResponse, Node, Project } from "./types";
+import type { DetectionEvent, MetricQueryResponse, Node, Project, RealtimeMessage } from "./types";
 
 const API_BASE = "/api/v1";
+
+export async function fetchDetectionEvents(): Promise<RealtimeMessage[]> {
+  const response = await fetch(`${API_BASE}/detection-events?limit=50`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error("Không tải được lịch sử cảnh báo");
+  const data: { items: DetectionEvent[] } = await response.json();
+  return data.items.map((item) => ({
+    event: "detection_alert", timestamp: item.detected_at, data: { ...item },
+  }));
+}
 
 export async function fetchProjects(): Promise<Project[]> {
   const res = await fetch(`${API_BASE}/projects`, {

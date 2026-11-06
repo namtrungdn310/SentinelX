@@ -16,9 +16,7 @@ class DetectionEventModel(Base):
     """Database model storing anomaly detection events."""
 
     __tablename__ = "detection_events"
-    __table_args__ = (
-        Index("idx_detection_events_node_time", "node_id", "detected_at"),
-    )
+    __table_args__ = (Index("idx_detection_events_node_time", "node_id", "detected_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -58,3 +56,16 @@ class DetectionEventModel(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+class DetectionNodeStateModel(Base):
+    """One bounded state per registered node, row-locked until ingestion commits."""
+
+    __tablename__ = "detection_node_state"
+
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    state: Mapped[dict[str, Any]] = mapped_column(JSONB().with_variant(JSON, "sqlite"))

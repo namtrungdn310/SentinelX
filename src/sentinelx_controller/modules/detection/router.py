@@ -1,18 +1,20 @@
 """API router for detection events."""
 
-from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.detection import (
     DetectionEventListResponse,
     DetectionEventResponse,
+    DetectionSeverity,
 )
 from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.engine import DetectionEngine
 from sentinelx_controller.modules.detection.repository import DetectionRepository
 from sentinelx_controller.modules.detection.service import (
@@ -24,7 +26,8 @@ router = APIRouter(prefix="/detection-events", tags=["detection"])
 
 
 def get_detection_service(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
+    background_tasks: BackgroundTasks,
+    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     engine: Annotated[DetectionEngine, Depends(get_detection_engine)],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
 ) -> DetectionService:
@@ -34,6 +37,7 @@ def get_detection_service(
         repository=repo,
         engine=engine,
         realtime_hub=realtime_hub,
+        publisher=CommittedPublisher(background_tasks, realtime_hub),
     )
 
 
@@ -47,10 +51,10 @@ async def list_detection_events(
     service: Annotated[DetectionService, Depends(get_detection_service)],
     node_id: Annotated[str | None, Query(description="Filter by node ID")] = None,
     severity: Annotated[
-        str | None, Query(description="Filter by severity (LOW, HIGH, etc)")
+        DetectionSeverity | None, Query(description="Filter by severity (LOW, HIGH, etc)")
     ] = None,
-    start_time: Annotated[datetime | None, Query(description="Start time (UTC)")] = None,
-    end_time: Annotated[datetime | None, Query(description="End time (UTC)")] = None,
+    start_time: Annotated[AwareDatetime | None, Query(description="Start time (UTC)")] = None,
+    end_time: Annotated[AwareDatetime | None, Query(description="End time (UTC)")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> DetectionEventListResponse:

@@ -2,9 +2,9 @@
 Data models for CPU, RAM, Disk, and Network metrics sent in batches.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import Field
+from pydantic import AwareDatetime, Field, field_validator
 
 from sentinelx_common.contracts.base import SentinelXBaseModel
 
@@ -12,10 +12,15 @@ from sentinelx_common.contracts.base import SentinelXBaseModel
 class MetricSample(SentinelXBaseModel):
     """Single measurement of machine metrics at one moment."""
 
-    observed_at: datetime = Field(
+    observed_at: AwareDatetime = Field(
         ...,
         description="Time when metrics were collected in UTC",
     )
+
+    @field_validator("observed_at")
+    @classmethod
+    def observed_at_utc(cls, value: datetime) -> datetime:
+        return value.astimezone(UTC)
     cpu_percent: float = Field(
         ...,
         ge=0.0,
@@ -78,6 +83,7 @@ class MetricBatchRequest(SentinelXBaseModel):
     samples: list[MetricSample] = Field(
         ...,
         min_length=1,
+        max_length=1000,
         description="List of metric samples (must have at least 1)",
     )
 

@@ -81,8 +81,8 @@ sentinelx/
 
 ### Core Business Logic Milestones (Sau Foundation Freeze)
 - **M1 — Real Resource Monitoring** `(Code + Agent deployment + automated acceptance DONE — 04/11/2026)`
-- **M2 — Network Collection + Aggregation**
-- **M3 — Resource Detection**
+- **M2 — Network Collection + Aggregation** `(Code + automated acceptance DONE — 04/11/2026, chưa nghiệm thu LAN thực tế)`
+- **M3 — Resource Detection** `(Code có trên dev; tích hợp M2 và sửa lỗi batch/retry — 06/11/2026)`
 - **M4 — Network Detection**
 - **M5 — Incident + Policy**
 - **M6 — Defense Command Pipeline**
@@ -94,6 +94,11 @@ Chi tiết sửa lỗi, bằng chứng Windows/Linux/PostgreSQL và giới hạn
 [`docs/M1_RESOURCE_MONITORING.md`](docs/M1_RESOURCE_MONITORING.md).
 Agent Linux đã có bundle riêng, enrollment một lần, systemd service,
 update/rollback/uninstall: [`docs/AGENT_INSTALLATION.md`](docs/AGENT_INSTALLATION.md).
+M2 đã có capture Scapy/libpcap opt-in, cửa sổ trượt, lưu/query PostgreSQL và
+WebSocket: [`docs/M2_NETWORK_COLLECTION.md`](docs/M2_NETWORK_COLLECTION.md).
+Chưa có trang dashboard mạng riêng, detector hoặc firewall trong M2.
+M3 phát hiện bất thường CPU/RAM/disk từ metric M1. Chi tiết tích hợp M2/M3,
+migration và kiểm thử: [`docs/M2_M3_INTEGRATION.md`](docs/M2_M3_INTEGRATION.md).
 Demo M1 trên hai máy Linux/LAN thật chưa được xác nhận trong lượt kiểm tra này;
 không coi Docker single-host là bằng chứng thay thế cho demo mạng cuối kỳ.
 

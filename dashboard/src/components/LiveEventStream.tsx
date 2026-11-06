@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, Pause, Play, Search, Terminal } from "lucide-react";
 import type { Node, RealtimeMessage } from "../types";
-import { eventLabel, filterEvents, type EventCategory } from "../events";
+import { detectionMessage, eventLabel, filterEvents, type EventCategory } from "../events";
 
 const categories: { value: EventCategory; label: string }[] = [
   { value: "all", label: "Tất cả" },
@@ -137,13 +137,13 @@ export function LiveEventStream({
         ) : (
           visible.slice(0, limit).map((event, index) => {
             const metric = event.event === "metric_update";
-            const warning = event.event === "system_alert";
+            const warning = event.event === "system_alert" || event.event === "detection_alert";
             const hostname =
               nodes.find((node) => node.id === event.data.node_id)?.hostname ??
               String(event.data.hostname ?? event.data.node_id ?? "Controller");
             const message = metric
               ? `Nhận ${event.data.samples?.length ?? 0} mẫu CPU, RAM, ổ đĩa và mạng`
-              : String(
+              : event.event === "detection_alert" ? detectionMessage(event) : String(
                   event.data.message ??
                     (event.data.status
                       ? `Trạng thái: ${Object.hasOwn(statusLabels, String(event.data.status)) ? statusLabels[String(event.data.status)] : event.data.status}`
@@ -184,7 +184,7 @@ export function LiveEventStream({
           : isDemoMode
             ? "Bộ đệm phiên · mô phỏng"
             : isConnected
-              ? "Bộ đệm phiên · đã kết nối"
+              ? "Lịch sử gần đây và sự kiện trực tiếp · đã kết nối"
               : "Đang chờ kết nối Controller"}
         <span>
           {Math.min(limit, visible.length)} / {visible.length}{" "}

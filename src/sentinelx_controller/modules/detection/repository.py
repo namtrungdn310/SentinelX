@@ -4,11 +4,16 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.detection import DetectionEventContract
-from sentinelx_controller.modules.detection.models import DetectionEventModel
+from sentinelx_controller.modules.detection.models import (
+    DetectionEventModel,
+    DetectionNodeStateModel,
+)
 
 
 class DetectionRepository:
@@ -16,6 +21,27 @@ class DetectionRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def lock_state(self, node_id: uuid.UUID) -> DetectionNodeStateModel:
+        """Serialize this node across concurrent requests and Controller workers."""
+        insert = sqlite_insert if self._session.get_bind().dialect.name == "sqlite" else pg_insert
+        await self._session.execute(
+            insert(DetectionNodeStateModel)
+            .values(
+                node_id=node_id,
+                state={},
+            )
+            .on_conflict_do_nothing(index_elements=["node_id"])
+        )
+        statement = (
+            select(DetectionNodeStateModel)
+            .where(
+                DetectionNodeStateModel.node_id == node_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return (await self._session.execute(statement)).scalar_one()
 
     async def save_events(
         self,
@@ -62,7 +88,14 @@ class DetectionRepository:
         if end_time is not None:
             stmt = stmt.where(DetectionEventModel.detected_at <= end_time)
 
-        stmt = stmt.order_by(DetectionEventModel.detected_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(
+                DetectionEventModel.detected_at.desc(),
+                DetectionEventModel.id,
+            )
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
@@ -71,3 +104,21 @@ class DetectionRepository:
         stmt = select(DetectionEventModel).where(DetectionEventModel.id == event_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def count_events(
+        self,
+        node_id: uuid.UUID | None,
+        severity: str | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
+    ) -> int:
+        statement = select(func.count()).select_from(DetectionEventModel)
+        if node_id is not None:
+            statement = statement.where(DetectionEventModel.node_id == node_id)
+        if severity is not None:
+            statement = statement.where(DetectionEventModel.severity == severity.upper())
+        if start_time is not None:
+            statement = statement.where(DetectionEventModel.detected_at >= start_time)
+        if end_time is not None:
+            statement = statement.where(DetectionEventModel.detected_at <= end_time)
+        return int((await self._session.execute(statement)).scalar_one())

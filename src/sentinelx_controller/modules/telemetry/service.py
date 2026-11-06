@@ -19,6 +19,7 @@ from sentinelx_common.contracts.telemetry import (
 )
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
@@ -35,11 +36,13 @@ class TelemetryService:
         node_service: NodeService,
         realtime_hub: RealtimeHub | None = None,
         detection_service: DetectionService | None = None,
+        publisher: CommittedPublisher | None = None,
     ) -> None:
         self._telemetry_repo = telemetry_repo
         self._node_service = node_service
         self._realtime_hub = realtime_hub
         self._detection_service = detection_service
+        self._publisher = publisher
 
     async def ingest_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
         """Validate agent credentials and persist incoming metric batch."""
@@ -79,16 +82,17 @@ class TelemetryService:
                 data=metric_payload.model_dump(mode="json"),
                 timestamp=now,
             )
-            await self._realtime_hub.broadcast(message)
+            if self._publisher is not None:
+                self._publisher.enqueue(message)
+            else:
+                await self._realtime_hub.broadcast(message)
 
         if self._detection_service is not None:
-            try:
-                await self._detection_service.evaluate_metrics(
-                    node_id=node_uuid,
-                    samples=request.samples,
-                )
-            except Exception as exc:
-                logger.error("Detection evaluation failed for node %s: %s", node_uuid, exc)
+            # A detection/state write failure rolls back metrics too; Agent can retry safely.
+            await self._detection_service.evaluate_metrics(
+                node_id=node_uuid,
+                samples=request.samples,
+            )
 
         return MetricBatchResponse(
             status="ok",

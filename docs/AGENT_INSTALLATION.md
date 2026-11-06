@@ -165,3 +165,54 @@ ghi đè đường dẫn không có marker của chính nó.
 
 Thiết kế unit tham chiếu [systemd.exec](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html)
 và [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html).
+
+## 9. Bật thu thập mạng M2 (tùy chọn)
+
+Capture mặc định tắt. Trên Ubuntu 22.04/Debian 12, cài thư viện hệ thống
+`libpcap0.8` bằng package manager; Scapy đã có trong requirements của bundle M2.
+Chọn interface thực tế của server (`ip -br link`), không mặc định mọi máy là eth0.
+Sửa phần `agent` trong cấu hình, giữ các khóa/identity M1 đang có:
+
+```yaml
+network_capture_enabled: true
+network_interface: ens3
+network_bpf_filter: "ip or ip6"
+network_window_seconds: 10
+network_step_seconds: 5
+network_max_groups: 256
+```
+
+Từ bundle đã giải nén, cấp profile capture rồi kiểm tra/restart:
+
+```bash
+sudo python3 manage.py capture-permissions --enable
+sudo python3 manage.py check
+sudo python3 manage.py restart
+sudo journalctl -u sentinelx-agent.service -f
+```
+
+Profile cấp **CAP_NET_RAW**, cho phép socket AF_PACKET/AF_NETLINK cần thiết; daemon
+vẫn chạy bằng user riêng, không có CAP_NET_ADMIN, không bật promiscuous mode.
+Đường dẫn override: `/etc/systemd/system/sentinelx-agent.service.d/50-sentinelx-network.conf`.
+Không setcap lên Python hệ thống và không dùng `--privileged` hoặc host networking.
+
+Một cửa sổ tổng hợp theo IP nguồn/đích và giao thức; tối đa 64 cổng đích được giữ
+cho mỗi nhóm. Không ghi PCAP hay packet payload. IP metadata vẫn là dữ liệu vận hành.
+Agent gửi cửa sổ qua `/api/v1/telemetry/network-features`; query lịch sử theo node
+qua `/api/v1/telemetry/nodes/{node_id}/network-features`. Đây chưa phải một trang
+phân tích mạng riêng trên dashboard và chưa có phát hiện/chặn tấn công.
+
+Khi thiếu libpcap/quyền/interface hoặc BPF không hợp lệ, journal báo
+`Network capture unavailable`; resource monitoring M1 vẫn chạy. Không có cửa sổ
+mới không đồng nghĩa lưu lượng bằng 0. Cửa sổ rỗng chỉ được gửi khi sniffer đang
+chạy; kiểm tra timestamp và journal khi đánh giá độ mới của dữ liệu.
+
+Để tắt: đặt `network_capture_enabled: false`, chạy
+`sudo python3 manage.py capture-permissions --disable`, rồi restart. Uninstall
+xóa override do SentinelX quản lý; khi cài lại mà vẫn muốn capture, cấp lại profile
+này. Override đã chỉnh tay sẽ bị từ chối ghi đè/xóa để operator tự kiểm tra.
+
+Theo dõi các dấu hiệu thiếu dữ liệu: `omitted_packets` (vượt số nhóm),
+`ports_truncated` (vượt 64 cổng), `skipped_windows` (scheduler chậm), cùng log bộ
+đệm đầy. Các trường này **không** đo số packet bị kernel/libpcap drop. Cửa sổ chồng
+lấp, không cộng trực tiếp số gói/byte của các cửa sổ liên tiếp.

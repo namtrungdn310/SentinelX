@@ -11,6 +11,7 @@ import json
 import os
 import pwd
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
     parser.add_argument("--uv", required=True)
+    parser.add_argument(
+        "--network-capture", action="store_true", help="Also test M2 libpcap profile"
+    )
     args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
         raise SystemExit("This opt-in test requires root on a systemd Linux lab host")
@@ -53,7 +57,13 @@ def main() -> None:
     token = uuid4().hex
     credential = str(uuid4())
     node = str(uuid4())
-    stats: dict[str, Any] = {"enroll": 0, "heartbeat": 0, "batches": [], "offline": False}
+    stats: dict[str, Any] = {
+        "enroll": 0,
+        "heartbeat": 0,
+        "batches": [],
+        "network": [],
+        "offline": False,
+    }
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:
@@ -88,6 +98,13 @@ def main() -> None:
                         "received_at": now,
                         "processed_count": len(payload["samples"]),
                     }
+                elif self.path == "/api/v1/telemetry/network-features":
+                    stats["network"].extend(payload["windows"])
+                    response = {
+                        "status": "ok",
+                        "received_at": now,
+                        "processed_count": len(payload["windows"]),
+                    }
                 else:
                     status, response = 404, {}
             body = json.dumps(response).encode()
@@ -101,6 +118,18 @@ def main() -> None:
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     url = f"http://127.0.0.1:{server.server_port}"
+    udp_receiver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_receiver.bind(("127.0.0.1", 0))
+    udp_sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    traffic_stop = threading.Event()
+
+    def send_udp() -> None:
+        while not traffic_stop.wait(0.1):
+            udp_sender.sendto(b"m2-qa-private-payload", udp_receiver.getsockname())
+
+    traffic = threading.Thread(target=send_udp, daemon=True)
+    if args.network_capture:
+        traffic.start()
 
     def pid() -> str:
         return run(
@@ -124,7 +153,17 @@ def main() -> None:
         )
         settings = json.loads(config.read_text())
         settings["agent"].update(telemetry_interval_seconds=0.2, telemetry_batch_size=2)
+        if args.network_capture:
+            settings["agent"].update(
+                network_capture_enabled=True,
+                network_interface="lo",
+                network_bpf_filter=f"udp and dst port {udp_receiver.getsockname()[1]}",
+                network_window_seconds=1,
+                network_step_seconds=1,
+            )
         config.write_text(json.dumps(settings))
+        if args.network_capture:
+            run([*command, "capture-permissions", "--enable"])
         with tempfile.TemporaryDirectory(prefix="sentinelx-agent-qa-") as temporary:
             work = Path(temporary)
             token_file = work / "token"
@@ -145,6 +184,15 @@ def main() -> None:
             sample = stats["batches"][-1]["samples"][-1]
             assert 0 <= sample["cpu_percent"] <= 100 and 0 <= sample["memory_percent"] <= 100
             assert sample["disk_percent"] is not None
+            if args.network_capture:
+                wait_until(lambda: any(w["features"] for w in stats["network"]), "network windows")
+                process = Path(f"/proc/{pid()}/status").read_text()
+                effective = next(
+                    line.split()[1] for line in process.splitlines() if line.startswith("CapEff:")
+                )
+                assert int(effective, 16) == 1 << 13
+                assert "m2-qa-private-payload" not in json.dumps(stats["network"])
+                print("PASS: systemd non-root M2 capture with ONLY NET_RAW, no payload", flush=True)
             print("PASS: enrolled, non-root service, private identity, real OS samples", flush=True)
 
             stats["offline"] = True
@@ -217,6 +265,9 @@ def main() -> None:
             run([*command, "uninstall"])
             assert identity.read_bytes() == saved and not (prefix / "current").exists()
             run([*command, "install", "--uv", args.uv])
+            if args.network_capture:
+                run([*command, "capture-permissions", "--enable"])
+                run([*command, "restart"])
             wait_until(lambda: pid() != "0", "reinstall start")
             assert identity.read_bytes() == saved and stats["enroll"] == 1
             print(
@@ -226,11 +277,17 @@ def main() -> None:
 
         logs = run(["journalctl", "-u", unit, "--no-pager"], capture_output=True).stdout
         assert token not in logs and credential not in logs
+        assert "m2-qa-private-payload" not in logs
         print(
             "PASS: no enrollment token/agent credential in journal; boot enabled (no reboot)",
             flush=True,
         )
     finally:
+        traffic_stop.set()
+        if args.network_capture:
+            traffic.join(timeout=3)
+        udp_sender.close()
+        udp_receiver.close()
         server.shutdown()
         server.server_close()
         worker.join(timeout=5)
@@ -238,6 +295,7 @@ def main() -> None:
             run([*command, "uninstall", "--purge"])
         assert not prefix.exists() and not state.exists() and not config.parent.exists()
         assert not (Path("/etc/systemd/system") / unit).exists()
+        assert not (Path("/etc/systemd/system") / f"{unit}.d").exists()
         print(f"QA cleaned: {name}", flush=True)
 
 

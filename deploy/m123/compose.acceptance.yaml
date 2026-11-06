@@ -1,0 +1,30 @@
+# Dedicated combined acceptance, including disposable migration-path databases.
+services:
+  postgres:
+    extends:
+      file: ../m2/compose.acceptance.yaml
+      service: postgres
+  controller:
+    extends:
+      file: ../m2/compose.acceptance.yaml
+      service: controller
+  agent-check:
+    extends:
+      file: ../m2/compose.acceptance.yaml
+      service: agent-check
+    environment:
+      SENTINELX_M1_CONTROLLER_URL: http://controller:8000
+      SENTINELX_M3_CONTROLLER_URL: http://controller:8000
+      # Test-only disposable QA credentials; never point this at an existing database server.
+      SENTINELX_MIGRATION_TEST_URL: postgresql+asyncpg://m1_test:m1_isolated_lab_only@postgres:5432/m1_test
+      # This isolated lab PostgreSQL has no TLS; avoid probing root's client certificates.
+      PGSSLMODE: disable
+    command:
+      - tests/e2e/test_m1_live.py
+      - tests/e2e/test_m2_live.py
+      - tests/e2e/test_m3_live.py
+      - tests/e2e/test_m123_migrations.py
+      - -v
+      - -p
+      - no:cacheprovider
+      - --basetemp=/tmp/sentinelx-m123-qa

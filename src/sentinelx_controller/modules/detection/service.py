@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 from sentinelx_common.contracts.detection import (
     DetectionEventContract,
@@ -14,21 +14,23 @@ from sentinelx_common.contracts.detection import (
 )
 from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
 from sentinelx_common.contracts.telemetry import MetricSample
+from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.engine import DetectionEngine
 from sentinelx_controller.modules.detection.repository import DetectionRepository
 
 logger = logging.getLogger(__name__)
 
-_global_detection_engine: DetectionEngine | None = None
 
-
-def get_detection_engine() -> DetectionEngine:
-    """Provide singleton instance of DetectionEngine."""
-    global _global_detection_engine
-    if _global_detection_engine is None:
-        _global_detection_engine = DetectionEngine()
-    return _global_detection_engine
+def get_detection_engine(request: Request) -> DetectionEngine:
+    """App-local immutable evaluator; per-node cursors/cooldown live in PostgreSQL."""
+    if not hasattr(request.app.state, "detection_engine"):
+        request.app.state.detection_engine = DetectionEngine(
+            **request.app.state.settings.detection.model_dump(),
+        )
+    engine: DetectionEngine = request.app.state.detection_engine
+    return engine
 
 
 class DetectionService:
@@ -39,10 +41,12 @@ class DetectionService:
         repository: DetectionRepository,
         engine: DetectionEngine,
         realtime_hub: RealtimeHub | None = None,
+        publisher: CommittedPublisher | None = None,
     ) -> None:
         self._repo = repository
         self._engine = engine
         self._realtime_hub = realtime_hub
+        self._publisher = publisher
 
     async def evaluate_metrics(
         self,
@@ -50,15 +54,14 @@ class DetectionService:
         samples: list[MetricSample],
     ) -> list[DetectionEventContract]:
         """Evaluate incoming metric samples and emit events if anomalies detected."""
-        events = self._engine.process_samples(node_id, samples)
-        if not events:
-            return []
+        record = await self._repo.lock_state(node_id)
+        events, updated = self._engine.evaluate_state(node_id, samples, record.state)
+        if events:
+            await self._repo.save_events(events)
+        record.state = updated
 
-        # 1. Save events to database
-        await self._repo.save_events(events)
-
-        # 2. Broadcast via WebSocket
-        if self._realtime_hub is not None:
+        # HTTP dependencies queue delivery until the shared DB transaction commits.
+        if self._realtime_hub is not None or self._publisher is not None:
             now = datetime.now(UTC)
             for ev in events:
                 msg = RealtimeMessage(
@@ -66,9 +69,12 @@ class DetectionService:
                     data=ev.model_dump(mode="json"),
                     timestamp=now,
                 )
-                await self._realtime_hub.broadcast(msg)
+                if self._publisher is not None:
+                    self._publisher.enqueue(msg)
+                elif self._realtime_hub is not None:
+                    await self._realtime_hub.broadcast(msg)
                 logger.warning(
-                    "DETECTION ALERT emitted: node=%s detector=%s severity=%s",
+                    "Detection candidate evaluated: node=%s detector=%s severity=%s",
                     node_id,
                     ev.detector_name,
                     ev.severity,
@@ -86,6 +92,8 @@ class DetectionService:
         offset: int = 0,
     ) -> DetectionEventListResponse:
         """Query list of detection events with pagination and filters."""
+        if start_time is not None and end_time is not None and start_time > end_time:
+            raise HTTPException(422, "start_time must not be after end_time")
         node_uuid: uuid.UUID | None = None
         if node_id_str is not None:
             try:
@@ -115,12 +123,13 @@ class DetectionService:
                 attacker_ip=m.attacker_ip,
                 confidence_score=m.confidence_score,
                 details=m.details,
-                detected_at=m.detected_at,
+                detected_at=ensure_utc(m.detected_at),
             )
             for m in models
         ]
 
-        return DetectionEventListResponse(total=len(items), items=items)
+        total = await self._repo.count_events(node_uuid, severity, start_time, end_time)
+        return DetectionEventListResponse(total=total, items=items)
 
     async def get_event(self, event_id_str: str) -> DetectionEventResponse:
         """Get single event details by UUID string."""
@@ -148,5 +157,5 @@ class DetectionService:
             attacker_ip=model.attacker_ip,
             confidence_score=model.confidence_score,
             details=model.details,
-            detected_at=model.detected_at,
+            detected_at=ensure_utc(model.detected_at),
         )

@@ -18,6 +18,12 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
+CAPTURE_OVERRIDE = (
+    "# Managed by SentinelX: opt-in M2 capture, no promiscuous mode.\n"
+    "[Service]\nCapabilityBoundingSet=CAP_NET_RAW\nAmbientCapabilities=CAP_NET_RAW\n"
+    "RestrictAddressFamilies=AF_PACKET AF_NETLINK\n"
+)
+
 
 @dataclass(frozen=True)
 class Layout:
@@ -121,6 +127,22 @@ def managed(layout: Layout) -> None:
         or layout.marker.read_text().strip() != layout.name
     ):
         raise ValueError("Target is not a recognized SentinelX-managed installation")
+
+
+def capture_permissions(layout: Layout, enabled: bool) -> None:
+    """Manage only our fixed-name systemd override; never edit unrelated overrides."""
+    directory = layout.unit.with_name(layout.name + ".service.d")
+    override = directory / "50-sentinelx-network.conf"
+    if directory.is_symlink() or override.is_symlink():
+        raise ValueError("Capture override must not be a symbolic link")
+    if override.exists() and override.read_text() != CAPTURE_OVERRIDE:
+        raise ValueError("Capture override was customized; refusing to overwrite/remove it")
+    if enabled:
+        atomic_write(override, CAPTURE_OVERRIDE, 0o644)
+    else:
+        override.unlink(missing_ok=True)
+        if directory.is_dir() and not any(directory.iterdir()):
+            directory.rmdir()
 
 
 def account(layout: Layout) -> tuple[int, int]:
@@ -355,6 +377,10 @@ def main() -> int:
         command.add_argument("--no-start", action="store_true")
     registration = sub.add_parser("enroll")
     registration.add_argument("--token-file", type=Path)
+    capture = sub.add_parser("capture-permissions", help="Opt in/out of CAP_NET_RAW for M2")
+    capture_choice = capture.add_mutually_exclusive_group(required=True)
+    capture_choice.add_argument("--enable", action="store_true")
+    capture_choice.add_argument("--disable", action="store_true")
     for action in ("check", "status", "restart", "rollback", "uninstall"):
         command = sub.add_parser(action)
         if action == "uninstall":
@@ -379,6 +405,12 @@ def main() -> int:
             elif args.action == "restart":
                 local_command(layout, ["check"])
                 execute(["systemctl", "restart", f"{layout.name}.service"])
+            elif args.action == "capture-permissions":
+                capture_permissions(layout, args.enable)
+                execute(["systemctl", "daemon-reload"])
+                print(
+                    "Capture permissions updated; configure capture, then restart explicitly."
+                )
             elif args.action == "rollback":
                 previous = release_at(layout, "previous")
                 current = release_at(layout, "current")
@@ -398,6 +430,7 @@ def main() -> int:
                 if layout.unit.is_file():
                     execute(["systemctl", "disable", "--now", f"{layout.name}.service"])
                 layout.unit.unlink(missing_ok=True)
+                capture_permissions(layout, False)
                 execute(["systemctl", "daemon-reload"])
                 # Only a marked, fixed-name installation is removable. Never follow symlinks.
                 if args.purge:
