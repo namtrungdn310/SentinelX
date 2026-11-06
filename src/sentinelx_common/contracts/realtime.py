@@ -14,6 +14,7 @@ class RealtimeEventType(StrEnum):
     """Enumeration of supported realtime WebSocket events."""
 
     METRIC_UPDATE = "metric_update"
+    NETWORK_FEATURE_UPDATE = "network_feature_update"
     NODE_STATUS = "node_status"
     PING = "ping"
     PONG = "pong"

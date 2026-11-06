@@ -149,3 +149,32 @@ Command tương lai phải có:
 - acknowledgement/result
 
 Không triển khai command firewall thật trong Foundation.
+
+---
+
+## 9. M2 network aggregate windows
+
+| Endpoint | Contract |
+|---|---|
+| `POST /api/v1/telemetry/network-features` | `NetworkBatchRequest` -> `NetworkBatchResponse` |
+| `GET /api/v1/telemetry/nodes/{node_id}/network-features` | `NetworkQueryResponse` |
+
+Wire definitions: `sentinelx_common/contracts/network.py`. POST contains UUID
+node_id/agent_id, sequence >=1, timezone-aware sent_at and 1..16 windows. Each
+window has a stable UUID, UTC start/end (duration <=300s), interface, up to 1024
+directional IP/protocol features, omitted_packets and skipped_windows. No raw
+packet/payload/PCAP fields are allowed. Feature counters include IP bytes,
+packets and TCP flag counts; bounded destination_ports has a truncation flag.
+
+Only enrolled node credentials may ingest. `(node_id, window_id)` is idempotent:
+retries return processed_count=0 for already stored windows and do not rebroadcast.
+New windows broadcast `network_feature_update`, with node_id, received_at and
+windows in data. This event is observation telemetry, not a detection/incident.
+As with M1, WebSocket broadcast may precede commit; REST success follows commit.
+
+GET accepts timezone-aware start_time/end_time (filter window_end), limit 1..100
+(default 20); windows sort by window_end descending then window_id. Invalid UUID,
+naive timestamps, reversed time range or invalid limits return 422; missing node
+returns 404. Overlapping windows must not be summed as disjoint totals. An empty
+valid window differs from capture being unavailable/stale. See
+[M2_NETWORK_COLLECTION.md](M2_NETWORK_COLLECTION.md) for exact limits and privileges.

@@ -11,6 +11,7 @@ from sentinelx_common.contracts.agents import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
+from sentinelx_common.contracts.network import NetworkBatchRequest, NetworkBatchResponse
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
     MetricBatchResponse,
@@ -124,4 +125,15 @@ class ControllerClient:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return MetricBatchResponse.model_validate(data)
+
+    async def send_network(self, request: NetworkBatchRequest) -> NetworkBatchResponse:
+        """Send only aggregate windows; body/credentials are never logged."""
+        session = await self._get_session()
+        async with session.post(
+            f"{self._base_url}/api/v1/telemetry/network-features",
+            json=request.model_dump(mode="json"),
+        ) as response:
+            if response.status != 200:
+                raise ControllerClientError(response.status, "Network ingestion rejected")
+            return NetworkBatchResponse.model_validate(await response.json())
 

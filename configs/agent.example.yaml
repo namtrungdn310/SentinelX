@@ -4,6 +4,13 @@ controller:
   timeout_seconds: 5
 
 agent:
+  # M2 is opt-in; install libpcap and grant the managed CAP_NET_RAW profile first.
+  network_capture_enabled: false
+  network_interface: ""
+  network_bpf_filter: "ip or ip6"
+  network_window_seconds: 10
+  network_step_seconds: 5
+  network_max_groups: 256
   # node_id: "UUID issued when creating the node"
   # Supply enrollment token via SENTINELX_ENROLLMENT_TOKEN.
   heartbeat_interval_seconds: 5

@@ -96,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
                         "enrolled": identity is not None,
                         "node_id": identity.node_id if identity else settings.node_id,
                         "collector": settings.telemetry_collector_type,
+                "network_capture_enabled": settings.network_capture_enabled,
+                "network_interface": settings.network_interface,
                         "controller_url": settings.controller_url,
                     }
                 )

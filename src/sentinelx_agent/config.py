@@ -8,7 +8,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from sentinelx_common.config.yaml_loader import load_yaml_config
@@ -99,6 +99,24 @@ class AgentSettings(BaseSettings):
         ge=1.0,
         description="Exponential multiplier for retry backoff",
     )
+    network_capture_enabled: bool = False
+    network_interface: str = Field(default="", max_length=64)
+    network_bpf_filter: str = Field(default="ip or ip6", min_length=1, max_length=512)
+    network_window_seconds: int = Field(default=10, ge=1, le=300)
+    network_step_seconds: int = Field(default=5, ge=1, le=300)
+    network_max_groups: int = Field(default=256, ge=1, le=1024)
+
+    @model_validator(mode="after")
+    def validate_network(self) -> "AgentSettings":
+        if self.network_capture_enabled and not self.network_interface.strip():
+            raise ValueError("network_interface is required when capture is enabled")
+        if (
+            self.network_step_seconds > self.network_window_seconds
+            or self.network_window_seconds % self.network_step_seconds
+            or self.network_window_seconds // self.network_step_seconds > 12
+        ):
+            raise ValueError("Network window must be a multiple of step, with at most 12 overlaps")
+        return self
 
     @field_validator("controller_url")
     @classmethod
@@ -144,6 +162,9 @@ class AgentSettings(BaseSettings):
                         if "timeout_seconds" in controller_section:
                             yaml_data["timeout_seconds"] = controller_section["timeout_seconds"]
                     if isinstance(agent_section, dict):
+                        for name in cls.model_fields:
+                            if name.startswith("network_") and name in agent_section:
+                                yaml_data[name] = agent_section[name]
                         if "node_id" in agent_section:
                             yaml_data["node_id"] = agent_section["node_id"]
                         if "heartbeat_interval_seconds" in agent_section:
@@ -169,6 +190,10 @@ class AgentSettings(BaseSettings):
 
         # Environment variables take precedence over YAML values
         env_kwargs: dict[str, Any] = {}
+        for name in cls.model_fields:
+            key = "SENTINELX_" + name.upper()
+            if name.startswith("network_") and key in os.environ:
+                env_kwargs[name] = os.environ[key]
         if "SENTINELX_CONTROLLER_URL" in os.environ:
             env_kwargs["controller_url"] = os.environ["SENTINELX_CONTROLLER_URL"]
         if "SENTINELX_NODE_ID" in os.environ:

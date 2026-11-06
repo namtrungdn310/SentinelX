@@ -51,7 +51,12 @@ export function useInfrastructure() {
   const modeRef = useRef(true);
 
   const handleMessage = useCallback((message: RealtimeMessage) => {
-    if (modeRef.current || message.event === "pong") return;
+    // Network windows use a separate contract; keep them out of M1 resource/event buffers.
+    if (
+      modeRef.current ||
+      message.event === "pong" ||
+      message.event === "network_feature_update"
+    ) return;
     setSnapshot((previous) => {
       const { node_id: nodeId, samples } = message.data;
       const latest = nodeId && samples?.length ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1) : undefined;
