@@ -216,7 +216,7 @@ async def test_unblock_ipv4_success(mock_runner: MockCommandRunner) -> None:
     executor = NftablesDefenseExecutor(command_runner=mock_runner)
     cmd = AgentCommandContract(
         id=str(uuid.uuid4()),
-        action_type="UNBLOCK_IP_NFTABLES",
+        action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip="203.0.113.195",
         command_payload={},
         created_at=datetime.now(UTC),
@@ -248,7 +248,7 @@ async def test_unblock_handles_already_expired_element(mock_runner: MockCommandR
     executor = NftablesDefenseExecutor(command_runner=mock_runner)
     cmd = AgentCommandContract(
         id=str(uuid.uuid4()),
-        action_type="UNBLOCK_IP_NFTABLES",
+        action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip="203.0.113.195",
         command_payload={},
         created_at=datetime.now(UTC),

@@ -116,7 +116,11 @@ class NftablesDefenseExecutor(BaseDefenseExecutor):
     async def execute(self, command: AgentCommandContract) -> ExecutionResult:
         """Execute defense action on the local Linux host via nftables."""
         action_type = command.action_type
-        if action_type not in (PolicyActionType.BLOCK_IP_NFTABLES.value, "UNBLOCK_IP_NFTABLES"):
+        if action_type not in (
+            PolicyActionType.BLOCK_IP_NFTABLES.value,
+            PolicyActionType.UNBLOCK_IP_NFTABLES.value,
+            "UNBLOCK_IP_NFTABLES",
+        ):
             return ExecutionResult(
                 success=False,
                 error_message=f"Action '{action_type}' is not supported by NftablesDefenseExecutor",
