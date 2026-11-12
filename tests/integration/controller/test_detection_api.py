@@ -217,7 +217,11 @@ async def test_metric_detection_state_atomicity_commit_boundary_and_retry(
         counters.update(sessions=0, commits=0)
         assert (await client.post("/api/v1/telemetry/metrics", json=batch)).status_code == 200
         assert counters == {"sessions": 1, "commits": 1}
-        assert hub.broadcast.await_count == 2
+        assert hub.broadcast.await_count == 3
+        events_sent = [call.args[0].event for call in hub.broadcast.await_args_list]
+        assert "metric_update" in events_sent
+        assert "detection_alert" in events_sent
+        assert "incident_alert" in events_sent
     async with factory() as session:
         assert (
             await session.execute(select(func.count()).select_from(DetectionEventModel))
