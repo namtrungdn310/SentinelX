@@ -84,3 +84,4 @@ export function SecurityToast({ toast, onClose, onNavigate }: Props) {
     </div>
   );
 }
+

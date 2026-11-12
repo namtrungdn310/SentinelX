@@ -41,7 +41,7 @@
     --status-neutral: #636b75;
     --status-neutral-bg: #eff1f3;
     --status-neutral-border: #cdd2d7;
-    --focus-ring: #4b5563;
+    --focus-ring: #000000;
     --bg-selected: #eef1f5;
     --action-primary: #25282d;
     --action-primary-hover: #3e4249;
@@ -87,7 +87,8 @@ a {
     outline-offset: 0;
 }
 :focus-visible {
-    outline: 2px solid var(--focus-ring);
+    outline: 1px solid var(--focus-ring);
+    outline-offset: 1px;
 }
 button:disabled {
     cursor: not-allowed;
@@ -360,17 +361,50 @@ button:active:not(:disabled) {
 .form-group label span {
     color: var(--status-warn);
 }
-.form-input {
+.form-input,
+.form-group input,
+.form-group select,
+.form-group textarea {
     width: 100%;
     min-height: 40px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    padding: 7px 10px;
-    background: var(--bg-canvas);
+    padding: 8px 12px;
+    background: var(--bg-panel);
     color: var(--text-primary);
+    font: inherit;
+    font-size: 14px;
+    transition: border-color 150ms ease;
+    outline: none;
 }
-.form-input:focus {
-    border-color: var(--focus-ring);
+.form-input:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #000000 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* Viền khung 1 màu đen thuần khi click vào, mỏng sắc nét không pha trộn */
+input:focus,
+select:focus,
+textarea:focus,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.search-box:focus-within,
+.global-search:focus-within,
+.event-search:focus-within,
+.scope-filters select:focus,
+.filter-group select:focus,
+.workspace-crumb select:focus,
+.telemetry-controls select:focus,
+.telemetry-host-toolbar select:focus,
+.defense-toolbar select:focus {
+    border-color: #000000 !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 .field-hint {
     font-size: 13px;
