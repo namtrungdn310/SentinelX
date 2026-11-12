@@ -569,3 +569,4 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
     </div>
   );
 }
+

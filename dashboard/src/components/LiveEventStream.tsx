@@ -1,21 +1,14 @@
 import { useState } from "react";
 import { ChevronRight, Pause, Play, Search, Terminal } from "lucide-react";
 import type { Node, RealtimeMessage } from "../types";
-import { detectionMessage, eventLabel, filterEvents, type EventCategory } from "../events";
+import { formatRealtimeMessage, eventLabel, filterEvents, type EventCategory } from "../events";
 
 const categories: { value: EventCategory; label: string }[] = [
   { value: "all", label: "Tất cả" },
-  { value: "status", label: "Trạng thái & cảnh báo" },
+  { value: "security", label: "An ninh & Tường lửa" },
+  { value: "status", label: "Trạng thái máy chủ" },
   { value: "telemetry", label: "Telemetry" },
 ];
-
-const statusLabels: Record<string, string> = {
-  healthy: "Ổn định",
-  online: "Trực tuyến",
-  offline: "Mất kết nối",
-  degraded: "Suy giảm",
-  unenrolled: "Chờ đăng ký",
-};
 
 interface Props {
   events: RealtimeMessage[];
@@ -25,6 +18,7 @@ interface Props {
   preview?: boolean;
   onOpenAll?: () => void;
 }
+
 export function LiveEventStream({
   events,
   nodes,
@@ -137,18 +131,33 @@ export function LiveEventStream({
         ) : (
           visible.slice(0, limit).map((event, index) => {
             const metric = event.event === "metric_update";
-            const warning = event.event === "system_alert" || event.event === "detection_alert";
+            const isSecurityCrit =
+              event.event === "incident_alert" || event.event === "defense_action_created";
+            const isSecuritySuccess =
+              event.event === "defense_action_reverted" || event.event === "recovery_completed";
+            const warning =
+              event.event === "system_alert" ||
+              event.event === "detection_alert" ||
+              event.event === "incident_update";
+
+            const eventTypeClass = isSecurityCrit
+              ? "crit"
+              : isSecuritySuccess
+                ? "ok"
+                : warning
+                  ? "warn"
+                  : metric
+                    ? "metric"
+                    : "info";
+
             const hostname =
               nodes.find((node) => node.id === event.data.node_id)?.hostname ??
               String(event.data.hostname ?? event.data.node_id ?? "Controller");
+
             const message = metric
               ? `Nhận ${event.data.samples?.length ?? 0} mẫu CPU, RAM, ổ đĩa và mạng`
-              : event.event === "detection_alert" ? detectionMessage(event) : String(
-                  event.data.message ??
-                    (event.data.status
-                      ? `Trạng thái: ${Object.hasOwn(statusLabels, String(event.data.status)) ? statusLabels[String(event.data.status)] : event.data.status}`
-                      : "Đã nhận sự kiện từ Controller"),
-                );
+              : formatRealtimeMessage(event);
+
             return (
               <article
                 className="event-item"
@@ -161,9 +170,7 @@ export function LiveEventStream({
                     second: "2-digit",
                   })}
                 </time>
-                <span
-                  className={`event-type ${warning ? "warn" : metric ? "metric" : "info"}`}
-                >
+                <span className={`event-type ${eventTypeClass}`}>
                   <span className="event-type-label">{eventLabel(event.event)}</span>
                   <code className="event-type-code">{event.event}</code>
                 </span>

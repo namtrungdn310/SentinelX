@@ -35,6 +35,7 @@ import { AddNodeModal } from "./components/AddNodeModal";
 import { IncidentsView } from "./components/IncidentsView";
 import { DefenseView } from "./components/DefenseView";
 import { PoliciesView } from "./components/PoliciesView";
+import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { Modal } from "./components/Modal";
 import { useInfrastructure } from "./useInfrastructure";
@@ -63,6 +64,10 @@ export function App() {
     loadHistory,
     toggleDemo,
     addNode,
+    activeIncidentsCount,
+    activeBlocksCount,
+    securityToast,
+    dismissSecurityToast,
   } = useInfrastructure();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
@@ -263,10 +268,10 @@ export function App() {
         <span className="nav-label" style={{ marginTop: 16 }}>AN NINH & PHÒNG THỦ</span>
         <nav aria-label="Điều hướng an ninh">
           {[
-            { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert },
-            { id: "defense", label: "Tường lửa nftables", Icon: Flame },
+            { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert, count: activeIncidentsCount, tone: "crit" },
+            { id: "defense", label: "Tường lửa nftables", Icon: Flame, count: activeBlocksCount, tone: "danger" },
             { id: "policies", label: "Chính sách & Whitelist", Icon: Sliders },
-          ].map(({ id, label, Icon }) => (
+          ].map(({ id, label, Icon, count, tone }) => (
             <a
               key={id}
               className={`nav-item ${activeView === id ? "active" : ""}`}
@@ -275,6 +280,9 @@ export function App() {
             >
               <Icon size={18} />
               <span>{label}</span>
+              {count !== undefined && count > 0 && (
+                <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
+              )}
               {activeView === id && <span className="nav-active-dot" />}
             </a>
           ))}
@@ -541,6 +549,11 @@ export function App() {
           onClose={() => setDetailNodeId(null)}
         />
       )}
+      <SecurityToast
+        toast={securityToast}
+        onClose={dismissSecurityToast}
+        onNavigate={navigate}
+      />
       {showHelp && (
         <Modal
           onClose={() => setShowHelp(false)}

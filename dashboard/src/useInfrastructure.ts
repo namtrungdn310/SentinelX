@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchDetectionEvents, fetchNodeMetrics, fetchNodes, fetchProjects } from "./api";
+import {
+  fetchDetectionEvents,
+  fetchDefenseActions,
+  fetchIncidents,
+  fetchNodeMetrics,
+  fetchNodes,
+  fetchProjects,
+} from "./api";
 import { mergeEvents } from "./events";
 import {
   generateMockTelemetryHistory,
   MOCK_INITIAL_EVENTS,
+  MOCK_INCIDENTS,
+  MOCK_DEFENSE_ACTIONS,
   MOCK_NODES,
   MOCK_PROJECTS,
 } from "./mockData";
 import type { MetricSample, Node, Project, RealtimeMessage } from "./types";
 import { useWebSocket } from "./useWebSocket";
 import { mergeSamples } from "./telemetry";
+import type { SecurityToastPayload } from "./components/SecurityToast";
 
 interface Snapshot {
   projects: Project[];
@@ -47,17 +57,67 @@ export function useInfrastructure() {
     loading: boolean;
     error: string | null;
   } | null>(null);
+  const [activeIncidentsCount, setActiveIncidentsCount] = useState<number>(() => {
+    return MOCK_INCIDENTS.filter((i) => i.status !== "RESOLVED").length;
+  });
+  const [activeBlocksCount, setActiveBlocksCount] = useState<number>(() => {
+    return MOCK_DEFENSE_ACTIONS.filter(
+      (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
+    ).length;
+  });
+  const [securityToast, setSecurityToast] = useState<SecurityToastPayload | null>(null);
+
   const requestId = useRef(0);
   const historyRequestId = useRef(0);
   const modeRef = useRef(true);
+  const demoTickRef = useRef(0);
+
+  const dismissSecurityToast = useCallback(() => {
+    setSecurityToast(null);
+  }, []);
 
   const handleMessage = useCallback((message: RealtimeMessage) => {
-    // Network windows use a separate contract; keep them out of M1 resource/event buffers.
-    if (
-      modeRef.current ||
-      message.event === "pong" ||
-      message.event === "network_feature_update"
-    ) return;
+    // Ping/Pong check
+    if (message.event === "pong") return;
+
+    // In live mode, handle security events
+    if (!modeRef.current) {
+      if (message.event === "incident_alert") {
+        setActiveIncidentsCount((c) => c + 1);
+        setSecurityToast({
+          id: `toast-inc-${Date.now()}`,
+          type: "incident",
+          title: "Phát hiện sự cố an ninh mới",
+          message: String(message.data.summary || message.data.title || "Tấn công bất thường được ghi nhận"),
+          attackerIp: typeof message.data.attacker_ip === "string" ? message.data.attacker_ip : null,
+          severity: typeof message.data.severity === "string" ? message.data.severity : "CRITICAL",
+          targetView: "incidents",
+        });
+      } else if (message.event === "incident_update") {
+        if (message.data.status === "RESOLVED") {
+          setActiveIncidentsCount((c) => Math.max(0, c - 1));
+        }
+      } else if (message.event === "defense_action_created") {
+        setActiveBlocksCount((c) => c + 1);
+        setSecurityToast({
+          id: `toast-def-${Date.now()}`,
+          type: "defense",
+          title: "Tường lửa nftables đã kích hoạt",
+          message: `Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)`,
+          attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
+          severity: "HIGH",
+          targetView: "defense",
+        });
+      } else if (
+        message.event === "defense_action_reverted" ||
+        message.event === "recovery_completed"
+      ) {
+        setActiveBlocksCount((c) => Math.max(0, c - 1));
+      }
+    }
+
+    if (modeRef.current || message.event === "network_feature_update") return;
+
     setSnapshot((previous) => {
       const { node_id: nodeId, samples } = message.data;
       const latest = nodeId && samples?.length ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1) : undefined;
@@ -120,11 +180,21 @@ export function useInfrastructure() {
         fetchNodes(),
       ]);
       if (ticket !== requestId.current) return;
-      const [metrics, detections] = await Promise.all([
+      const [metrics, detections, incidents, defenseActions] = await Promise.all([
         Promise.allSettled(nodes.map((node) => fetchNodeMetrics(node.id, 1))),
         fetchDetectionEvents().catch(() => null),
+        fetchIncidents({ limit: 100 }).catch(() => []),
+        fetchDefenseActions({ status: "APPLIED", limit: 100 }).catch(() => []),
       ]);
       if (ticket !== requestId.current) return;
+
+      setActiveIncidentsCount(incidents.filter((i) => i.status !== "RESOLVED").length);
+      setActiveBlocksCount(
+        defenseActions.filter(
+          (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
+        ).length,
+      );
+
       const histories: Record<string, MetricSample[]> = {};
       const hydratedNodes = nodes.map((node, index) => {
         const result = metrics[index];
@@ -182,10 +252,10 @@ export function useInfrastructure() {
         events: mergeEvents(events, previous.events),
         notableEvents: mergeEvents(events, previous.notableEvents).slice(0, 20),
       }));
-    }).catch(() => {
-      if (!disposed) setConnectionError("Chưa đồng bộ được lịch sử cảnh báo sau kết nối lại. Thử làm mới.");
     });
-    return () => { disposed = true; };
+    return () => {
+      disposed = true;
+    };
   }, [isConnected, snapshot.isDemoMode]);
 
   const cancelRequests = useCallback(() => {
@@ -194,18 +264,30 @@ export function useInfrastructure() {
   }, []);
 
   useEffect(() => {
-    const initialRequest = window.setTimeout(() => void loadData(true), 0);
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "r" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        void loadData();
+      }
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
-      window.clearTimeout(initialRequest);
+      window.removeEventListener("keydown", onKey);
       cancelRequests();
     };
   }, [loadData, cancelRequests]);
 
+  // Demo mode real-time simulation
   useEffect(() => {
     if (!snapshot.isDemoMode) return;
     const interval = window.setInterval(() => {
       setSnapshot((previous) => {
         if (!previous.isDemoMode) return previous;
+        demoTickRef.current += 1;
         const now = new Date().toISOString();
         const histories = { ...previous.histories };
         const nodes = previous.nodes.map((node) => {
@@ -262,13 +344,72 @@ export function useInfrastructure() {
               },
             }
           : null;
+
+        let newEvents = event ? [event, ...previous.events].slice(0, 50) : previous.events;
+        let newNotable = previous.notableEvents;
+
+        // Every 8 ticks (~19.2s), generate a simulated security event in Demo Mode
+        if (demoTickRef.current % 8 === 0 && eventNode) {
+          const isAttack = demoTickRef.current % 16 === 0;
+          const secEvent: RealtimeMessage = isAttack
+            ? {
+                event: "incident_alert",
+                timestamp: now,
+                data: {
+                  id: `inc-demo-${Date.now()}`,
+                  title: "SYN Flood vượt ngưỡng cảnh báo (750 pps)",
+                  severity: "CRITICAL",
+                  attacker_ip: "198.51.100.19",
+                  node_id: eventNode.id,
+                  summary: "Phát hiện bão gói tin TCP SYN tấn công cổng web 443",
+                },
+              }
+            : {
+                event: "defense_action_created",
+                timestamp: now,
+                data: {
+                  id: `def-demo-${Date.now()}`,
+                  action_type: "BLOCK_IP_NFTABLES",
+                  target_ip: "198.51.100.19",
+                  node_id: eventNode.id,
+                  duration_seconds: 1800,
+                },
+              };
+
+          newEvents = [secEvent, ...newEvents].slice(0, 50);
+          newNotable = [secEvent, ...newNotable].slice(0, 20);
+
+          if (isAttack) {
+            setActiveIncidentsCount((c) => c + 1);
+            setSecurityToast({
+              id: `toast-demo-${Date.now()}`,
+              type: "incident",
+              title: "Phát hiện sự cố an ninh mới",
+              message: "SYN Flood vượt ngưỡng cảnh báo (750 pps)",
+              attackerIp: "198.51.100.19",
+              severity: "CRITICAL",
+              targetView: "incidents",
+            });
+          } else {
+            setActiveBlocksCount((c) => c + 1);
+            setSecurityToast({
+              id: `toast-demo-${Date.now()}`,
+              type: "defense",
+              title: "Tường lửa nftables đã kích hoạt",
+              message: "Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)",
+              attackerIp: "198.51.100.19",
+              severity: "HIGH",
+              targetView: "defense",
+            });
+          }
+        }
+
         return {
           ...previous,
           nodes,
           histories,
-          events: event
-            ? [event, ...previous.events].slice(0, 40)
-            : previous.events,
+          events: newEvents,
+          notableEvents: newNotable,
         };
       });
     }, 2400);
@@ -281,7 +422,7 @@ export function useInfrastructure() {
     setChartRequest({ nodeId, loading: true, error: null });
     try {
       const response = await fetchNodeMetrics(nodeId, limit);
-      if (ticket !== historyRequestId.current || modeRef.current) return;
+      if (ticket !== historyRequestId.current) return;
       setSnapshot((previous) => ({
         ...previous,
         histories: {
@@ -292,7 +433,7 @@ export function useInfrastructure() {
           ),
         },
       }));
-      setChartRequest({ nodeId, loading: false, error: null });
+      setChartRequest(null);
     } catch {
       if (ticket === historyRequestId.current)
         setChartRequest({
@@ -311,10 +452,17 @@ export function useInfrastructure() {
     requestId.current++;
     historyRequestId.current++;
     modeRef.current = true;
+    demoTickRef.current = 0;
     setIsRefreshing(false);
     setConnectionError(null);
     setChartRequest(null);
     setSnapshot(demoSnapshot());
+    setActiveIncidentsCount(MOCK_INCIDENTS.filter((i) => i.status !== "RESOLVED").length);
+    setActiveBlocksCount(
+      MOCK_DEFENSE_ACTIONS.filter(
+        (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
+      ).length,
+    );
   };
 
   const addNode = (node: Node) =>
@@ -322,6 +470,7 @@ export function useInfrastructure() {
       ...previous,
       nodes: [node, ...previous.nodes],
     }));
+
   return {
     ...snapshot,
     isRefreshing,
@@ -329,6 +478,10 @@ export function useInfrastructure() {
     chartRequest,
     isConnected,
     latencyMs,
+    activeIncidentsCount,
+    activeBlocksCount,
+    securityToast,
+    dismissSecurityToast,
     loadData: () => loadData(),
     loadHistory,
     toggleDemo,
