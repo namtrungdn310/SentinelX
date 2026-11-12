@@ -59,7 +59,7 @@ async def test_process_heartbeat_success(
     resp = await service.process_heartbeat(req)
 
     assert resp.status == "ok"
-    assert resp.next_interval_seconds == 10
+    assert resp.next_interval_seconds == 7
     node_repo.record_heartbeat.assert_awaited_once()
 
 

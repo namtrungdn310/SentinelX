@@ -1,5 +1,6 @@
 """API router for node endpoints."""
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -15,6 +16,8 @@ from sentinelx_common.contracts.agents import (
 )
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
 from sentinelx_controller.infrastructure.database.session import get_db_session
+from sentinelx_controller.modules.defense.router import get_defense_service
+from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.nodes.repository import (
     AgentEnrollmentRepository,
     NodeRepository,
@@ -75,8 +78,14 @@ async def enroll_agent(
 async def process_heartbeat(
     request: HeartbeatRequest,
     service: Annotated[NodeService, Depends(get_node_service)],
+    defense_service: Annotated[DefenseService, Depends(get_defense_service)],
 ) -> HeartbeatResponse:
-    return await service.process_heartbeat(request)
+    try:
+        node_uuid = uuid.UUID(request.node_id)
+        commands = await defense_service.get_pending_commands_for_node(node_uuid)
+    except ValueError:
+        commands = []
+    return await service.process_heartbeat(request, commands=commands)
 
 
 

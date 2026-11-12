@@ -12,6 +12,7 @@ from sentinelx_agent.collectors.base import MetricCollector
 from sentinelx_agent.collectors.fake import FakeMetricGenerator
 from sentinelx_agent.collectors.real import RealResourceCollector
 from sentinelx_agent.config import AgentSettings
+from sentinelx_agent.defense.processor import CommandProcessor
 from sentinelx_agent.identity import AgentIdentity, AgentIdentityManager
 from sentinelx_agent.telemetry import TelemetryBatcher
 from sentinelx_common.contracts.agents import AgentEnrollRequest, HeartbeatRequest
@@ -29,6 +30,7 @@ class AgentDaemon:
         client: ControllerClient | None = None,
         collector: MetricCollector | None = None,
         batcher: TelemetryBatcher | None = None,
+        command_processor: CommandProcessor | None = None,
     ) -> None:
         self.settings = settings
         self._client = client or ControllerClient(
@@ -46,6 +48,7 @@ class AgentDaemon:
             self._collector = RealResourceCollector(disk_path=settings.telemetry_disk_path)
 
         self._batcher = batcher if batcher is not None else TelemetryBatcher()
+        self._command_processor = command_processor or CommandProcessor(settings=self.settings)
         self._identity: AgentIdentity | None = None
         self._stop_event = asyncio.Event()
         self._telemetry_sequence: int = 1
@@ -192,10 +195,14 @@ class AgentDaemon:
                 current_delay = self.settings.retry_initial_delay_seconds
                 next_interval = float(resp.next_interval_seconds)
                 logger.debug(
-                    "Heartbeat acknowledged (seq=%d, next_interval=%.1fs)",
+                    "Heartbeat acknowledged (seq=%d, next_interval=%.1fs, commands=%d)",
                     sequence - 1,
                     next_interval,
+                    len(resp.commands),
                 )
+                if resp.commands:
+                    for cmd in resp.commands:
+                        await self._command_processor.process_command(cmd, self._client)
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=next_interval)
                 except TimeoutError:

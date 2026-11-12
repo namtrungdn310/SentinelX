@@ -171,6 +171,11 @@ class PolicyEngine:
         self._cooldown_tracker[cooldown_key] = now
 
         # ─── BƯỚC 5: Phê duyệt Hành động ───
+        is_auto = (
+            bool(matched_policy.is_auto_execute)
+            if matched_policy.is_auto_execute is not None
+            else True
+        )
         return PolicyEvaluationResult(
             authorized=True,
             status=PolicyEvaluationStatus.ACTION_AUTHORIZED,
@@ -178,5 +183,6 @@ class PolicyEngine:
             target=target,
             duration_seconds=block_duration,
             policy_id=str(matched_policy.id),
+            is_auto_execute=is_auto,
             reason=f"Phê duyệt {action_type.value} theo chính sách '{matched_policy.name}'",
         )

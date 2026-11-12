@@ -116,7 +116,7 @@ async def test_heartbeat_lifecycle_and_node_online_transition(
         assert hb_res.status_code == 200
         hb_data = hb_res.json()
         assert hb_data["status"] == "ok"
-        assert hb_data["next_interval_seconds"] == 10
+        assert hb_data["next_interval_seconds"] == 7
         assert "received_at" in hb_data
 
         # 5. Verify node status transitioned to ONLINE and last_seen is set

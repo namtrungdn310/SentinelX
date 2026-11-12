@@ -8,6 +8,7 @@ from enum import StrEnum
 from pydantic import Field
 
 from sentinelx_common.contracts.base import SentinelXBaseModel
+from sentinelx_common.contracts.defense import AgentCommandContract
 
 
 class EnrollmentStatus(StrEnum):
@@ -121,7 +122,7 @@ class AgentEnrollResponse(SentinelXBaseModel):
         description="Enrollment status (e.g. enrolled)",
     )
     heartbeat_interval_seconds: int = Field(
-        default=10,
+        default=7,
         ge=1,
         le=3600,
         description="How often the agent should send hearbeats in seconds",
@@ -172,8 +173,12 @@ class HeartbeatResponse(SentinelXBaseModel):
     )
 
     next_interval_seconds: int = Field(
-        default=10,
+        default=7,
         ge=1,
         le=3600,
         description="Next heartbeat interval in seconds",
+    )
+    commands: list[AgentCommandContract] = Field(
+        default_factory=list,
+        description="Pending defense commands to be executed by this agent",
     )

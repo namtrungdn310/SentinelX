@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sentinelx_controller.config import ControllerSettings
 from sentinelx_controller.infrastructure.database.base import Base
 # Import models so metadata registers the schemas
+from sentinelx_controller.modules.defense.models import DefenseActionModel  # noqa: F401
 from sentinelx_controller.modules.detection.models import (  # noqa: F401
     DetectionEventModel,
 )
