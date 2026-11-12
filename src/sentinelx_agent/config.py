@@ -42,9 +42,13 @@ class AgentSettings(BaseSettings):
         le=3600,
         description="Interval between heartbeats in seconds",
     )
-    defense_executor_type: Literal["simulated", "noop"] = Field(
+    defense_executor_type: Literal["simulated", "noop", "nftables"] = Field(
         default="simulated",
-        description="Type of defense executor to run locally ('simulated' or 'noop')",
+        description="Type of defense executor to run locally ('simulated', 'noop', or 'nftables')",
+    )
+    nftables_table_name: str = Field(
+        default="sentinelx",
+        description="nftables table name for SentinelX firewall rules",
     )
     telemetry_interval_seconds: float = Field(
         default=5.0,

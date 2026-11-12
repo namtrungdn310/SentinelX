@@ -9,6 +9,7 @@ import pytest
 from sentinelx_agent.client import ControllerClient
 from sentinelx_agent.config import AgentSettings
 from sentinelx_agent.defense.executors.base import BaseDefenseExecutor, ExecutionResult
+from sentinelx_agent.defense.executors.nftables import NftablesDefenseExecutor
 from sentinelx_agent.defense.processor import CommandProcessor
 from sentinelx_agent.defense.validator import LocalSafetyValidator
 from sentinelx_common.contracts.defense import (
@@ -116,3 +117,11 @@ async def test_processor_handles_executor_failure(mock_client: AsyncMock) -> Non
     ack_req = call_args[0][1]
     assert ack_req.status == DefenseActionStatus.FAILED
     assert "timed out" in ack_req.error_message
+
+
+def test_processor_instantiates_nftables_executor_from_settings() -> None:
+    settings = AgentSettings(defense_executor_type="nftables", nftables_table_name="custom_table")
+    processor = CommandProcessor(settings=settings)
+
+    assert isinstance(processor.executor, NftablesDefenseExecutor)
+    assert processor.executor.table_name == "custom_table"

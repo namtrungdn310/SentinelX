@@ -5,6 +5,7 @@ import logging
 from sentinelx_agent.client import ControllerClient, ControllerClientError
 from sentinelx_agent.config import AgentSettings
 from sentinelx_agent.defense.executors.base import BaseDefenseExecutor
+from sentinelx_agent.defense.executors.nftables import NftablesDefenseExecutor
 from sentinelx_agent.defense.executors.noop import NoopDefenseExecutor
 from sentinelx_agent.defense.executors.simulated import SimulatedDefenseExecutor
 from sentinelx_agent.defense.validator import LocalSafetyValidator
@@ -33,6 +34,10 @@ class CommandProcessor:
             self.executor = executor
         elif getattr(settings, "defense_executor_type", "simulated") == "noop":
             self.executor = NoopDefenseExecutor()
+        elif getattr(settings, "defense_executor_type", "simulated") == "nftables":
+            self.executor = NftablesDefenseExecutor(
+                table_name=getattr(settings, "nftables_table_name", "sentinelx")
+            )
         else:
             self.executor = SimulatedDefenseExecutor()
 
