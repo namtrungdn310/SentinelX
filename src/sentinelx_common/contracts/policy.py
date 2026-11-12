@@ -142,4 +142,8 @@ class PolicyEvaluationResult(SentinelXBaseModel):
     target: str | None = Field(default=None, description="Mục tiêu can thiệp (IP, service, PID)")
     duration_seconds: int = Field(default=0, ge=0, description="Thời hạn hiệu lực nếu có")
     policy_id: str | None = Field(default=None, description="UUID của policy đã match")
+    is_auto_execute: bool = Field(
+        default=True,
+        description="Cho phép tự động thi hành hay cần phê duyệt",
+    )
     reason: str = Field(..., description="Giải thích lý do phê duyệt hoặc từ chối")

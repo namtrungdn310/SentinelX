@@ -37,10 +37,14 @@ class AgentSettings(BaseSettings):
         description="One-time secret token for agent enrollment",
     )
     heartbeat_interval_seconds: int = Field(
-        default=10,
+        default=7,
         ge=1,
         le=3600,
         description="Interval between heartbeats in seconds",
+    )
+    defense_executor_type: Literal["simulated", "noop"] = Field(
+        default="simulated",
+        description="Type of defense executor to run locally ('simulated' or 'noop')",
     )
     telemetry_interval_seconds: float = Field(
         default=5.0,

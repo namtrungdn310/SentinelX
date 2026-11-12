@@ -119,7 +119,7 @@ async def test_daemon_run_collects_and_sends_telemetry(tmp_path: Path) -> None:
 
     settings = AgentSettings(
         identity_path=id_file,
-        heartbeat_interval_seconds=10,
+        heartbeat_interval_seconds=7,
         telemetry_interval_seconds=0.01,
         telemetry_batch_size=2,
     )
@@ -127,7 +127,7 @@ async def test_daemon_run_collects_and_sends_telemetry(tmp_path: Path) -> None:
     mock_client.send_heartbeat.return_value = HeartbeatResponse(
         status="ok",
         received_at=datetime.now(UTC),
-        next_interval_seconds=10,
+        next_interval_seconds=7,
     )
     mock_client.send_metrics.return_value = MetricBatchResponse(
         status="ok",

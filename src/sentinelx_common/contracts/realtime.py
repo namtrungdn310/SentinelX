@@ -19,6 +19,8 @@ class RealtimeEventType(StrEnum):
     DETECTION_ALERT = "detection_alert"
     INCIDENT_ALERT = "incident_alert"
     INCIDENT_UPDATE = "incident_update"
+    DEFENSE_ACTION_CREATED = "defense_action_created"
+    DEFENSE_ACTION_UPDATED = "defense_action_updated"
     PING = "ping"
     PONG = "pong"
 

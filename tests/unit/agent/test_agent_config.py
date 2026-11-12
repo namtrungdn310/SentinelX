@@ -12,7 +12,7 @@ def test_agent_settings_default_values() -> None:
     """Test AgentSettings default parameters."""
     settings = AgentSettings()
     assert settings.controller_url == "http://localhost:8000"
-    assert settings.heartbeat_interval_seconds == 10
+    assert settings.heartbeat_interval_seconds == 7
     assert settings.agent_version == "0.1.0"
     assert settings.identity_path == Path("data/agent_identity.json")
 

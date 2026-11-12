@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
+from sentinelx_common.contracts.policy import PolicyActionType
 from sentinelx_common.contracts.realtime import (
     RealtimeEventType,
     RealtimeMessage,
@@ -20,6 +21,7 @@ from sentinelx_common.contracts.telemetry import (
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
+from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.service import NodeService
@@ -41,6 +43,7 @@ class TelemetryService:
         incident_service: IncidentService | None = None,
         policy_service: PolicyService | None = None,
         publisher: CommittedPublisher | None = None,
+        defense_service: DefenseService | None = None,
     ) -> None:
         self._telemetry_repo = telemetry_repo
         self._node_service = node_service
@@ -49,6 +52,7 @@ class TelemetryService:
         self._incident_service = incident_service
         self._policy_service = policy_service
         self._publisher = publisher
+        self._defense_service = defense_service
 
     async def ingest_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
         """Validate agent credentials and persist incoming metric batch."""
@@ -108,12 +112,37 @@ class TelemetryService:
                     events=events,
                 )
                 if self._policy_service is not None:
-                    for _inc, ev_list in correlated:
+                    for inc, ev_list in correlated:
                         for ev in ev_list:
-                            await self._policy_service.evaluate_event(
+                            res = await self._policy_service.evaluate_event(
                                 project_id=project_uuid,
                                 event=ev,
                             )
+                            if (
+                                res.authorized
+                                and res.is_auto_execute
+                                and res.action_type
+                                and self._defense_service is not None
+                            ):
+                                policy_uuid = (
+                                    uuid.UUID(res.policy_id) if res.policy_id else None
+                                )
+                                await self._defense_service.create_action_from_policy(
+                                    node_id=node_uuid,
+                                    action_type=res.action_type.value,
+                                    target_ip=(
+                                        res.target
+                                        if res.action_type
+                                        == PolicyActionType.BLOCK_IP_NFTABLES
+                                        else None
+                                    ),
+                                    command_payload={
+                                        "target": res.target,
+                                        "duration_seconds": res.duration_seconds,
+                                    },
+                                    incident_id=inc.id,
+                                    policy_id=policy_uuid,
+                                )
 
         return MetricBatchResponse(
             status="ok",

@@ -138,7 +138,7 @@ async def test_agent_enrollment_complete_lifecycle(
         assert enroll_data["node_id"] == node_id
         assert "agent_id" in enroll_data
         assert enroll_data["status"] == "enrolled"
-        assert enroll_data["heartbeat_interval_seconds"] == 10
+        assert enroll_data["heartbeat_interval_seconds"] == 7
 
         # 7. Token reuse rejected with 409 Conflict
         reuse_res = await client.post(
