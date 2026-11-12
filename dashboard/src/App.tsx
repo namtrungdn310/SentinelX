@@ -6,7 +6,6 @@ import {
   CircleHelp,
   LayoutDashboard,
   Plus,
-  Radio,
   Server,
   ShieldAlert,
   Sliders,
@@ -338,7 +337,6 @@ export function App() {
           </div>
           {connectionError && (
             <div className="connection-error" role="alert">
-              <Radio size={16} />
               <span>{connectionError}</span>
               <button
                 className="text-button"

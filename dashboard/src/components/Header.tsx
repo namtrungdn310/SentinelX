@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Search } from "lucide-react";
+import { Search, Radio } from "lucide-react";
 import type { Project } from "../types";
 
 interface HeaderProps {
@@ -58,6 +58,7 @@ export function Header(props: HeaderProps) {
           className={`connection-state ${!props.isDemoMode && props.isConnected ? "connected" : ""}`}
           role="status"
         >
+          <Radio size={14} />
           <span>
             {props.isDemoMode
               ? "Dữ liệu mô phỏng"
