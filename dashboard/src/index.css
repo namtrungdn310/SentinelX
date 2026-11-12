@@ -120,16 +120,23 @@ button:active:not(:disabled) {
     background: #dde5f5;
     color: var(--text-primary);
 }
+/* Ẩn hoàn toàn thanh cuộn khi lướt lên xuống nhưng vẫn giữ khả năng cuộn */
+html,
+body,
+* {
+    scrollbar-width: none !important; /* Firefox */
+    -ms-overflow-style: none !important; /* IE & Edge */
+}
 ::-webkit-scrollbar {
-    width: 7px;
-    height: 7px;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
 }
-::-webkit-scrollbar-thumb {
-    background: #7a838f;
-    border-radius: var(--radius-sm);
-}
+::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-track {
-    background: var(--bg-canvas);
+    display: none !important;
+    background: transparent !important;
 }
 .font-mono {
     font-family: var(--font-mono);
