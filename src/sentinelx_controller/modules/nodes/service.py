@@ -15,6 +15,7 @@ from sentinelx_common.contracts.agents import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
+from sentinelx_common.contracts.defense import AgentCommandContract
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse, NodeStatus
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.modules.nodes.models import AgentEnrollmentModel, NodeModel
@@ -253,11 +254,15 @@ class NodeService:
             agent_id=str(agent_id),
             node_id=str(node.id),
             status="enrolled",
-            heartbeat_interval_seconds=10,
+            heartbeat_interval_seconds=7,
             enrolled_at=now,
         )
 
-    async def process_heartbeat(self, request: HeartbeatRequest) -> HeartbeatResponse:
+    async def process_heartbeat(
+        self,
+        request: HeartbeatRequest,
+        commands: list[AgentCommandContract] | None = None,
+    ) -> HeartbeatResponse:
         """Process heartbeat from an Agent and update node online status."""
         repo = self._ensure_enrollment_repo()
         try:
@@ -289,7 +294,8 @@ class NodeService:
         return HeartbeatResponse(
             status="ok",
             received_at=now,
-            next_interval_seconds=10,
+            next_interval_seconds=7,
+            commands=commands or [],
         )
 
     async def verify_agent(self, node_id_str: str, agent_id_str: str) -> bool:

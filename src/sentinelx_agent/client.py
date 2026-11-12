@@ -11,6 +11,7 @@ from sentinelx_common.contracts.agents import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
+from sentinelx_common.contracts.defense import CommandAckRequest, CommandAckResponse
 from sentinelx_common.contracts.network import NetworkBatchRequest, NetworkBatchResponse
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
@@ -136,4 +137,25 @@ class ControllerClient:
             if response.status != 200:
                 raise ControllerClientError(response.status, "Network ingestion rejected")
             return NetworkBatchResponse.model_validate(await response.json())
+
+    async def ack_defense_action(
+        self,
+        action_id: str,
+        request: CommandAckRequest,
+    ) -> CommandAckResponse:
+        """Send command execution ACK to Controller."""
+        url = f"{self._base_url}/api/v1/defense/actions/{action_id}/ack"
+        session = await self._get_session()
+
+        payload = request.model_dump(mode="json")
+        logger.debug("Sending command ACK to %s: status=%s", url, request.status)
+
+        async with session.post(url, json=payload) as resp:
+            data = await resp.json()
+            if resp.status != 200:
+                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+                raise ControllerClientError(status_code=resp.status, message=detail)
+
+            return CommandAckResponse.model_validate(data)
+
 

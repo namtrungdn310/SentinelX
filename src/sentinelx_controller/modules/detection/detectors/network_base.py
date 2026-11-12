@@ -32,3 +32,4 @@ class BaseNetworkDetector(ABC):
             Danh sách các DetectionEventContract phát hiện được (mỗi phần tử kèm attacker_ip).
         """
         ...
+

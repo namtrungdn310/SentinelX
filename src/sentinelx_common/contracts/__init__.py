@@ -10,6 +10,15 @@ from sentinelx_common.contracts.agents import (
     HeartbeatResponse,
 )
 from sentinelx_common.contracts.base import SentinelXBaseModel
+from sentinelx_common.contracts.defense import (
+    AgentCommandContract,
+    CommandAckRequest,
+    CommandAckResponse,
+    DefenseActionListResponse,
+    DefenseActionResponse,
+    DefenseActionStatus,
+    ManualDefenseActionCreateRequest,
+)
 from sentinelx_common.contracts.detection import (
     DetectionEventContract,
     DetectionEventListResponse,
@@ -61,8 +70,14 @@ from sentinelx_common.contracts.telemetry import (
 )
 
 __all__ = [
+    "AgentCommandContract",
     "AgentEnrollRequest",
     "AgentEnrollResponse",
+    "CommandAckRequest",
+    "CommandAckResponse",
+    "DefenseActionListResponse",
+    "DefenseActionResponse",
+    "DefenseActionStatus",
     "DefensePolicyCreateRequest",
     "DefensePolicyListResponse",
     "DefensePolicyResponse",
@@ -85,6 +100,7 @@ __all__ = [
     "IncidentResponse",
     "IncidentStatus",
     "IncidentUpdateRequest",
+    "ManualDefenseActionCreateRequest",
     "MetricBatchRequest",
     "MetricBatchResponse",
     "MetricQueryResponse",

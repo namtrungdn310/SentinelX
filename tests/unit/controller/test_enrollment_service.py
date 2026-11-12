@@ -126,7 +126,7 @@ async def test_enroll_agent_success(
 
     assert resp.node_id == str(node_id)
     assert resp.status == "enrolled"
-    assert resp.heartbeat_interval_seconds == 10
+    assert resp.heartbeat_interval_seconds == 7
     enrollment_repo.mark_approved.assert_awaited_once()
     node_repo.update_agent_metadata.assert_awaited_once_with(
         node_id=node_id,

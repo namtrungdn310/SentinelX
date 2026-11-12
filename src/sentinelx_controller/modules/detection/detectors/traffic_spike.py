@@ -79,3 +79,4 @@ class TrafficSpikeDetector(BaseNetworkDetector):
                 events.append(event)
 
         return events
+
