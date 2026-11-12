@@ -16,6 +16,8 @@ from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
+from sentinelx_controller.modules.defense.router import get_defense_service
+from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.detection.router import get_detection_service
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.router import get_incident_service
@@ -38,6 +40,7 @@ def get_network_service(
     detection_service: Annotated[DetectionService, Depends(get_detection_service)],
     incident_service: Annotated[IncidentService, Depends(get_incident_service)],
     policy_service: Annotated[PolicyService, Depends(get_policy_service)],
+    defense_service: Annotated[DefenseService, Depends(get_defense_service)],
 ) -> NetworkTelemetryService:
     return NetworkTelemetryService(
         repository=NetworkRepository(session),
@@ -47,6 +50,7 @@ def get_network_service(
         detection_service=detection_service,
         incident_service=incident_service,
         policy_service=policy_service,
+        defense_service=defense_service,
     )
 
 

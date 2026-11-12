@@ -10,9 +10,11 @@ from sentinelx_common.contracts.network import (
     NetworkBatchResponse,
     NetworkQueryResponse,
 )
+from sentinelx_common.contracts.policy import PolicyActionType
 from sentinelx_common.contracts.realtime import RealtimeMessage
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
+from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.service import NodeService
@@ -30,6 +32,7 @@ class NetworkTelemetryService:
         detection_service: DetectionService | None = None,
         incident_service: IncidentService | None = None,
         policy_service: PolicyService | None = None,
+        defense_service: DefenseService | None = None,
     ) -> None:
         self._repository = repository
         self._nodes = nodes
@@ -38,6 +41,7 @@ class NetworkTelemetryService:
         self._detection_service = detection_service
         self._incident_service = incident_service
         self._policy_service = policy_service
+        self._defense_service = defense_service
 
     async def ingest(self, request: NetworkBatchRequest) -> NetworkBatchResponse:
         if not await self._nodes.verify_agent(str(request.node_id), str(request.agent_id)):
@@ -75,12 +79,38 @@ class NetworkTelemetryService:
                         events=events,
                     )
                     if self._policy_service is not None:
-                        for _inc, ev_list in correlated:
+                        for inc, ev_list in correlated:
                             for ev in ev_list:
-                                await self._policy_service.evaluate_event(
+                                res = await self._policy_service.evaluate_event(
                                     project_id=project_uuid,
                                     event=ev,
                                 )
+                                # Automated defense execution pipeline (Milestone M6)
+                                if (
+                                    res.authorized
+                                    and res.is_auto_execute
+                                    and res.action_type
+                                    and self._defense_service is not None
+                                ):
+                                    policy_uuid = (
+                                        UUID(res.policy_id) if res.policy_id else None
+                                    )
+                                    await self._defense_service.create_action_from_policy(
+                                        node_id=request.node_id,
+                                        action_type=res.action_type.value,
+                                        target_ip=(
+                                            res.target
+                                            if res.action_type
+                                            == PolicyActionType.BLOCK_IP_NFTABLES
+                                            else None
+                                        ),
+                                        command_payload={
+                                            "target": res.target,
+                                            "duration_seconds": res.duration_seconds,
+                                        },
+                                        incident_id=inc.id,
+                                        policy_id=policy_uuid,
+                                    )
 
         return NetworkBatchResponse(processed_count=len(saved), received_at=now)
 

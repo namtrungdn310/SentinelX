@@ -1,6 +1,6 @@
 """End-to-end integration tests for Milestone M4.
 
-Pipeline: Network Telemetry -> Network Detection -> Incident -> Policy.
+Pipeline: Network Telemetry -> Network Detection -> Incident -> Policy -> Defense Action.
 """
 
 import uuid
@@ -60,8 +60,9 @@ async def test_m4_end_to_end_network_telemetry_detection_incident_policy_flow(
     4. Ingest external SYN flood attack (203.0.113.195) via /telemetry/network-features.
     5. Assert DetectionEvent is saved with attacker_ip and details.
     6. Assert an Incident is created/grouped for the attack.
-    7. Query Policy evaluation endpoint to verify authorized action intent.
-    8. Ingest attack from whitelisted IP (192.168.1.50) -> action denied by whitelist!
+    7. Assert DefenseAction (BLOCK_IP_NFTABLES) is automatically created (M6 integration).
+    8. Assert Agent Heartbeat receives the BLOCK_IP_NFTABLES command!
+    9. Ingest attack from whitelisted IP (192.168.1.50) -> action denied by whitelist!
     """
     app, _ = test_app
     transport = ASGITransport(app=app)
@@ -194,28 +195,36 @@ async def test_m4_end_to_end_network_telemetry_detection_incident_policy_flow(
         assert incident["severity"] == "CRITICAL"
         assert incident["event_count"] >= 1
 
-        # 7. Evaluate Policy for this event (Dry-run / Direct check)
-        eval_res = await client.post(
-            f"/api/v1/projects/{project_id}/policy/evaluate",
+        # 7. Check DefenseAction automatically created for BLOCK_IP_NFTABLES (M6 Integration)
+        actions_res = await client.get(f"/api/v1/defense/actions?node_id={node_id}")
+        assert actions_res.status_code == 200
+        actions = actions_res.json()["items"]
+        assert len(actions) == 1
+        action = actions[0]
+        assert action["action_type"] == "BLOCK_IP_NFTABLES"
+        assert action["target_ip"] == "203.0.113.195"
+        assert action["status"] == "PENDING"
+        action_id = action["id"]
+
+        # 8. Agent sends Heartbeat -> Piggybacked command received!
+        hb_res = await client.post(
+            "/api/v1/nodes/heartbeat",
             json={
-                "event": {
-                    "id": event["id"],
-                    "node_id": node_id,
-                    "detector_name": "syn_flood_detector",
-                    "severity": "CRITICAL",
-                    "attacker_ip": "203.0.113.195",
-                    "confidence_score": 0.95,
-                    "details": event["details"],
-                    "detected_at": now.isoformat(),
-                }
+                "node_id": node_id,
+                "agent_id": agent_id,
+                "sequence": 1,
+                "sent_at": now.isoformat(),
             },
         )
-        assert eval_res.status_code == 200
-        eval_data = eval_res.json()
-        assert eval_data["action_type"] == "BLOCK_IP_NFTABLES"
-        assert eval_data["target"] == "203.0.113.195"
+        assert hb_res.status_code == 200
+        hb_data = hb_res.json()
+        assert len(hb_data["commands"]) == 1
+        cmd = hb_data["commands"][0]
+        assert cmd["id"] == action_id
+        assert cmd["action_type"] == "BLOCK_IP_NFTABLES"
+        assert cmd["command_payload"]["target"] == "203.0.113.195"
 
-        # 8. Ingest attack from whitelisted IP (192.168.1.50)
+        # 9. Ingest attack from whitelisted IP (192.168.1.50)
         wl_attack_id = str(uuid.uuid4())
         wl_payload = {
             "node_id": node_id,
