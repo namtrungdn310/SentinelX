@@ -130,11 +130,6 @@ export function AddNodeModal({
       )}
       {!createdNode ? (
         <form onSubmit={submit}>
-          <p className="text-body">
-            {isDemoMode
-              ? "Tạo máy chủ mẫu để khám phá giao diện. Agent thật và enrollment token chỉ khả dụng khi kết nối Controller."
-              : "Đăng ký máy chủ Linux, sau đó kích hoạt Agent bằng enrollment token."}
-          </p>
           <div className="form-group">
             <label htmlFor={`${id}-project`}>
               Dự án quản lý <span aria-hidden="true">*</span>
@@ -188,9 +183,6 @@ export function AddNodeModal({
               pattern={".*\\S.*"}
               disabled={loading}
             />
-            <small className="field-hint">
-              Địa chỉ máy chủ mà Controller có thể truy cập.
-            </small>
           </div>
           {!isDemoMode && (
             <div className="form-group">
