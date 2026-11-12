@@ -321,8 +321,8 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
                     </td>
                     <td>
                       <button
-                        className="btn btn-outline"
-                        style={{ padding: "4px 10px", fontSize: 13 }}
+                        type="button"
+                        className="btn btn-outline btn-sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedIncident(inc);

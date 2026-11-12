@@ -68,7 +68,8 @@ body {
 button,
 input,
 select {
-    font: inherit;
+    font-family: var(--font-sans);
+    font-size: inherit;
 }
 button,
 a,
@@ -161,18 +162,21 @@ body,
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 40px;
-    padding: 6px 12px;
+    min-height: 38px;
+    padding: 6px 14px;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
-    font-size: 15px;
+    font-family: var(--font-sans);
+    font-size: 14px;
     font-weight: 500;
+    line-height: 1.4;
     white-space: nowrap;
 }
 .btn-primary {
     background: #000000 !important;
     border: 1px solid #000000 !important;
     color: #ffffff !important;
+    font-family: var(--font-sans);
     font-weight: 600;
     transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
@@ -200,14 +204,21 @@ body,
     background: var(--bg-panel);
     color: var(--text-secondary);
     border-color: var(--border-strong);
+    font-family: var(--font-sans);
+    font-weight: 500;
 }
 .btn-outline:hover {
     background: var(--bg-subtle);
     color: var(--text-primary);
 }
 .btn-sm {
-    min-height: 40px;
-    padding: 4px 9px;
+    min-height: 34px;
+    padding: 4px 12px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    border-radius: var(--radius-xs);
 }
 .icon-button {
     display: inline-flex;
@@ -234,7 +245,9 @@ body,
     border: 0;
     background: transparent;
     color: var(--brand-indigo);
+    font-family: var(--font-sans);
     font-size: 13px;
+    font-weight: 500;
     padding: 4px;
 }
 .text-button:hover {
