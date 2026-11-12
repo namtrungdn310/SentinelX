@@ -84,7 +84,7 @@ export function Header(props: HeaderProps) {
 
         <button
           type="button"
-          className="btn btn-outline btn-sm source-action"
+          className="btn btn-primary btn-sm source-action"
           aria-label={
             props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"
           }
