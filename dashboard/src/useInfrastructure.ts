@@ -6,6 +6,7 @@ import {
   fetchNodeMetrics,
   fetchNodes,
   fetchProjects,
+  createProject as apiCreateProject,
 } from "./api";
 import { mergeEvents } from "./events";
 import {
@@ -471,6 +472,28 @@ export function useInfrastructure() {
       nodes: [node, ...previous.nodes],
     }));
 
+  const createProject = async (name: string, description?: string): Promise<Project> => {
+    if (snapshot.isDemoMode) {
+      const newProj: Project = {
+        id: `proj-demo-${Date.now()}`,
+        name,
+        description: description ?? null,
+        created_at: new Date().toISOString(),
+      };
+      setSnapshot((prev) => ({
+        ...prev,
+        projects: [...prev.projects, newProj],
+      }));
+      return newProj;
+    }
+    const created = await apiCreateProject(name, description);
+    setSnapshot((prev) => ({
+      ...prev,
+      projects: [...prev.projects, created],
+    }));
+    return created;
+  };
+
   return {
     ...snapshot,
     isRefreshing,
@@ -486,5 +509,6 @@ export function useInfrastructure() {
     loadHistory,
     toggleDemo,
     addNode,
+    createProject,
   };
 }

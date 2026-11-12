@@ -8,13 +8,14 @@ import {
   List,
   Server,
 } from "lucide-react";
-import type { Node } from "../types";
+import type { Node, Project } from "../types";
 import { nodeHealthLabel, nodeHealth, formatPercent, validMetric } from "../presentation";
 export interface HostTableState {
   view: "table" | "grid";
   sort: { key: "hostname" | "latestCpu" | "latestMemory"; ascending: boolean } | null;
 }
 interface Props {
+  projects?: Project[];
   state?: HostTableState;
   onStateChange?: (state: HostTableState) => void;
   nodes: Node[];
@@ -24,6 +25,7 @@ interface Props {
   onOpenDetail?: (node: Node) => void;
 }
 export function NodeMatrix({
+  projects,
   nodes,
   selectedNodeId,
   onSelectNode,
@@ -151,6 +153,9 @@ export function NodeMatrix({
                         <strong>{node.hostname}</strong>
                         <small>
                           {node.ip_address}
+                          {projects?.find((p) => p.id === node.project_id)
+                            ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
+                            : ""}
                         </small>
                       </span>
                     </button>
@@ -200,6 +205,9 @@ export function NodeMatrix({
                 </span>
                 <small>
                   {node.ip_address}
+                  {projects?.find((p) => p.id === node.project_id)
+                    ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
+                    : ""}
                 </small>
                 <span className="tile-metrics">
                   <span>

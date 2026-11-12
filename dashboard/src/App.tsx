@@ -5,7 +5,6 @@ import {
   Box,
   CircleHelp,
   LayoutDashboard,
-  Plus,
   Server,
   ShieldAlert,
   Sliders,
@@ -35,15 +34,17 @@ import { DefenseView } from "./components/DefenseView";
 import { PoliciesView } from "./components/PoliciesView";
 import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
+import { ProjectsView } from "./components/ProjectsView";
+import { AddProjectModal } from "./components/AddProjectModal";
 import { Modal } from "./components/Modal";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
-const views = ["overview", "hosts", "metrics", "events", "incidents", "defense", "policies"];
-const currentView = () =>
-  views.includes(window.location.hash.slice(1))
-    ? window.location.hash.slice(1)
-    : "overview";
+const views = ["projects", "overview", "hosts", "metrics", "events", "incidents", "defense", "policies"];
+const currentView = () => {
+  const hash = window.location.hash.slice(1);
+  return views.includes(hash) ? hash : "projects";
+};
 
 export function App() {
   const {
@@ -62,6 +63,7 @@ export function App() {
     loadHistory,
     toggleDemo,
     addNode,
+    createProject,
     activeIncidentsCount,
     activeBlocksCount,
     securityToast,
@@ -72,6 +74,7 @@ export function App() {
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
+  const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sampleLimit, setSampleLimit] = useState(30);
@@ -95,6 +98,7 @@ export function App() {
 
   useEffect(() => {
     const viewTitles: Record<string, string> = {
+      projects: "Dự Án Hạ Tầng",
       overview: "Tổng Quan Hạ Tầng",
       hosts: "Ma Trận Máy Chủ",
       metrics: "Chỉ Số Đo Lường",
@@ -144,6 +148,8 @@ export function App() {
       )
     );
   });
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedNode =
     projectNodes.find((node) => node.id === selectedNodeId) ??
     projectNodes[0] ??
@@ -164,6 +170,7 @@ export function App() {
     statusFacet !== "all",
   );
   const pageHeadings: Record<string, string> = {
+    projects: "Dự án hạ tầng",
     overview: "Tổng quan hạ tầng",
     hosts: "Danh sách máy chủ",
     metrics: "Telemetry tài nguyên",
@@ -218,7 +225,7 @@ export function App() {
         Đi đến nội dung
       </a>
       <aside className="app-sidebar">
-        <a className="brand" href="#overview" aria-label="SentinelX tổng quan">
+        <a className="brand" href="#projects" aria-label="SentinelX dự án">
           <span className="brand-mark">
             <img
               src={`${import.meta.env.BASE_URL}sentinelx-mark-v2.svg`}
@@ -232,23 +239,33 @@ export function App() {
             Sentinel<span className="brand-x">X</span>
           </span>
         </a>
-        <div className="workspace-card">
-          <span className="workspace-icon">
-            <Box size={19} />
+        <div className="project-context-card">
+          <span className="project-context-badge">
+            {selectedProject ? "DỰ ÁN HIỆN TẠI" : "PHẠM VI HẠ TẦNG"}
           </span>
-          <div>
-            <strong>SentinelX Lab</strong>
-            <small>Linux infrastructure</small>
-          </div>
+          <strong className="project-context-name">
+            {selectedProject ? selectedProject.name : "Toàn bộ hạ tầng"}
+          </strong>
+          <button
+            type="button"
+            className="project-switch-btn"
+            onClick={() => {
+              setSelectedProjectId(null);
+              navigate("projects");
+            }}
+          >
+            ⇄ Đổi dự án
+          </button>
         </div>
         <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
         <nav aria-label="Điều hướng chính">
           {[
+            { id: "projects", label: "Dự án", Icon: Box, count: projects.length },
             { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
             { id: "hosts", label: "Máy chủ", Icon: Server },
             { id: "metrics", label: "Telemetry", Icon: Activity },
             { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
-          ].map(({ id, label, Icon }) => (
+          ].map(({ id, label, Icon, count }) => (
             <a
               key={id}
               className={`nav-item ${activeView === id ? "active" : ""}`}
@@ -257,8 +274,9 @@ export function App() {
             >
               <Icon size={18} />
               <span>{label}</span>
+              {id === "projects" && <small>{count}</small>}
               {id === "hosts" && <small>{projectNodes.length}</small>}
-              {id === "overview" && <span className="nav-active-dot" />}
+              {activeView === id && <span className="nav-active-dot" />}
             </a>
           ))}
         </nav>
@@ -313,28 +331,52 @@ export function App() {
           className="main-viewport"
           id="main-content"
         >
-          <div className="page-heading">
-            <div>
-              <h1>{pageHeadings[activeView]}</h1>
-              <div className="page-heading-context">
-              <p>
-                {projectNodes.length} máy chủ trong phạm vi ·{" "}
-                {selectedProjectId
-                  ? projects.find((project) => project.id === selectedProjectId)
-                      ?.name
-                  : `${projects.length} dự án`}
-              </p>
-              {statusFilter}
+          {activeView === "projects" ? (
+            <ProjectsView
+              projects={projects}
+              nodes={nodes}
+              onSelectProject={(projectId) => {
+                setSelectedProjectId(projectId);
+                navigate("overview");
+              }}
+              onOpenCreateModal={() => setIsAddProjectOpen(true)}
+            />
+          ) : (
+            <>
+              <div className="page-heading">
+                <div>
+                  <h1>{pageHeadings[activeView]}</h1>
+                  <div className="page-heading-context">
+                    <p>
+                      {projectNodes.length} máy chủ trong phạm vi ·{" "}
+                      {selectedProject
+                        ? selectedProject.name
+                        : `${projects.length} dự án (Toàn cụm)`}
+                    </p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setSelectedProjectId(null);
+                        navigate("projects");
+                      }}
+                      style={{ fontSize: 13, fontWeight: 500 }}
+                    >
+                      ⇄ Đổi dự án
+                    </button>
+                    {statusFilter}
+                  </div>
+                </div>
+                {(activeView === "overview" || activeView === "hosts") && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setIsAddNodeOpen(true)}
+                  >
+                    + Thêm máy chủ
+                  </button>
+                )}
               </div>
-            </div>
-            {(activeView === "overview" || activeView === "hosts") && <button
-              className="btn btn-primary"
-              onClick={() => setIsAddNodeOpen(true)}
-            >
-              <Plus size={17} />
-              Thêm máy chủ
-            </button>}
-          </div>
           {connectionError && (
             <div className="connection-error" role="alert">
               <span>{connectionError}</span>
@@ -385,6 +427,7 @@ export function App() {
           )}
           {activeView === "hosts" && (
             <NodeMatrix
+              projects={projects}
               nodes={displayedNodes}
               selectedNodeId={selectedNode?.id || null}
               onSelectNode={handleSelectNode}
@@ -525,6 +568,8 @@ export function App() {
               isDemoMode={isDemoMode}
             />
           )}
+            </>
+          )}
         </main>
       </div>
       <AddNodeModal
@@ -534,6 +579,18 @@ export function App() {
         isOpen={isAddNodeOpen}
         onClose={() => setIsAddNodeOpen(false)}
         onNodeCreated={handleNodeCreated}
+        isDemoMode={isDemoMode}
+      />
+      <AddProjectModal
+        isOpen={isAddProjectOpen}
+        onClose={() => setIsAddProjectOpen(false)}
+        onCreateProject={async (name, desc) => {
+          const created = await createProject(name, desc);
+          if (created) {
+            setSelectedProjectId(created.id);
+            navigate("overview");
+          }
+        }}
         isDemoMode={isDemoMode}
       />
       {detailNode && (
