@@ -5,7 +5,6 @@ import {
   Box,
   CircleHelp,
   LayoutDashboard,
-  ListFilter,
   Plus,
   Radio,
   Server,
@@ -187,7 +186,6 @@ export function App() {
   const recentEvents = notableEvents.filter(matchesEventScope);
   const statusFilter = (activeView === "overview" || activeView === "hosts") && (
     <div className="scope-filters">
-      <ListFilter size={15} aria-hidden="true" />
       <select
         aria-label="Lọc trạng thái"
         value={statusFacet}
