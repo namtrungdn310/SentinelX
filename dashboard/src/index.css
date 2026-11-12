@@ -43,8 +43,8 @@
     --status-neutral-border: #cdd2d7;
     --focus-ring: #000000;
     --bg-selected: #eef1f5;
-    --action-primary: #25282d;
-    --action-primary-hover: #3e4249;
+    --action-primary: #000000;
+    --action-primary-hover: #262626;
     --status-critical: var(--status-crit);
     --status-critical-bg: var(--status-crit-bg);
     --status-online: var(--status-ok);
@@ -170,13 +170,31 @@ body,
     white-space: nowrap;
 }
 .btn-primary {
-    background: var(--action-primary);
-    border-color: var(--action-primary);
-    color: #fff;
+    background: #000000 !important;
+    border: 1px solid #000000 !important;
+    color: #ffffff !important;
     font-weight: 600;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
-.btn-primary:hover {
-    background: var(--action-primary-hover);
+.btn-primary:hover:not(:disabled) {
+    background: #262626 !important;
+    border-color: #262626 !important;
+    color: #ffffff !important;
+}
+.btn-primary:active:not(:disabled) {
+    background: #000000 !important;
+    transform: translateY(1px);
+}
+.btn-primary:disabled {
+    background: #71717a !important;
+    border-color: #71717a !important;
+    color: #f4f4f5 !important;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.btn-primary svg {
+    color: #ffffff !important;
+    stroke: #ffffff !important;
 }
 .btn-outline {
     background: var(--bg-panel);

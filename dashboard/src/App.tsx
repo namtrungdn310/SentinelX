@@ -331,7 +331,7 @@ export function App() {
               </div>
             </div>
             {(activeView === "overview" || activeView === "hosts") && <button
-              className={`btn ${activeView === "hosts" ? "btn-primary" : "btn-outline"}`}
+              className="btn btn-primary"
               onClick={() => setIsAddNodeOpen(true)}
             >
               <Plus size={17} />
