@@ -60,6 +60,12 @@ class LocalSafetyValidator:
         if command.action_type not in allowed_actions:
             return False, f"Action type '{command.action_type}' is not supported"
 
+        if (
+            command.action_type == PolicyActionType.UNBLOCK_IP_NFTABLES.value
+            and not command.target_ip
+        ):
+            return False, "Target IP is required for UNBLOCK_IP_NFTABLES"
+
         # 2. Target IP validation (if command specifies a target IP)
         if command.target_ip:
             try:

@@ -129,3 +129,36 @@ class DefenseRepository:
 
         res = await self._session.execute(stmt)
         return (res.scalar_one() or 0) > 0
+
+    async def get_applied_blocking_actions(
+        self,
+        node_id: uuid.UUID | None = None,
+    ) -> list[DefenseActionModel]:
+        """Fetch all currently APPLIED stateful actions that may expire."""
+        stmt = select(DefenseActionModel).where(
+            DefenseActionModel.status == DefenseActionStatus.APPLIED.value,
+            DefenseActionModel.action_type.in_(["BLOCK_IP_NFTABLES", "RATE_LIMIT"]),
+        )
+        if node_id is not None:
+            stmt = stmt.where(DefenseActionModel.node_id == node_id)
+
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def has_active_blocking_actions_for_incident(
+        self,
+        incident_id: uuid.UUID,
+    ) -> bool:
+        """Check if any active blocking actions remain for an incident."""
+        active_statuses = [
+            DefenseActionStatus.PENDING.value,
+            DefenseActionStatus.SENT.value,
+            DefenseActionStatus.APPLIED.value,
+        ]
+        stmt = select(func.count(DefenseActionModel.id)).where(
+            DefenseActionModel.incident_id == incident_id,
+            DefenseActionModel.status.in_(active_statuses),
+            DefenseActionModel.action_type != "UNBLOCK_IP_NFTABLES",
+        )
+        res = await self._session.execute(stmt)
+        return (res.scalar_one() or 0) > 0

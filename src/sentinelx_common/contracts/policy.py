@@ -13,8 +13,9 @@ from sentinelx_common.contracts.detection import DetectionEventContract
 class PolicyActionType(StrEnum):
     """Danh mục hành động phòng thủ mở rộng trong SentinelX."""
 
-    # Can thiệp Mạng & Firewall (Stateful)
+    # Can thiệp Mạng & Firewall (Stateful & Recovery)
     BLOCK_IP_NFTABLES = "BLOCK_IP_NFTABLES"
+    UNBLOCK_IP_NFTABLES = "UNBLOCK_IP_NFTABLES"
     RATE_LIMIT = "RATE_LIMIT"
 
     # Can thiệp Tài nguyên Host (Instantaneous)

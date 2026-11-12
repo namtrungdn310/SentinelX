@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,6 +28,9 @@ from sentinelx_controller.modules.incidents.repository import IncidentRepository
 logger = logging.getLogger("sentinelx_controller.defense.service")
 
 
+RecoveryAckHandler = Callable[[DefenseActionModel, str, str | None], Awaitable[None]]
+
+
 class DefenseService:
     """Service handling defense action authorization, command delivery, and ACK processing."""
 
@@ -36,11 +40,13 @@ class DefenseService:
         realtime_hub: RealtimeHub | None = None,
         publisher: CommittedPublisher | None = None,
         incident_repo: IncidentRepository | None = None,
+        recovery_ack_handler: RecoveryAckHandler | None = None,
     ) -> None:
         self._repo = defense_repo
         self._realtime_hub = realtime_hub
         self._publisher = publisher
         self._incident_repo = incident_repo
+        self._recovery_ack_handler = recovery_ack_handler
 
     def _to_response(self, model: DefenseActionModel) -> DefenseActionResponse:
         return DefenseActionResponse(
@@ -271,11 +277,23 @@ class DefenseService:
             action.incident_id is not None
             and self._incident_repo is not None
             and request.status == DefenseActionStatus.APPLIED
+            and action.action_type != "UNBLOCK_IP_NFTABLES"
         ):
             inc = await self._incident_repo.get_by_id(action.incident_id)
             if inc and inc.status == IncidentStatus.DETECTED.value:
                 inc.status = IncidentStatus.MITIGATING.value
                 await self._incident_repo.save(inc)
+
+        # Trigger recovery completion hook if unblock action was acknowledged
+        if (
+            self._recovery_ack_handler is not None
+            and action.action_type == "UNBLOCK_IP_NFTABLES"
+        ):
+            await self._recovery_ack_handler(
+                action,
+                request.status.value,
+                request.error_message,
+            )
 
         resp = self._to_response(updated)
         await self._broadcast(
