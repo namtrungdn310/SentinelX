@@ -85,6 +85,7 @@ class DetectionService:
     async def list_events(
         self,
         node_id_str: str | None = None,
+        incident_id_str: str | None = None,
         severity: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -104,8 +105,19 @@ class DetectionService:
                     detail="Invalid node UUID format",
                 ) from err
 
+        incident_uuid: uuid.UUID | None = None
+        if incident_id_str is not None:
+            try:
+                incident_uuid = uuid.UUID(incident_id_str)
+            except ValueError as err:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Invalid incident UUID format",
+                ) from err
+
         models = await self._repo.query_events(
             node_id=node_uuid,
+            incident_id=incident_uuid,
             severity=severity,
             start_time=start_time,
             end_time=end_time,

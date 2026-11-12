@@ -21,7 +21,9 @@ from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.service import DetectionService
+from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.policy.service import PolicyService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
 
 logger = logging.getLogger(__name__)
@@ -36,12 +38,16 @@ class TelemetryService:
         node_service: NodeService,
         realtime_hub: RealtimeHub | None = None,
         detection_service: DetectionService | None = None,
+        incident_service: IncidentService | None = None,
+        policy_service: PolicyService | None = None,
         publisher: CommittedPublisher | None = None,
     ) -> None:
         self._telemetry_repo = telemetry_repo
         self._node_service = node_service
         self._realtime_hub = realtime_hub
         self._detection_service = detection_service
+        self._incident_service = incident_service
+        self._policy_service = policy_service
         self._publisher = publisher
 
     async def ingest_metrics(self, request: MetricBatchRequest) -> MetricBatchResponse:
@@ -89,10 +95,25 @@ class TelemetryService:
 
         if self._detection_service is not None:
             # A detection/state write failure rolls back metrics too; Agent can retry safely.
-            await self._detection_service.evaluate_metrics(
+            events = await self._detection_service.evaluate_metrics(
                 node_id=node_uuid,
                 samples=request.samples,
             )
+            if events and self._incident_service is not None:
+                node_resp = await self._node_service.get_node(request.node_id)
+                project_uuid = uuid.UUID(node_resp.project_id)
+                correlated = await self._incident_service.correlate_events(
+                    project_id=project_uuid,
+                    node_id=node_uuid,
+                    events=events,
+                )
+                if self._policy_service is not None:
+                    for _inc, ev_list in correlated:
+                        for ev in ev_list:
+                            await self._policy_service.evaluate_event(
+                                project_id=project_uuid,
+                                event=ev,
+                            )
 
         return MetricBatchResponse(
             status="ok",

@@ -14,7 +14,12 @@ from sentinelx_controller.infrastructure.database.base import Base
 from sentinelx_controller.modules.detection.models import (  # noqa: F401
     DetectionEventModel,
 )
+from sentinelx_controller.modules.incidents.models import IncidentModel  # noqa: F401
 from sentinelx_controller.modules.nodes.models import NodeModel  # noqa: F401
+from sentinelx_controller.modules.policy.models import (  # noqa: F401
+    DefensePolicyModel,
+    IPWhitelistModel,
+)
 from sentinelx_controller.modules.projects.models import ProjectModel  # noqa: F401
 from sentinelx_controller.modules.telemetry.models import (  # noqa: F401
     TelemetryMetricSampleModel,

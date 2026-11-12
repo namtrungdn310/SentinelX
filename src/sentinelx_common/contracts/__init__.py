@@ -18,10 +18,30 @@ from sentinelx_common.contracts.detection import (
     DetectorType,
     ResourceAnomalyDetail,
 )
+from sentinelx_common.contracts.incidents import (
+    IncidentDetailResponse,
+    IncidentListResponse,
+    IncidentResponse,
+    IncidentStatus,
+    IncidentUpdateRequest,
+)
 from sentinelx_common.contracts.nodes import (
     NodeRegisterRequest,
     NodeResponse,
     NodeStatus,
+)
+from sentinelx_common.contracts.policy import (
+    DefensePolicyCreateRequest,
+    DefensePolicyListResponse,
+    DefensePolicyResponse,
+    DefensePolicyUpdateRequest,
+    IPWhitelistCreateRequest,
+    IPWhitelistListResponse,
+    IPWhitelistResponse,
+    PolicyActionType,
+    PolicyEvaluationRequest,
+    PolicyEvaluationResult,
+    PolicyEvaluationStatus,
 )
 from sentinelx_common.contracts.projects import (
     ProjectCreateRequest,
@@ -42,6 +62,10 @@ from sentinelx_common.contracts.telemetry import (
 __all__ = [
     "AgentEnrollRequest",
     "AgentEnrollResponse",
+    "DefensePolicyCreateRequest",
+    "DefensePolicyListResponse",
+    "DefensePolicyResponse",
+    "DefensePolicyUpdateRequest",
     "DetectionEventContract",
     "DetectionEventListResponse",
     "DetectionEventResponse",
@@ -52,6 +76,14 @@ __all__ = [
     "EnrollmentTokenResponse",
     "HeartbeatRequest",
     "HeartbeatResponse",
+    "IPWhitelistCreateRequest",
+    "IPWhitelistListResponse",
+    "IPWhitelistResponse",
+    "IncidentDetailResponse",
+    "IncidentListResponse",
+    "IncidentResponse",
+    "IncidentStatus",
+    "IncidentUpdateRequest",
     "MetricBatchRequest",
     "MetricBatchResponse",
     "MetricQueryResponse",
@@ -59,6 +91,10 @@ __all__ = [
     "NodeRegisterRequest",
     "NodeResponse",
     "NodeStatus",
+    "PolicyActionType",
+    "PolicyEvaluationRequest",
+    "PolicyEvaluationResult",
+    "PolicyEvaluationStatus",
     "ProjectCreateRequest",
     "ProjectResponse",
     "RealtimeEventType",

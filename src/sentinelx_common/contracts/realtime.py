@@ -17,6 +17,8 @@ class RealtimeEventType(StrEnum):
     NETWORK_FEATURE_UPDATE = "network_feature_update"
     NODE_STATUS = "node_status"
     DETECTION_ALERT = "detection_alert"
+    INCIDENT_ALERT = "incident_alert"
+    INCIDENT_UPDATE = "incident_update"
     PING = "ping"
     PONG = "pong"
 

@@ -52,7 +52,7 @@ class DetectionRepository:
         for ev in events:
             model = DetectionEventModel(
                 id=uuid.UUID(ev.id),
-                incident_id=None,
+                incident_id=uuid.UUID(ev.incident_id) if ev.incident_id else None,
                 node_id=uuid.UUID(ev.node_id),
                 detector_name=ev.detector_name,
                 severity=ev.severity.value,
@@ -70,6 +70,7 @@ class DetectionRepository:
     async def query_events(
         self,
         node_id: uuid.UUID | None = None,
+        incident_id: uuid.UUID | None = None,
         severity: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
@@ -81,6 +82,8 @@ class DetectionRepository:
 
         if node_id is not None:
             stmt = stmt.where(DetectionEventModel.node_id == node_id)
+        if incident_id is not None:
+            stmt = stmt.where(DetectionEventModel.incident_id == incident_id)
         if severity is not None:
             stmt = stmt.where(DetectionEventModel.severity == severity.upper())
         if start_time is not None:
@@ -98,6 +101,23 @@ class DetectionRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def link_events_to_incident(
+        self,
+        event_ids: list[uuid.UUID],
+        incident_id: uuid.UUID,
+    ) -> None:
+        """Liên kết danh sách event IDs với một incident ID."""
+        if not event_ids:
+            return
+        from sqlalchemy import update
+        stmt = (
+            update(DetectionEventModel)
+            .where(DetectionEventModel.id.in_(event_ids))
+            .values(incident_id=incident_id)
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
 
     async def get_by_id(self, event_id: uuid.UUID) -> DetectionEventModel | None:
         """Lấy một event theo UUID."""

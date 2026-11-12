@@ -25,6 +25,7 @@ class DetectionEventModel(Base):
     )
     incident_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
+        ForeignKey("incidents.id", ondelete="SET NULL"),
         nullable=True,
     )
     node_id: Mapped[uuid.UUID] = mapped_column(

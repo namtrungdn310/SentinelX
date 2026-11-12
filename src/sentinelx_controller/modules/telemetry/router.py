@@ -17,8 +17,12 @@ from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.router import get_detection_service
 from sentinelx_controller.modules.detection.service import DetectionService
+from sentinelx_controller.modules.incidents.router import get_incident_service
+from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.router import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.policy.router import get_policy_service
+from sentinelx_controller.modules.policy.service import PolicyService
 from sentinelx_controller.modules.telemetry.repository import TelemetryRepository
 from sentinelx_controller.modules.telemetry.service import TelemetryService
 
@@ -31,6 +35,8 @@ def get_telemetry_service(
     node_service: Annotated[NodeService, Depends(get_node_service)],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
     detection_service: Annotated[DetectionService, Depends(get_detection_service)],
+    incident_service: Annotated[IncidentService, Depends(get_incident_service)],
+    policy_service: Annotated[PolicyService, Depends(get_policy_service)],
 ) -> TelemetryService:
     """Dependency providing TelemetryService."""
     telemetry_repo = TelemetryRepository(session)
@@ -39,6 +45,8 @@ def get_telemetry_service(
         node_service=node_service,
         realtime_hub=realtime_hub,
         detection_service=detection_service,
+        incident_service=incident_service,
+        policy_service=policy_service,
         publisher=CommittedPublisher(background_tasks, realtime_hub),
     )
 

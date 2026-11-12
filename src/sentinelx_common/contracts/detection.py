@@ -69,6 +69,10 @@ class DetectionEventContract(SentinelXBaseModel):
         default_factory=lambda: str(uuid.uuid4()),
         description="UUID của detection event",
     )
+    incident_id: str | None = Field(
+        default=None,
+        description="UUID của incident liên kết nếu có",
+    )
     node_id: str = Field(
         ...,
         min_length=36,
