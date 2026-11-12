@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
+from sentinelx_common.contracts.detection import ResourceAnomalyDetail
 from sentinelx_common.contracts.telemetry import MetricSample
 from sentinelx_controller.modules.detection.engine import DetectionEngine
 
@@ -57,7 +58,11 @@ def test_unsorted_batch_is_evaluated_chronologically() -> None:
     events = DetectionEngine().process_samples(
         uuid4(), list(reversed(samples([98, 98, 98]))), now=NOW
     )
-    assert len(events) == 1 and events[0].details.window_duration_seconds == 10
+    assert (
+        len(events) == 1
+        and isinstance(events[0].details, ResourceAnomalyDetail)
+        and events[0].details.window_duration_seconds == 10
+    )
 
 
 def test_long_gap_breaks_consecutive_sequence() -> None:

@@ -22,9 +22,15 @@ class DetectionSeverity(StrEnum):
 class DetectorType(StrEnum):
     """Định danh các bộ detector phát hiện bất thường."""
 
+    # Resource Detectors (M3)
     CPU_THRESHOLD = "cpu_threshold_detector"
     MEMORY_EXHAUSTION = "memory_exhaustion_detector"
     DISK_SATURATION = "disk_saturation_detector"
+
+    # Network Detectors (M4)
+    SYN_FLOOD = "syn_flood_detector"
+    PORT_SCAN = "port_scan_detector"
+    TRAFFIC_SPIKE = "traffic_spike_detector"
 
 
 class ResourceAnomalyDetail(SentinelXBaseModel):
@@ -62,6 +68,59 @@ class ResourceAnomalyDetail(SentinelXBaseModel):
     )
 
 
+class NetworkAnomalyDetail(SentinelXBaseModel):
+    """Cấu trúc dữ liệu chi tiết cho sự kiện bất thường mạng (Milestone M4)."""
+
+    attack_type: str = Field(
+        ...,
+        description="Loại tấn công mạng: SYN_FLOOD, PORT_SCAN, TRAFFIC_SPIKE",
+    )
+    source_ip: str = Field(
+        ...,
+        description="Địa chỉ IP nguồn phát sinh tấn công (attacker_ip)",
+    )
+    destination_ip: str = Field(
+        ...,
+        description="Địa chỉ IP đích của server",
+    )
+    protocol: str = Field(
+        ...,
+        description="Giao thức mạng: tcp, udp, icmp, other",
+    )
+    packet_count: int = Field(
+        ...,
+        ge=0,
+        description="Tổng số gói tin quan sát được trong cửa sổ",
+    )
+    byte_count: int = Field(
+        default=0,
+        ge=0,
+        description="Tổng số bytes quan sát được trong cửa sổ",
+    )
+    syn_count: int = Field(
+        default=0,
+        ge=0,
+        description="Số lượng cờ SYN",
+    )
+    ack_count: int = Field(
+        default=0,
+        ge=0,
+        description="Số lượng cờ ACK",
+    )
+    targeted_ports: list[int] = Field(
+        default_factory=list,
+        description="Danh sách cổng bị thăm dò hoặc tấn công",
+    )
+    metric_ratio: float | None = Field(
+        default=None,
+        description="Tỷ lệ kích hoạt bất thường (ví dụ: syn/ack ratio)",
+    )
+    extra_context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Thông tin ngữ cảnh bổ sung",
+    )
+
+
 class DetectionEventContract(SentinelXBaseModel):
     """Contract nội bộ đại diện cho một sự kiện bất thường do Detector bắn ra."""
 
@@ -89,7 +148,7 @@ class DetectionEventContract(SentinelXBaseModel):
     )
     attacker_ip: str | None = Field(
         default=None,
-        description="IP kẻ tấn công (luôn là None với Resource Anomaly)",
+        description="IP kẻ tấn công (None với Resource Anomaly, có giá trị với Network Anomaly)",
     )
     confidence_score: float = Field(
         ...,
@@ -97,9 +156,9 @@ class DetectionEventContract(SentinelXBaseModel):
         le=1.0,
         description="Độ tin cậy từ 0.0 đến 1.0",
     )
-    details: ResourceAnomalyDetail = Field(
+    details: ResourceAnomalyDetail | NetworkAnomalyDetail = Field(
         ...,
-        description="Chi tiết thông số đo đạc",
+        description="Chi tiết thông số đo đạc bất thường",
     )
     detected_at: datetime = Field(
         ...,

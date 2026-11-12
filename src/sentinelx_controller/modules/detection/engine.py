@@ -6,11 +6,16 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sentinelx_common.contracts.detection import DetectionEventContract, DetectionSeverity
+from sentinelx_common.contracts.network import NetworkWindow
 from sentinelx_common.contracts.telemetry import MetricSample
 from sentinelx_controller.modules.detection.detectors.base import BaseDetector
 from sentinelx_controller.modules.detection.detectors.cpu import CpuThresholdDetector
 from sentinelx_controller.modules.detection.detectors.disk import DiskSaturationDetector
 from sentinelx_controller.modules.detection.detectors.memory import MemoryExhaustionDetector
+from sentinelx_controller.modules.detection.detectors.network_base import BaseNetworkDetector
+from sentinelx_controller.modules.detection.detectors.port_scan import PortScanDetector
+from sentinelx_controller.modules.detection.detectors.syn_flood import SynFloodDetector
+from sentinelx_controller.modules.detection.detectors.traffic_spike import TrafficSpikeDetector
 
 
 class DetectionEngine:
@@ -24,6 +29,7 @@ class DetectionEngine:
         window_size: int = 10,
         cooldown_seconds: int = 60,
         detectors: list[BaseDetector] | None = None,
+        network_detectors: list[BaseNetworkDetector] | None = None,
         *,
         max_gap_seconds: int = 60,
         max_sample_age_seconds: int = 86400,
@@ -46,6 +52,15 @@ class DetectionEngine:
                 CpuThresholdDetector(),
                 MemoryExhaustionDetector(),
                 DiskSaturationDetector(),
+            ]
+        )
+        self._network_detectors = (
+            network_detectors
+            if network_detectors is not None
+            else [
+                SynFloodDetector(),
+                PortScanDetector(),
+                TrafficSpikeDetector(),
             ]
         )
         self._windows: dict[uuid.UUID, deque[MetricSample]] = {}
@@ -97,6 +112,7 @@ class DetectionEngine:
             self._window_size,
             self._cooldown_seconds,
             self._detectors,
+            network_detectors=self._network_detectors,
             max_gap_seconds=self._max_gap,
             max_sample_age_seconds=self._max_age,
             future_skew_seconds=self._future_skew,
@@ -111,14 +127,59 @@ class DetectionEngine:
                 DetectionSeverity(alert["severity"]),
             )
         events = local.process_samples(node_id, samples, now=now)
-        updated: dict[str, Any] = {
-            "samples": [sample.model_dump(mode="json") for sample in local._windows[node_id]],
-            "alerts": {
-                name: {"time": stamp.isoformat(), "severity": severity.value}
-                for (node, name), (stamp, severity) in local._last_alerts.items()
-                if node == node_id
-            },
+        updated: dict[str, Any] = dict(state)
+        updated["samples"] = [sample.model_dump(mode="json") for sample in local._windows[node_id]]
+        updated["alerts"] = {
+            name: {"time": stamp.isoformat(), "severity": severity.value}
+            for (node, name), (stamp, severity) in local._last_alerts.items()
+            if node == node_id
         }
+        return events, updated
+
+    def evaluate_network_state(
+        self,
+        node_id: uuid.UUID,
+        windows: list[NetworkWindow],
+        state: dict[str, Any],
+        *,
+        now: datetime | None = None,
+    ) -> tuple[list[DetectionEventContract], dict[str, Any]]:
+        """Evaluate network windows and track cooldown scoped per attacker IP."""
+        if not windows:
+            return [], dict(state)
+
+        updated: dict[str, Any] = dict(state)
+        network_alerts: dict[str, dict[str, str]] = dict(state.get("network_alerts", {}))
+        events: list[DetectionEventContract] = []
+
+        for window in windows:
+            for detector in self._network_detectors:
+                candidates = detector.evaluate(node_id, window)
+                for candidate in candidates:
+                    alert_key = f"{candidate.detector_name}:{candidate.attacker_ip}"
+                    previous = network_alerts.get(alert_key)
+                    should_emit = True
+
+                    if previous is not None:
+                        last_time = datetime.fromisoformat(previous["time"])
+                        prev_severity = DetectionSeverity(previous["severity"])
+                        escalated = (
+                            prev_severity != DetectionSeverity.CRITICAL
+                            and candidate.severity == DetectionSeverity.CRITICAL
+                        )
+                        cooldown_elapsed = (
+                            candidate.detected_at - last_time
+                        ).total_seconds() >= self._cooldown_seconds
+                        should_emit = escalated or cooldown_elapsed
+
+                    if should_emit:
+                        network_alerts[alert_key] = {
+                            "time": candidate.detected_at.isoformat(),
+                            "severity": candidate.severity.value,
+                        }
+                        events.append(candidate)
+
+        updated["network_alerts"] = network_alerts
         return events, updated
 
     def _should_emit_alert(self, node_id: uuid.UUID, event: DetectionEventContract) -> bool:

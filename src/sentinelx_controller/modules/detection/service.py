@@ -12,6 +12,7 @@ from sentinelx_common.contracts.detection import (
     DetectionEventResponse,
     DetectionSeverity,
 )
+from sentinelx_common.contracts.network import NetworkWindow
 from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
 from sentinelx_common.contracts.telemetry import MetricSample
 from sentinelx_common.utils.time import ensure_utc
@@ -77,6 +78,43 @@ class DetectionService:
                     "Detection candidate evaluated: node=%s detector=%s severity=%s",
                     node_id,
                     ev.detector_name,
+                    ev.severity,
+                )
+
+        return events
+
+    async def evaluate_network_windows(
+        self,
+        node_id: uuid.UUID,
+        windows: list[NetworkWindow],
+    ) -> list[DetectionEventContract]:
+        """Evaluate incoming network windows and emit events if attacks/anomalies detected."""
+        if not windows:
+            return []
+
+        record = await self._repo.lock_state(node_id)
+        events, updated = self._engine.evaluate_network_state(node_id, windows, record.state)
+        if events:
+            await self._repo.save_events(events)
+        record.state = updated
+
+        if self._realtime_hub is not None or self._publisher is not None:
+            now = datetime.now(UTC)
+            for ev in events:
+                msg = RealtimeMessage(
+                    event=RealtimeEventType.DETECTION_ALERT.value,
+                    data=ev.model_dump(mode="json"),
+                    timestamp=now,
+                )
+                if self._publisher is not None:
+                    self._publisher.enqueue(msg)
+                elif self._realtime_hub is not None:
+                    await self._realtime_hub.broadcast(msg)
+                logger.warning(
+                    "Network attack evaluated: node=%s detector=%s attacker=%s severity=%s",
+                    node_id,
+                    ev.detector_name,
+                    ev.attacker_ip,
                     ev.severity,
                 )
 

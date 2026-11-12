@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sentinelx_common.contracts.detection import DetectionSeverity
+from sentinelx_common.contracts.detection import DetectionSeverity, ResourceAnomalyDetail
 from sentinelx_common.contracts.telemetry import MetricSample
 from sentinelx_controller.modules.detection.detectors.cpu import CpuThresholdDetector
 
@@ -71,6 +71,7 @@ def test_cpu_detector_sustained_overload_triggers_high() -> None:
     event = detector.evaluate(node_id, samples)
     assert event is not None
     assert event.severity == DetectionSeverity.HIGH
+    assert isinstance(event.details, ResourceAnomalyDetail)
     assert event.details.metric_name == "cpu_percent"
     assert event.details.current_value == 91.0
     assert event.confidence_score >= 0.70

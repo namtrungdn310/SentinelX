@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sentinelx_common.contracts.detection import DetectionSeverity
+from sentinelx_common.contracts.detection import DetectionSeverity, ResourceAnomalyDetail
 from sentinelx_common.contracts.telemetry import MetricSample
 from sentinelx_controller.modules.detection.detectors.memory import MemoryExhaustionDetector
 
@@ -51,6 +51,7 @@ def test_memory_detector_high_warning() -> None:
     event = detector.evaluate(node_id, samples)
     assert event is not None
     assert event.severity == DetectionSeverity.HIGH
+    assert isinstance(event.details, ResourceAnomalyDetail)
     assert event.details.metric_name == "memory_percent"
     assert event.confidence_score >= 0.75
 

@@ -1,4 +1,4 @@
-"""M2 REST endpoints, under the existing telemetry module."""
+"""M2 and M4 REST endpoints, under the existing telemetry module."""
 
 from typing import Annotated
 from uuid import UUID
@@ -16,8 +16,14 @@ from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
+from sentinelx_controller.modules.detection.router import get_detection_service
+from sentinelx_controller.modules.detection.service import DetectionService
+from sentinelx_controller.modules.incidents.router import get_incident_service
+from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.router import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.policy.router import get_policy_service
+from sentinelx_controller.modules.policy.service import PolicyService
 from sentinelx_controller.modules.telemetry.network_repository import NetworkRepository
 from sentinelx_controller.modules.telemetry.network_service import NetworkTelemetryService
 
@@ -29,9 +35,18 @@ def get_network_service(
     session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     nodes: Annotated[NodeService, Depends(get_node_service)],
     hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
+    detection_service: Annotated[DetectionService, Depends(get_detection_service)],
+    incident_service: Annotated[IncidentService, Depends(get_incident_service)],
+    policy_service: Annotated[PolicyService, Depends(get_policy_service)],
 ) -> NetworkTelemetryService:
     return NetworkTelemetryService(
-        NetworkRepository(session), nodes, hub, CommittedPublisher(background_tasks, hub),
+        repository=NetworkRepository(session),
+        nodes=nodes,
+        hub=hub,
+        publisher=CommittedPublisher(background_tasks, hub),
+        detection_service=detection_service,
+        incident_service=incident_service,
+        policy_service=policy_service,
     )
 
 

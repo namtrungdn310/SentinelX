@@ -16,6 +16,7 @@ from sentinelx_common.contracts.detection import (
     DetectionEventResponse,
     DetectionSeverity,
     DetectorType,
+    NetworkAnomalyDetail,
     ResourceAnomalyDetail,
 )
 from sentinelx_common.contracts.incidents import (
@@ -88,6 +89,7 @@ __all__ = [
     "MetricBatchResponse",
     "MetricQueryResponse",
     "MetricSample",
+    "NetworkAnomalyDetail",
     "NodeRegisterRequest",
     "NodeResponse",
     "NodeStatus",

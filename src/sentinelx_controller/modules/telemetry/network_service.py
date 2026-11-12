@@ -13,7 +13,10 @@ from sentinelx_common.contracts.network import (
 from sentinelx_common.contracts.realtime import RealtimeMessage
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
+from sentinelx_controller.modules.detection.service import DetectionService
+from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.policy.service import PolicyService
 from sentinelx_controller.modules.telemetry.network_repository import NetworkRepository
 
 
@@ -24,9 +27,17 @@ class NetworkTelemetryService:
         nodes: NodeService,
         hub: RealtimeHub,
         publisher: CommittedPublisher | None = None,
+        detection_service: DetectionService | None = None,
+        incident_service: IncidentService | None = None,
+        policy_service: PolicyService | None = None,
     ) -> None:
-        self._repository, self._nodes, self._hub = repository, nodes, hub
+        self._repository = repository
+        self._nodes = nodes
+        self._hub = hub
         self._publisher = publisher
+        self._detection_service = detection_service
+        self._incident_service = incident_service
+        self._policy_service = policy_service
 
     async def ingest(self, request: NetworkBatchRequest) -> NetworkBatchResponse:
         if not await self._nodes.verify_agent(str(request.node_id), str(request.agent_id)):
@@ -47,6 +58,30 @@ class NetworkTelemetryService:
                 self._publisher.enqueue(message)
             else:
                 await self._hub.broadcast(message)
+
+            # Evaluate network attack detection (Milestone M4)
+            if self._detection_service is not None:
+                events = await self._detection_service.evaluate_network_windows(
+                    node_id=request.node_id,
+                    windows=saved,
+                )
+                # Correlate events into Incidents and evaluate Defense Policies (Milestone M5)
+                if events and self._incident_service is not None:
+                    node_resp = await self._nodes.get_node(str(request.node_id))
+                    project_uuid = UUID(node_resp.project_id)
+                    correlated = await self._incident_service.correlate_events(
+                        project_id=project_uuid,
+                        node_id=request.node_id,
+                        events=events,
+                    )
+                    if self._policy_service is not None:
+                        for _inc, ev_list in correlated:
+                            for ev in ev_list:
+                                await self._policy_service.evaluate_event(
+                                    project_id=project_uuid,
+                                    event=ev,
+                                )
+
         return NetworkBatchResponse(processed_count=len(saved), received_at=now)
 
     async def query(
