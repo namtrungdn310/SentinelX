@@ -21,6 +21,8 @@ class RealtimeEventType(StrEnum):
     INCIDENT_UPDATE = "incident_update"
     DEFENSE_ACTION_CREATED = "defense_action_created"
     DEFENSE_ACTION_UPDATED = "defense_action_updated"
+    DEFENSE_ACTION_REVERTED = "defense_action_reverted"
+    RECOVERY_COMPLETED = "recovery_completed"
     PING = "ping"
     PONG = "pong"
 
