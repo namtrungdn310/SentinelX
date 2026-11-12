@@ -10,6 +10,8 @@ import {
   Radio,
   Server,
   ShieldAlert,
+  Sliders,
+  Flame,
   Terminal,
   X,
 } from "lucide-react";
@@ -31,12 +33,14 @@ import { TelemetryChart } from "./components/TelemetryChart";
 import { LiveEventStream } from "./components/LiveEventStream";
 import { AddNodeModal } from "./components/AddNodeModal";
 import { IncidentsView } from "./components/IncidentsView";
+import { DefenseView } from "./components/DefenseView";
+import { PoliciesView } from "./components/PoliciesView";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { Modal } from "./components/Modal";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
-const views = ["overview", "hosts", "metrics", "events", "incidents"];
+const views = ["overview", "hosts", "metrics", "events", "incidents", "defense", "policies"];
 const currentView = () =>
   views.includes(window.location.hash.slice(1))
     ? window.location.hash.slice(1)
@@ -92,6 +96,9 @@ export function App() {
       hosts: "Ma Trận Máy Chủ",
       metrics: "Chỉ Số Đo Lường",
       events: "Nhật Ký Sự Kiện",
+      incidents: "Quản Lý Sự Cố An Ninh",
+      defense: "Tường Lửa & Lệnh Phòng Thủ",
+      policies: "Chính Sách & Whitelist",
     };
     const subtitle =
       viewTitles[activeView] || "Giám Sát Hạ Tầng & Bảo Vệ Tự Động";
@@ -159,6 +166,8 @@ export function App() {
     metrics: "Telemetry tài nguyên",
     events: "Nhật ký hệ thống",
     incidents: "Quản lý Sự cố An ninh",
+    defense: "Tường lửa & Lệnh phòng thủ",
+    policies: "Chính sách phòng thủ & Danh sách an toàn",
   };
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
@@ -255,6 +264,8 @@ export function App() {
         <nav aria-label="Điều hướng an ninh">
           {[
             { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert },
+            { id: "defense", label: "Tường lửa nftables", Icon: Flame },
+            { id: "policies", label: "Chính sách & Whitelist", Icon: Sliders },
           ].map(({ id, label, Icon }) => (
             <a
               key={id}
@@ -494,6 +505,19 @@ export function App() {
           {activeView === "incidents" && (
             <IncidentsView
               selectedProjectId={selectedProjectId}
+              isDemoMode={isDemoMode}
+            />
+          )}
+          {activeView === "defense" && (
+            <DefenseView
+              nodes={projectNodes}
+              isDemoMode={isDemoMode}
+            />
+          )}
+          {activeView === "policies" && (
+            <PoliciesView
+              selectedProjectId={selectedProjectId}
+              projects={projects}
               isDemoMode={isDemoMode}
             />
           )}

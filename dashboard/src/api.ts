@@ -182,7 +182,7 @@ export async function updateIncident(
 }
 
 // ----------------------------------------------------
-// Defense Actions API (M6, M7)
+// Defense Actions API (M6, M7, M8)
 // ----------------------------------------------------
 
 export async function fetchDefenseActions(params?: {
@@ -221,26 +221,84 @@ export async function createManualDefenseAction(payload: {
   return res.json();
 }
 
+export async function revertDefenseAction(actionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/recovery/actions/${actionId}/revert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "MANUAL_UNBLOCK" }),
+  });
+  if (!res.ok) throw new Error(`Lỗi gỡ bỏ lệnh chặn IP: ${res.statusText}`);
+}
+
 // ----------------------------------------------------
 // Policies & Whitelist API (M5)
 // ----------------------------------------------------
 
-export async function fetchPolicies(limit = 50): Promise<DefensePolicy[]> {
-  const res = await fetch(`${API_BASE}/policies?limit=${limit}`, {
-    signal: AbortSignal.timeout(10000),
-  });
+export async function fetchPolicies(projectId?: string): Promise<DefensePolicy[]> {
+  const url = projectId
+    ? `${API_BASE}/defense-policies?project_id=${projectId}`
+    : `${API_BASE}/defense-policies`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Lỗi tải danh mục chính sách: ${res.statusText}`);
   const data = await res.json();
   return data.items || [];
 }
 
-export async function fetchWhitelist(projectId?: string): Promise<IPWhitelist[]> {
-  const url = projectId
-    ? `${API_BASE}/policies/whitelist?project_id=${projectId}`
-    : `${API_BASE}/policies/whitelist`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Lỗi tải danh sách an toàn: ${res.statusText}`);
+export async function createPolicy(
+  projectId: string,
+  policy: {
+    name: string;
+    event_type: string;
+    action_type: string;
+    target_params?: Record<string, unknown>;
+    cooldown_seconds?: number;
+    block_duration_seconds?: number;
+    is_auto_execute?: boolean;
+    is_active?: boolean;
+  },
+): Promise<DefensePolicy> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/defense-policies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(policy),
+  });
+  if (!res.ok) throw new Error(`Lỗi tạo chính sách phòng thủ: ${res.statusText}`);
   return res.json();
+}
+
+export async function updatePolicy(
+  policyId: string,
+  update: {
+    name?: string;
+    is_active?: boolean;
+    is_auto_execute?: boolean;
+    cooldown_seconds?: number;
+    block_duration_seconds?: number;
+  },
+): Promise<DefensePolicy> {
+  const res = await fetch(`${API_BASE}/defense-policies/${policyId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  if (!res.ok) throw new Error(`Lỗi cập nhật chính sách: ${res.statusText}`);
+  return res.json();
+}
+
+export async function deletePolicy(policyId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/defense-policies/${policyId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Lỗi xóa chính sách: ${res.statusText}`);
+}
+
+export async function fetchWhitelist(projectId: string): Promise<IPWhitelist[]> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/ip-whitelist`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách an toàn: ${res.statusText}`);
+  const data = await res.json();
+  return data.items || [];
 }
 
 export async function createWhitelist(
@@ -248,11 +306,10 @@ export async function createWhitelist(
   cidr: string,
   description?: string,
 ): Promise<IPWhitelist> {
-  const res = await fetch(`${API_BASE}/policies/whitelist`, {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/ip-whitelist`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      project_id: projectId,
       cidr,
       description,
     }),
@@ -262,7 +319,7 @@ export async function createWhitelist(
 }
 
 export async function deleteWhitelist(whitelistId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/policies/whitelist/${whitelistId}`, {
+  const res = await fetch(`${API_BASE}/ip-whitelist/${whitelistId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Lỗi xóa IP an toàn: ${res.statusText}`);

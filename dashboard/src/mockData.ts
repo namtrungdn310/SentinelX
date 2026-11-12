@@ -1,4 +1,14 @@
-import type { Project, Node, MetricSample, RealtimeMessage, Incident, IncidentDetail } from "./types";
+import type {
+  Project,
+  Node,
+  MetricSample,
+  RealtimeMessage,
+  Incident,
+  IncidentDetail,
+  DefenseAction,
+  DefensePolicy,
+  IPWhitelist,
+} from "./types";
 
 export const MOCK_PROJECTS: Project[] = [
   {
@@ -108,7 +118,8 @@ export const MOCK_INCIDENTS: Incident[] = [
     severity: "CRITICAL",
     started_at: new Date(Date.now() - 15 * 60000).toISOString(),
     resolved_at: null,
-    summary: "Phát hiện bão gói tin SYN bất thường (tỷ lệ 88.5%). Đã kích hoạt lệnh nftables drop IP 203.0.113.195 (30m).",
+    summary:
+      "Phát hiện bão gói tin SYN bất thường (tỷ lệ 88.5%). Đã kích hoạt lệnh nftables drop IP 203.0.113.195 (30m).",
     event_count: 5,
   },
   {
@@ -119,7 +130,8 @@ export const MOCK_INCIDENTS: Incident[] = [
     severity: "HIGH",
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
-    summary: "IP 198.51.100.42 quét dồn dập 48 cổng đích trong cửa sổ 5s. Đang chờ đối soát chính sách phòng thủ.",
+    summary:
+      "IP 198.51.100.42 quét dồn dập 48 cổng đích trong cửa sổ 5s. Đang chờ đối soát chính sách phòng thủ.",
     event_count: 3,
   },
   {
@@ -130,7 +142,8 @@ export const MOCK_INCIDENTS: Incident[] = [
     severity: "MEDIUM",
     started_at: new Date(Date.now() - 95 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 35 * 60000).toISOString(),
-    summary: "Lưu lượng UDP từ 192.0.2.77 vượt ngưỡng 5000 pps. Đã hết thời hạn block và khôi phục lưu thông bình thường.",
+    summary:
+      "Lưu lượng UDP từ 192.0.2.77 vượt ngưỡng 5000 pps. Đã hết thời hạn block và khôi phục lưu thông bình thường.",
     event_count: 8,
   },
   {
@@ -141,7 +154,8 @@ export const MOCK_INCIDENTS: Incident[] = [
     severity: "HIGH",
     started_at: new Date(Date.now() - 180 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 120 * 60000).toISOString(),
-    summary: "CPU đạt 94.2% trong 3 chu kỳ đo liên tiếp. Tiến trình worker đã tự ổn định sau khi giải phóng queue.",
+    summary:
+      "CPU đạt 94.2% trong 3 chu kỳ đo liên tiếp. Tiến trình worker đã tự ổn định sau khi giải phóng queue.",
     event_count: 3,
   },
 ];
@@ -204,6 +218,136 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
     ],
   },
 };
+
+export const MOCK_DEFENSE_ACTIONS: DefenseAction[] = [
+  {
+    id: "def-act-01",
+    incident_id: "inc-syn-401",
+    policy_id: "pol-01",
+    node_id: "node-api-02",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_ip: "203.0.113.195",
+    command_payload: { duration_seconds: 1800, target: "203.0.113.195" },
+    status: "APPLIED",
+    agent_ack_at: new Date(Date.now() - 14 * 60000).toISOString(),
+    error_message: null,
+    created_at: new Date(Date.now() - 15 * 60000).toISOString(),
+  },
+  {
+    id: "def-act-02",
+    incident_id: "inc-scan-402",
+    policy_id: "pol-02",
+    node_id: "node-edge-01",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_ip: "198.51.100.42",
+    command_payload: { duration_seconds: 900, target: "198.51.100.42" },
+    status: "APPLIED",
+    agent_ack_at: new Date(Date.now() - 5 * 60000).toISOString(),
+    error_message: null,
+    created_at: new Date(Date.now() - 6 * 60000).toISOString(),
+  },
+  {
+    id: "def-act-03",
+    incident_id: "inc-udp-398",
+    policy_id: "pol-03",
+    node_id: "node-edge-01",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_ip: "192.0.2.77",
+    command_payload: { duration_seconds: 600, target: "192.0.2.77" },
+    status: "REVERTED",
+    agent_ack_at: new Date(Date.now() - 94 * 60000).toISOString(),
+    error_message: null,
+    created_at: new Date(Date.now() - 95 * 60000).toISOString(),
+  },
+  {
+    id: "def-act-04",
+    incident_id: null,
+    policy_id: null,
+    node_id: "node-api-02",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_ip: "127.0.0.1",
+    command_payload: { duration_seconds: 300, target: "127.0.0.1" },
+    status: "FAILED",
+    agent_ack_at: new Date(Date.now() - 40 * 60000).toISOString(),
+    error_message: "Local safety guardrail rejected: Target IP 127.0.0.1 is a loopback address",
+    created_at: new Date(Date.now() - 41 * 60000).toISOString(),
+  },
+];
+
+export const MOCK_POLICIES: DefensePolicy[] = [
+  {
+    id: "pol-01",
+    name: "Chặn SYN Flood khẩn cấp",
+    event_type: "syn_flood_detector",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_params: { flags: "timeout" },
+    cooldown_seconds: 60,
+    block_duration_seconds: 1800,
+    is_auto_execute: true,
+    is_active: true,
+    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
+  },
+  {
+    id: "pol-02",
+    name: "Khóa IP trinh sát quét cổng",
+    event_type: "port_scan_detector",
+    action_type: "BLOCK_IP_NFTABLES",
+    target_params: { flags: "timeout" },
+    cooldown_seconds: 120,
+    block_duration_seconds: 900,
+    is_auto_execute: true,
+    is_active: true,
+    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
+  },
+  {
+    id: "pol-03",
+    name: "Hạn chế bão lưu lượng UDP",
+    event_type: "traffic_spike_detector",
+    action_type: "RATE_LIMIT",
+    target_params: { limit_pps: 1000 },
+    cooldown_seconds: 60,
+    block_duration_seconds: 600,
+    is_auto_execute: false,
+    is_active: true,
+    created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
+  },
+  {
+    id: "pol-04",
+    name: "Khởi động lại Worker khi tràn CPU",
+    event_type: "cpu_saturation_detector",
+    action_type: "RESTART_SERVICE",
+    target_params: { service_name: "celery-worker" },
+    cooldown_seconds: 300,
+    block_duration_seconds: 0,
+    is_auto_execute: false,
+    is_active: false,
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+];
+
+export const MOCK_WHITELIST: IPWhitelist[] = [
+  {
+    id: "wl-01",
+    project_id: "proj-prod-01",
+    cidr: "192.168.1.0/24",
+    description: "Mạng LAN nội bộ phòng IT & Admin",
+    created_at: new Date(Date.now() - 12 * 86400000).toISOString(),
+  },
+  {
+    id: "wl-02",
+    project_id: "proj-prod-01",
+    cidr: "10.0.0.0/8",
+    description: "VPC Private Cloud Subnet",
+    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
+  },
+  {
+    id: "wl-03",
+    project_id: "proj-edge-02",
+    cidr: "172.16.0.0/12",
+    description: "Docker Bridge & Internal Overlay",
+    created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
+  },
+];
 
 export function generateMockTelemetryHistory(
   node: Node,
