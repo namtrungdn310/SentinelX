@@ -9,6 +9,7 @@ import {
   Plus,
   Radio,
   Server,
+  ShieldAlert,
   Terminal,
   X,
 } from "lucide-react";
@@ -29,12 +30,13 @@ import type { HostTableState } from "./components/NodeMatrix";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { LiveEventStream } from "./components/LiveEventStream";
 import { AddNodeModal } from "./components/AddNodeModal";
+import { IncidentsView } from "./components/IncidentsView";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { Modal } from "./components/Modal";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
-const views = ["overview", "hosts", "metrics", "events"];
+const views = ["overview", "hosts", "metrics", "events", "incidents"];
 const currentView = () =>
   views.includes(window.location.hash.slice(1))
     ? window.location.hash.slice(1)
@@ -156,6 +158,7 @@ export function App() {
     hosts: "Danh sách máy chủ",
     metrics: "Telemetry tài nguyên",
     events: "Nhật ký hệ thống",
+    incidents: "Quản lý Sự cố An ninh",
   };
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
@@ -227,7 +230,7 @@ export function App() {
             <small>Linux infrastructure</small>
           </div>
         </div>
-        <span className="nav-label">GIÁM SÁT</span>
+        <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
         <nav aria-label="Điều hướng chính">
           {[
             { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
@@ -245,6 +248,23 @@ export function App() {
               <span>{label}</span>
               {id === "hosts" && <small>{projectNodes.length}</small>}
               {id === "overview" && <span className="nav-active-dot" />}
+            </a>
+          ))}
+        </nav>
+        <span className="nav-label" style={{ marginTop: 16 }}>AN NINH & PHÒNG THỦ</span>
+        <nav aria-label="Điều hướng an ninh">
+          {[
+            { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert },
+          ].map(({ id, label, Icon }) => (
+            <a
+              key={id}
+              className={`nav-item ${activeView === id ? "active" : ""}`}
+              href={`#${id}`}
+              aria-current={activeView === id ? "page" : undefined}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+              {activeView === id && <span className="nav-active-dot" />}
             </a>
           ))}
         </nav>
@@ -468,6 +488,12 @@ export function App() {
               events={selectedEvents}
               nodes={nodes}
               isConnected={isConnected || isDemoMode}
+              isDemoMode={isDemoMode}
+            />
+          )}
+          {activeView === "incidents" && (
+            <IncidentsView
+              selectedProjectId={selectedProjectId}
               isDemoMode={isDemoMode}
             />
           )}

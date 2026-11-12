@@ -2,7 +2,19 @@
  * REST API Client for SentinelX Controller.
  */
 
-import type { DetectionEvent, MetricQueryResponse, Node, Project, RealtimeMessage } from "./types";
+import type {
+  DefenseAction,
+  DefensePolicy,
+  DetectionEvent,
+  IPWhitelist,
+  Incident,
+  IncidentDetail,
+  IncidentStatus,
+  MetricQueryResponse,
+  Node,
+  Project,
+  RealtimeMessage,
+} from "./types";
 
 const API_BASE = "/api/v1";
 
@@ -13,7 +25,9 @@ export async function fetchDetectionEvents(): Promise<RealtimeMessage[]> {
   if (!response.ok) throw new Error("Không tải được lịch sử cảnh báo");
   const data: { items: DetectionEvent[] } = await response.json();
   return data.items.map((item) => ({
-    event: "detection_alert", timestamp: item.detected_at, data: { ...item },
+    event: "detection_alert",
+    timestamp: item.detected_at,
+    data: { ...item },
   }));
 }
 
@@ -118,4 +132,138 @@ export async function fetchNodeMetrics(
   );
   if (!res.ok) throw new Error(`Lỗi tải số liệu node: ${res.statusText}`);
   return res.json();
+}
+
+// ----------------------------------------------------
+// Incidents API (M5)
+// ----------------------------------------------------
+
+export async function fetchIncidents(params?: {
+  projectId?: string;
+  nodeId?: string;
+  status?: string;
+  severity?: string;
+  limit?: number;
+}): Promise<Incident[]> {
+  const query = new URLSearchParams();
+  if (params?.projectId) query.set("project_id", params.projectId);
+  if (params?.nodeId) query.set("node_id", params.nodeId);
+  if (params?.status && params.status !== "all") query.set("status", params.status);
+  if (params?.severity && params.severity !== "all") query.set("severity", params.severity);
+  query.set("limit", String(params?.limit ?? 50));
+
+  const res = await fetch(`${API_BASE}/incidents?${query.toString()}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách sự cố: ${res.statusText}`);
+  const data = await res.json();
+  return data.items || [];
+}
+
+export async function fetchIncidentDetail(incidentId: string): Promise<IncidentDetail> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Lỗi tải chi tiết sự cố: ${res.statusText}`);
+  return res.json();
+}
+
+export async function updateIncident(
+  incidentId: string,
+  update: { status?: IncidentStatus; summary?: string },
+): Promise<Incident> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(update),
+  });
+  if (!res.ok) throw new Error(`Lỗi cập nhật sự cố: ${res.statusText}`);
+  return res.json();
+}
+
+// ----------------------------------------------------
+// Defense Actions API (M6, M7)
+// ----------------------------------------------------
+
+export async function fetchDefenseActions(params?: {
+  nodeId?: string;
+  incidentId?: string;
+  status?: string;
+  limit?: number;
+}): Promise<DefenseAction[]> {
+  const query = new URLSearchParams();
+  if (params?.nodeId) query.set("node_id", params.nodeId);
+  if (params?.incidentId) query.set("incident_id", params.incidentId);
+  if (params?.status && params.status !== "all") query.set("status", params.status);
+  query.set("limit", String(params?.limit ?? 50));
+
+  const res = await fetch(`${API_BASE}/defense/actions?${query.toString()}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách lệnh phòng thủ: ${res.statusText}`);
+  const data = await res.json();
+  return data.items || [];
+}
+
+export async function createManualDefenseAction(payload: {
+  node_id: string;
+  action_type: string;
+  target_ip?: string | null;
+  command_payload?: Record<string, unknown>;
+  incident_id?: string | null;
+}): Promise<DefenseAction> {
+  const res = await fetch(`${API_BASE}/defense/actions/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Lỗi thực hiện lệnh phòng thủ: ${res.statusText}`);
+  return res.json();
+}
+
+// ----------------------------------------------------
+// Policies & Whitelist API (M5)
+// ----------------------------------------------------
+
+export async function fetchPolicies(limit = 50): Promise<DefensePolicy[]> {
+  const res = await fetch(`${API_BASE}/policies?limit=${limit}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Lỗi tải danh mục chính sách: ${res.statusText}`);
+  const data = await res.json();
+  return data.items || [];
+}
+
+export async function fetchWhitelist(projectId?: string): Promise<IPWhitelist[]> {
+  const url = projectId
+    ? `${API_BASE}/policies/whitelist?project_id=${projectId}`
+    : `${API_BASE}/policies/whitelist`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error(`Lỗi tải danh sách an toàn: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createWhitelist(
+  projectId: string,
+  cidr: string,
+  description?: string,
+): Promise<IPWhitelist> {
+  const res = await fetch(`${API_BASE}/policies/whitelist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      project_id: projectId,
+      cidr,
+      description,
+    }),
+  });
+  if (!res.ok) throw new Error(`Lỗi thêm IP an toàn: ${res.statusText}`);
+  return res.json();
+}
+
+export async function deleteWhitelist(whitelistId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/policies/whitelist/${whitelistId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Lỗi xóa IP an toàn: ${res.statusText}`);
 }
