@@ -1,16 +1,11 @@
 import { useRef, useEffect } from "react";
-import {
-  Search,
-  ChevronRight,
-  Radio,
-  RefreshCw,
-  FlaskConical,
-} from "lucide-react";
+import { Search, Radio } from "lucide-react";
 import type { Project } from "../types";
+
 interface HeaderProps {
-  projects: Project[];
-  selectedProject: string | null;
-  onSelectProject: (id: string | null) => void;
+  projects?: Project[];
+  selectedProject?: string | null;
+  onSelectProject?: (id: string | null) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onSearchSubmit?: () => void;
@@ -21,6 +16,7 @@ interface HeaderProps {
   onRefresh: () => void;
   isRefreshing: boolean;
 }
+
 export function Header(props: HeaderProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -38,25 +34,9 @@ export function Header(props: HeaderProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
   return (
     <header className="topbar">
-      <div className="workspace-crumb">
-        <span className="workspace-avatar">S</span>
-        <span>Dự án</span>
-        <ChevronRight size={14} />
-        <select
-          aria-label="Dự án"
-          value={props.selectedProject ?? ""}
-          onChange={(e) => props.onSelectProject(e.target.value || null)}
-        >
-          <option value="">Tất cả dự án</option>
-          {props.projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </div>
       <div className="global-search">
         <Search size={16} />
         <input
@@ -66,10 +46,13 @@ export function Header(props: HeaderProps) {
           placeholder="Tìm hostname hoặc địa chỉ IP…"
           value={props.searchQuery}
           onChange={(e) => props.onSearchChange(e.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter") props.onSearchSubmit?.(); }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") props.onSearchSubmit?.();
+          }}
         />
         <kbd>/</kbd>
       </div>
+
       <div className="topbar-actions">
         <span
           className={`connection-state ${!props.isDemoMode && props.isConnected ? "connected" : ""}`}
@@ -77,27 +60,31 @@ export function Header(props: HeaderProps) {
         >
           <Radio size={14} />
           <span>
-          {props.isDemoMode
-            ? "Dữ liệu mô phỏng"
-            : props.isConnected
-              ? "Đã kết nối"
-              : "Đang kết nối lại"}
-          {props.isDemoMode && <small>Chưa kết nối Controller</small>}
-          {!props.isDemoMode &&
-            props.isConnected &&
-            props.latencyMs !== null && <small>{props.latencyMs} ms</small>}
+            {props.isDemoMode
+              ? "Dữ liệu mô phỏng"
+              : props.isConnected
+                ? "Đã kết nối"
+                : "Đang kết nối lại"}
+            {props.isDemoMode && <small>Chưa kết nối Controller</small>}
+            {!props.isDemoMode &&
+              props.isConnected &&
+              props.latencyMs !== null && <small>{props.latencyMs} ms</small>}
           </span>
         </span>
+
         <button
-          className="icon-button"
-          aria-label="Làm mới dữ liệu"
+          type="button"
+          className="btn btn-outline btn-sm"
           onClick={props.onRefresh}
           disabled={props.isRefreshing}
+          aria-label="Thử lại kết nối và làm mới dữ liệu"
         >
-          <RefreshCw size={17} className={props.isRefreshing ? "spin" : ""} />
+          {props.isRefreshing ? "Đang thử lại..." : "Thử lại"}
         </button>
+
         <button
-          className={`icon-button source-action ${props.isDemoMode ? "is-active" : ""}`}
+          type="button"
+          className="btn btn-outline btn-sm source-action"
           aria-label={
             props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"
           }
@@ -105,8 +92,7 @@ export function Header(props: HeaderProps) {
           onClick={props.onToggleDemoMode}
           disabled={props.isRefreshing}
         >
-          <FlaskConical size={17} />
-          {props.isDemoMode && <span>Kết nối</span>}
+          {props.isDemoMode ? "Kết nối" : "Dữ liệu mẫu"}
         </button>
       </div>
     </header>
