@@ -25,6 +25,8 @@ from sentinelx_controller.modules.nodes.repository import (
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.projects.router import get_project_service
 from sentinelx_controller.modules.projects.service import ProjectService
+from sentinelx_controller.modules.recovery.router import get_recovery_service
+from sentinelx_controller.modules.recovery.service import RecoveryService
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
@@ -79,9 +81,11 @@ async def process_heartbeat(
     request: HeartbeatRequest,
     service: Annotated[NodeService, Depends(get_node_service)],
     defense_service: Annotated[DefenseService, Depends(get_defense_service)],
+    recovery_service: Annotated[RecoveryService, Depends(get_recovery_service)],
 ) -> HeartbeatResponse:
     try:
         node_uuid = uuid.UUID(request.node_id)
+        await recovery_service.scan_and_revert_expired_actions(node_uuid)
         commands = await defense_service.get_pending_commands_for_node(node_uuid)
     except ValueError:
         commands = []

@@ -9,6 +9,7 @@ from sentinelx_controller.modules.incidents.router import router as incidents_ro
 from sentinelx_controller.modules.nodes.router import router as nodes_router
 from sentinelx_controller.modules.policy.router import router as policy_router
 from sentinelx_controller.modules.projects.router import router as projects_router
+from sentinelx_controller.modules.recovery.router import router as recovery_router
 from sentinelx_controller.modules.system.router import router as system_router
 from sentinelx_controller.modules.telemetry.network_router import router as network_router
 from sentinelx_controller.modules.telemetry.router import router as telemetry_router
@@ -24,6 +25,7 @@ api_v1_router.include_router(detection_router)
 api_v1_router.include_router(incidents_router)
 api_v1_router.include_router(policy_router)
 api_v1_router.include_router(defense_router)
+api_v1_router.include_router(recovery_router)
 api_v1_router.include_router(network_router)
 api_v1_router.include_router(realtime_router)
 

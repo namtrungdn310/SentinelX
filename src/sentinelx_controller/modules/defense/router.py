@@ -19,6 +19,8 @@ from sentinelx_controller.infrastructure.realtime.publisher import CommittedPubl
 from sentinelx_controller.modules.defense.repository import DefenseRepository
 from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.incidents.repository import IncidentRepository
+from sentinelx_controller.modules.recovery.repository import RecoveryRepository
+from sentinelx_controller.modules.recovery.service import RecoveryService
 
 router = APIRouter(prefix="/defense", tags=["defense"])
 
@@ -31,11 +33,21 @@ def get_defense_service(
     """Dependency providing DefenseService."""
     defense_repo = DefenseRepository(session)
     incident_repo = IncidentRepository(session)
+    recovery_repo = RecoveryRepository(session)
+    publisher = CommittedPublisher(background_tasks, realtime_hub)
+    recovery_service = RecoveryService(
+        recovery_repo=recovery_repo,
+        defense_repo=defense_repo,
+        incident_repo=incident_repo,
+        realtime_hub=realtime_hub,
+        publisher=publisher,
+    )
     return DefenseService(
         defense_repo=defense_repo,
         realtime_hub=realtime_hub,
-        publisher=CommittedPublisher(background_tasks, realtime_hub),
+        publisher=publisher,
         incident_repo=incident_repo,
+        recovery_ack_handler=recovery_service.handle_unblock_ack,
     )
 
 

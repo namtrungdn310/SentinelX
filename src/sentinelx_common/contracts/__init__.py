@@ -61,6 +61,14 @@ from sentinelx_common.contracts.realtime import (
     RealtimeMessage,
     RealtimeMetricPayload,
 )
+from sentinelx_common.contracts.recovery import (
+    ManualRevertRequest,
+    RecoveryActionListResponse,
+    RecoveryActionResponse,
+    RecoveryActionType,
+    RecoveryReason,
+    RecoveryStatus,
+)
 from sentinelx_common.contracts.telemetry import (
     MetricBatchRequest,
     MetricBatchResponse,
@@ -100,6 +108,7 @@ __all__ = [
     "IncidentStatus",
     "IncidentUpdateRequest",
     "ManualDefenseActionCreateRequest",
+    "ManualRevertRequest",
     "MetricBatchRequest",
     "MetricBatchResponse",
     "MetricQueryResponse",
@@ -116,6 +125,11 @@ __all__ = [
     "RealtimeEventType",
     "RealtimeMessage",
     "RealtimeMetricPayload",
+    "RecoveryActionListResponse",
+    "RecoveryActionResponse",
+    "RecoveryActionType",
+    "RecoveryReason",
+    "RecoveryStatus",
     "ResourceAnomalyDetail",
     "SentinelXBaseModel",
 ]

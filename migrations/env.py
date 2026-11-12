@@ -22,6 +22,7 @@ from sentinelx_controller.modules.policy.models import (  # noqa: F401
     IPWhitelistModel,
 )
 from sentinelx_controller.modules.projects.models import ProjectModel  # noqa: F401
+from sentinelx_controller.modules.recovery.models import RecoveryActionModel  # noqa: F401
 from sentinelx_controller.modules.telemetry.models import (  # noqa: F401
     TelemetryMetricSampleModel,
 )
