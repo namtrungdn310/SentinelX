@@ -27,8 +27,8 @@ const DEFAULT_DEMO_USERS = [
   {
     id: "77db55e0-1ebe-4b69-be7c-286519d21442",
     username: "admin",
-    email: "admin@sentinelx.vn",
-    passwordHash: "Admin@123456", // meets all 4 password criteria
+    email: "admin@sentinelx.com",
+    passwordHash: "P@ssw0rd",
     created_at: "2026-10-14T08:00:00.000Z",
   },
 ];
@@ -95,7 +95,22 @@ class AuthService {
         localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(DEFAULT_DEMO_USERS));
         return DEFAULT_DEMO_USERS;
       }
-      return JSON.parse(data) as StoredUser[];
+      const parsed = JSON.parse(data) as StoredUser[];
+      const admin = parsed.find(
+        (u) =>
+          u.username.toLowerCase() === "admin" ||
+          u.email.toLowerCase() === "admin@sentinelx.vn" ||
+          u.email.toLowerCase() === "admin@sentinelx.com",
+      );
+      if (admin) {
+        admin.email = "admin@sentinelx.com";
+        admin.passwordHash = "P@ssw0rd";
+        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(parsed));
+      } else {
+        parsed.unshift(DEFAULT_DEMO_USERS[0]);
+        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(parsed));
+      }
+      return parsed;
     } catch {
       return DEFAULT_DEMO_USERS;
     }

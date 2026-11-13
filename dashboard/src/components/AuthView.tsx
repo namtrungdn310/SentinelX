@@ -123,12 +123,6 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
     }
   };
 
-  const fillDemoAccount = () => {
-    setEmail("admin@sentinelx.vn");
-    setPassword("Admin@123456");
-    setError(null);
-  };
-
   return (
     <div className="auth-viewport">
       <div className="auth-card">
@@ -139,8 +133,8 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               <img
                 src={`${import.meta.env.BASE_URL}sentinelx-mark-v2.svg`}
                 alt=""
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 decoding="async"
               />
             </span>
@@ -148,7 +142,6 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               Sentinel<span className="brand-x">X</span>
             </span>
           </div>
-          <p className="auth-tagline">Nền tảng Quản trị & Giám sát An ninh Hạ tầng</p>
         </div>
 
         {/* Feedback banners */}
@@ -168,9 +161,6 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
           <form onSubmit={handleLoginSubmit} className="auth-form">
             <div className="auth-title-group">
               <h1 className="auth-title">Đăng nhập</h1>
-              <p className="auth-subtitle">
-                Đăng nhập bằng Email để vào không gian giám sát hạ tầng.
-              </p>
             </div>
 
             <div className="form-group">
@@ -179,7 +169,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                 id="login-email"
                 type="email"
                 className="form-input"
-                placeholder="VD: admin@sentinelx.vn"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -203,7 +193,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                   id="login-password"
                   type={showPassword ? "text" : "password"}
                   className="form-input"
-                  placeholder="Nhập mật khẩu"
+                  placeholder="Mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -241,20 +231,6 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               {loading ? "Đang xác thực..." : "Đăng nhập"}
             </button>
 
-            {/* Quick Demo Helper for PBL Evaluation */}
-            <div className="auth-demo-hint">
-              <div className="auth-demo-text">
-                <strong>Tài khoản Demo (PBL):</strong> <code>admin@sentinelx.vn</code> / <code>Admin@123456</code>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm auth-demo-btn"
-                onClick={fillDemoAccount}
-              >
-                Điền nhanh tài khoản mẫu
-              </button>
-            </div>
-
             <div className="auth-footer-nav">
               <span>Chưa có tài khoản?</span>
               <button
@@ -273,36 +249,30 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
           <form onSubmit={handleRegisterSubmit} className="auth-form">
             <div className="auth-title-group">
               <h1 className="auth-title">Đăng ký tài khoản</h1>
-              <p className="auth-subtitle">
-                Tạo tài khoản quản trị mới để bắt đầu giám sát hạ tầng của bạn.
-              </p>
             </div>
 
             <div className="form-group">
-              <label htmlFor="register-username">Tên đăng nhập (ít nhất 3 ký tự) *</label>
+              <label htmlFor="register-username">Tên đăng nhập *</label>
               <input
                 id="register-username"
                 type="text"
                 className="form-input"
-                placeholder="VD: trungchau, lead_admin..."
+                placeholder="Tên đăng nhập"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 autoFocus
                 minLength={3}
               />
-              <span className="form-hint">
-                Tên đăng nhập và email này sẽ hiển thị cùng nhau trong không gian làm việc.
-              </span>
             </div>
 
             <div className="form-group">
-              <label htmlFor="register-email">Địa chỉ Email *</label>
+              <label htmlFor="register-email">Email *</label>
               <input
                 id="register-email"
                 type="email"
                 className="form-input"
-                placeholder="VD: user@sentinelx.vn"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -316,7 +286,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                   id="register-password"
                   type={showPassword ? "text" : "password"}
                   className="form-input"
-                  placeholder="Tối thiểu 8 ký tự, có in hoa, số & ký tự đặc biệt"
+                  placeholder="Mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -336,7 +306,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             {/* Password Validation Checklist */}
             {password.length > 0 && (
               <div className="password-criteria-panel">
-                <span className="criteria-heading">Tiêu chuẩn mật khẩu an toàn:</span>
+                <span className="criteria-heading">Tiêu chuẩn mật khẩu:</span>
                 <ul className="criteria-list">
                   <li className={`criteria-item ${criteria.minLength ? "valid" : ""}`}>
                     {criteria.minLength ? <Check size={13} /> : <X size={13} />}
@@ -365,7 +335,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                   id="register-confirm"
                   type={showConfirmPassword ? "text" : "password"}
                   className="form-input"
-                  placeholder="Nhập lại mật khẩu vừa tạo"
+                  placeholder="Xác nhận mật khẩu"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
@@ -408,18 +378,15 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
           <form onSubmit={handleForgotSubmit} className="auth-form">
             <div className="auth-title-group">
               <h1 className="auth-title">Quên mật khẩu</h1>
-              <p className="auth-subtitle">
-                Đặt lại mật khẩu mới cho tài khoản quản trị của bạn bằng Email.
-              </p>
             </div>
 
             <div className="form-group">
-              <label htmlFor="forgot-email">Địa chỉ Email đã đăng ký *</label>
+              <label htmlFor="forgot-email">Email *</label>
               <input
                 id="forgot-email"
                 type="email"
                 className="form-input"
-                placeholder="VD: admin@sentinelx.vn"
+                placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -434,7 +401,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                   id="forgot-new-password"
                   type={showPassword ? "text" : "password"}
                   className="form-input"
-                  placeholder="Tối thiểu 8 ký tự, có in hoa, số & ký tự đặc biệt"
+                  placeholder="Mật khẩu mới"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -454,7 +421,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
             {/* Password Validation Checklist */}
             {password.length > 0 && (
               <div className="password-criteria-panel">
-                <span className="criteria-heading">Tiêu chuẩn mật khẩu an toàn:</span>
+                <span className="criteria-heading">Tiêu chuẩn mật khẩu:</span>
                 <ul className="criteria-list">
                   <li className={`criteria-item ${criteria.minLength ? "valid" : ""}`}>
                     {criteria.minLength ? <Check size={13} /> : <X size={13} />}
@@ -483,7 +450,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
                   id="forgot-confirm"
                   type={showConfirmPassword ? "text" : "password"}
                   className="form-input"
-                  placeholder="Nhập lại mật khẩu mới"
+                  placeholder="Xác nhận mật khẩu mới"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
