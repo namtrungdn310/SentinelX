@@ -106,7 +106,6 @@ export function useInfrastructure() {
           title: "Tường lửa nftables đã kích hoạt",
           message: `Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)`,
           attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
-          severity: "HIGH",
           targetView: "defense",
         });
       } else if (
@@ -399,7 +398,6 @@ export function useInfrastructure() {
               title: "Tường lửa nftables đã kích hoạt",
               message: "Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)",
               attackerIp: "198.51.100.19",
-              severity: "HIGH",
               targetView: "defense",
             });
           }

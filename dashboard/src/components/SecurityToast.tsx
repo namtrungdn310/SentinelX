@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ArrowRight, Flame, ShieldAlert, X } from "lucide-react";
+import { X } from "lucide-react";
 
 export interface SecurityToastPayload {
   id: string;
@@ -36,18 +36,10 @@ export function SecurityToast({ toast, onClose, onNavigate }: Props) {
       role="alert"
       aria-live="assertive"
     >
-      <div className="toast-icon-wrap">
-        {isDefense ? (
-          <Flame size={20} className="toast-icon pulse-flame" />
-        ) : (
-          <ShieldAlert size={20} className="toast-icon pulse-alert" />
-        )}
-      </div>
-
       <div className="toast-content">
         <div className="toast-header">
           <strong>{toast.title}</strong>
-          {toast.severity && (
+          {!isDefense && toast.severity && (
             <span className="toast-severity-badge font-mono">{toast.severity}</span>
           )}
         </div>
@@ -68,7 +60,7 @@ export function SecurityToast({ toast, onClose, onNavigate }: Props) {
             }}
           >
             <span>{isDefense ? "Xem bảng tường lửa" : "Xem chi tiết sự cố"}</span>
-            <ArrowRight size={13} />
+            <span aria-hidden="true" className="toast-link-arrow">&rarr;</span>
           </button>
         </div>
       </div>
