@@ -54,7 +54,9 @@ export function ProjectsView({
               </div>
 
               <div className="project-card-meta">
-                <span className="font-mono project-card-id">{project.id}</span>
+                <span className="font-mono project-card-id" title={project.id}>
+                  {project.id}
+                </span>
                 <span className="project-card-date">
                   Tạo ngày {new Date(project.created_at).toLocaleDateString("vi-VN")}
                 </span>

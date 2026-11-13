@@ -10,22 +10,26 @@ import type {
   IPWhitelist,
 } from "./types";
 
+export const PROJ_PROD_ID = "77db55e0-1ebe-4b69-be7c-286519d21442";
+export const PROJ_EDGE_ID = "8e3c00cf-d1f9-4dc7-95fa-569b33e95f21";
+export const PROJ_DATA_ID = "11c586ac-f41b-4b6b-8440-dbb093da66a4";
+
 export const MOCK_PROJECTS: Project[] = [
   {
-    id: "proj-prod-01",
+    id: PROJ_PROD_ID,
     name: "Production Web Cluster",
     description:
       "Cụm máy chủ hạ tầng chính chạy tải dịch vụ thương mại điện tử",
     created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
   },
   {
-    id: "proj-edge-02",
+    id: PROJ_EDGE_ID,
     name: "Edge AI & Gateway",
     description: "Cụm tính toán biên, Reverse Proxy & Load Balancer phân tán",
     created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
   },
   {
-    id: "proj-data-03",
+    id: PROJ_DATA_ID,
     name: "PostgreSQL Cluster",
     description: "Cụm lưu trữ PostgreSQL cho hạ tầng dữ liệu",
     created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
@@ -35,7 +39,7 @@ export const MOCK_PROJECTS: Project[] = [
 export const MOCK_NODES: Node[] = [
   {
     id: "node-edge-01",
-    project_id: "proj-edge-02",
+    project_id: PROJ_EDGE_ID,
     hostname: "edge-ingress-sg01",
     ip_address: "10.0.1.10",
     status: "online",
@@ -49,7 +53,7 @@ export const MOCK_NODES: Node[] = [
   },
   {
     id: "node-api-02",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     hostname: "api-gateway-node",
     ip_address: "10.0.1.15",
     status: "online",
@@ -63,7 +67,7 @@ export const MOCK_NODES: Node[] = [
   },
   {
     id: "node-db-03",
-    project_id: "proj-data-03",
+    project_id: PROJ_DATA_ID,
     hostname: "pg-primary-cluster",
     ip_address: "10.0.2.20",
     status: "degraded",
@@ -77,7 +81,7 @@ export const MOCK_NODES: Node[] = [
   },
   {
     id: "node-worker-04",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     hostname: "worker-celery-pool",
     ip_address: "10.0.1.25",
     status: "online",
@@ -91,7 +95,7 @@ export const MOCK_NODES: Node[] = [
   },
   {
     id: "node-backup-05",
-    project_id: "proj-data-03",
+    project_id: PROJ_DATA_ID,
     hostname: "backup-storage-nas",
     ip_address: "10.0.2.35",
     status: "offline",
@@ -100,7 +104,7 @@ export const MOCK_NODES: Node[] = [
   },
   {
     id: "node-new-06",
-    project_id: "proj-edge-02",
+    project_id: PROJ_EDGE_ID,
     hostname: "edge-inference-worker",
     ip_address: "10.0.1.40",
     status: "unenrolled",
@@ -112,7 +116,7 @@ export const MOCK_NODES: Node[] = [
 export const MOCK_INCIDENTS: Incident[] = [
   {
     id: "inc-syn-401",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     title: "Tấn công SYN Flood nhắm vào API Gateway",
     status: "MITIGATING",
     severity: "CRITICAL",
@@ -124,7 +128,7 @@ export const MOCK_INCIDENTS: Incident[] = [
   },
   {
     id: "inc-scan-402",
-    project_id: "proj-edge-02",
+    project_id: PROJ_EDGE_ID,
     title: "Dò quét cổng diện rộng (Port Scan Anomaly)",
     status: "DETECTED",
     severity: "HIGH",
@@ -136,7 +140,7 @@ export const MOCK_INCIDENTS: Incident[] = [
   },
   {
     id: "inc-udp-398",
-    project_id: "proj-edge-02",
+    project_id: PROJ_EDGE_ID,
     title: "Bão lưu lượng UDP đột biến (Traffic Spike)",
     status: "RESOLVED",
     severity: "MEDIUM",
@@ -148,7 +152,7 @@ export const MOCK_INCIDENTS: Incident[] = [
   },
   {
     id: "inc-cpu-385",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     title: "Quá tải CPU liên tục trên Celery Worker",
     status: "RESOLVED",
     severity: "HIGH",
@@ -328,21 +332,21 @@ export const MOCK_POLICIES: DefensePolicy[] = [
 export const MOCK_WHITELIST: IPWhitelist[] = [
   {
     id: "wl-01",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     cidr: "192.168.1.0/24",
     description: "Mạng LAN nội bộ phòng IT & Admin",
     created_at: new Date(Date.now() - 12 * 86400000).toISOString(),
   },
   {
     id: "wl-02",
-    project_id: "proj-prod-01",
+    project_id: PROJ_PROD_ID,
     cidr: "10.0.0.0/8",
     description: "VPC Private Cloud Subnet",
     created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
   },
   {
     id: "wl-03",
-    project_id: "proj-edge-02",
+    project_id: PROJ_EDGE_ID,
     cidr: "172.16.0.0/12",
     description: "Docker Bridge & Internal Overlay",
     created_at: new Date(Date.now() - 8 * 86400000).toISOString(),

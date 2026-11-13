@@ -475,7 +475,7 @@ export function useInfrastructure() {
   const createProject = async (name: string, description?: string): Promise<Project> => {
     if (snapshot.isDemoMode) {
       const newProj: Project = {
-        id: `proj-demo-${Date.now()}`,
+        id: crypto.randomUUID(),
         name,
         description: description ?? null,
         created_at: new Date().toISOString(),
