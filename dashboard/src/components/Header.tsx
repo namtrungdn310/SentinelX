@@ -54,48 +54,50 @@ export function Header(props: HeaderProps) {
         <kbd>/</kbd>
       </div>
 
-      <div className="topbar-actions">
-        <span
-          className={`connection-state ${!props.isDemoMode && props.isConnected ? "connected" : ""}`}
-          role="status"
-        >
-          <Radio size={14} />
-          <span>
-            {props.isDemoMode
-              ? "Dữ liệu mô phỏng"
-              : props.isConnected
-                ? "Đã kết nối"
-                : "Đang kết nối lại"}
-            {props.isDemoMode && <small>Chưa kết nối Controller</small>}
-            {!props.isDemoMode &&
-              props.isConnected &&
-              props.latencyMs !== null && <small>{props.latencyMs} ms</small>}
+      {props.selectedProject && (
+        <div className="topbar-actions">
+          <span
+            className={`connection-state ${!props.isDemoMode && props.isConnected ? "connected" : ""}`}
+            role="status"
+          >
+            <Radio size={14} />
+            <span>
+              {props.isDemoMode
+                ? "Dữ liệu mô phỏng"
+                : props.isConnected
+                  ? "Đã kết nối"
+                  : "Đang kết nối lại"}
+              {props.isDemoMode && <small>Chưa kết nối Controller</small>}
+              {!props.isDemoMode &&
+                props.isConnected &&
+                props.latencyMs !== null && <small>{props.latencyMs} ms</small>}
+            </span>
           </span>
-        </span>
 
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={props.onRefresh}
-          disabled={props.isRefreshing}
-          aria-label="Thử lại kết nối và làm mới dữ liệu"
-        >
-          {props.isRefreshing ? "Đang thử lại..." : "Thử lại"}
-        </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={props.onRefresh}
+            disabled={props.isRefreshing}
+            aria-label="Thử lại kết nối và làm mới dữ liệu"
+          >
+            {props.isRefreshing ? "Đang thử lại..." : "Thử lại"}
+          </button>
 
-        <button
-          type="button"
-          className="btn btn-primary btn-sm source-action"
-          aria-label={
-            props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"
-          }
-          title={props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"}
-          onClick={props.onToggleDemoMode}
-          disabled={props.isRefreshing}
-        >
-          {props.isDemoMode ? "Kết nối" : "Dữ liệu mẫu"}
-        </button>
-      </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm source-action"
+            aria-label={
+              props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"
+            }
+            title={props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"}
+            onClick={props.onToggleDemoMode}
+            disabled={props.isRefreshing}
+          >
+            {props.isDemoMode ? "Kết nối" : "Dữ liệu mẫu"}
+          </button>
+        </div>
+      )}
     </header>
   );
 }
