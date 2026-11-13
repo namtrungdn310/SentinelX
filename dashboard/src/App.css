@@ -1845,19 +1845,11 @@
     border-right: 1px solid var(--border-subtle);
 }
 .fleet-health-summary > strong {
-    font: 600 42px/1.15 var(--font-sans);
+    font: 600 40px/1.15 var(--font-sans);
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -1.5px;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-}
-.fleet-health-summary .fleet-total-slash {
-    font-size: 20px;
-    font-weight: 400;
-    color: var(--text-muted);
-    letter-spacing: 0;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
 }
 .fleet-health-summary > span {
     font-size: 14px;

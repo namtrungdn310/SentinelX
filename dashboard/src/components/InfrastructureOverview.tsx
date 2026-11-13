@@ -58,8 +58,7 @@ export function InfrastructureOverview({
           <div className="fleet-health-body">
           <div className="fleet-health-summary">
             <strong>
-              {counts.ok}
-              <span className="fleet-total-slash">/ {nodes.length}</span>
+              {`${counts.ok} / ${nodes.length}`}
             </strong>
             <span>máy chủ ổn định</span>
           </div>
