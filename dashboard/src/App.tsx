@@ -40,10 +40,23 @@ import { authService, type User } from "./auth";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
+const STORAGE_KEY_SELECTED_PROJECT = "sentinelx_selected_project_id";
+
+const getSavedProjectId = (): string | null => {
+  try {
+    return localStorage.getItem(STORAGE_KEY_SELECTED_PROJECT);
+  } catch {
+    return null;
+  }
+};
+
 const views = ["projects", "overview", "hosts", "metrics", "events", "incidents", "defense", "policies"];
 const currentView = () => {
   const hash = window.location.hash.slice(1);
-  return views.includes(hash) ? hash : "projects";
+  if (views.includes(hash)) {
+    return hash;
+  }
+  return getSavedProjectId() ? "overview" : "projects";
 };
 
 export function App() {
@@ -69,9 +82,7 @@ export function App() {
     securityToast,
     dismissSecurityToast,
   } = useInfrastructure();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
-  );
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(getSavedProjectId);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
@@ -84,9 +95,26 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
-  const effectiveView = !selectedProjectId ? "projects" : activeView;
+  const effectiveView = !selectedProjectId
+    ? "projects"
+    : activeView === "projects"
+      ? "overview"
+      : activeView;
   const mainRef = useRef<HTMLElement>(null);
   const previousView = useRef(activeView);
+
+  useEffect(() => {
+    try {
+      if (selectedProjectId) {
+        localStorage.setItem(STORAGE_KEY_SELECTED_PROJECT, selectedProjectId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_SELECTED_PROJECT);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [selectedProjectId]);
+
   useEffect(() => {
     const onHash = () => setActiveView(currentView());
     window.addEventListener("hashchange", onHash);
@@ -241,7 +269,7 @@ export function App() {
         Đi đến nội dung
       </a>
       <aside className="app-sidebar">
-        <a className="brand" href="#projects" aria-label="SentinelX dự án">
+        <a className="brand" href={selectedProjectId ? "#overview" : "#projects"} aria-label="SentinelX dự án">
           <span className="brand-mark">
             <img
               src={`${import.meta.env.BASE_URL}sentinelx-mark-v2.svg`}
@@ -365,6 +393,7 @@ export function App() {
               onClick={() => {
                 authService.logout();
                 setCurrentUser(null);
+                setSelectedProjectId(null);
               }}
             >
               Đăng xuất
