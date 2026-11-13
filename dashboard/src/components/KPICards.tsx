@@ -124,8 +124,14 @@ export function KPICards({
           <span>RX {rxNodes.length ? formatBytes(rx) : "—"}</span>
           <span>TX {txNodes.length ? formatBytes(tx) : "—"}</span>
         </div>
-        <small className="metric-coverage">Byte giữa hai lần đo của từng host</small>
-        {(rxNodes.length !== online.length || txNodes.length !== online.length) && <small className="metric-coverage">Dữ liệu chưa đủ toàn phạm vi</small>}
+        <small
+          className="metric-coverage"
+          title="Byte giữa 2 lần đo của từng host"
+        >
+          {rxNodes.length !== online.length || txNodes.length !== online.length
+            ? "Dữ liệu chưa đủ toàn phạm vi"
+            : "Byte giữa 2 lần đo của từng host"}
+        </small>
       </article>
     </section>
   );
