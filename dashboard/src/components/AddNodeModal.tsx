@@ -53,21 +53,22 @@ export function AddNodeModal({
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!hostname.trim() || !ipAddress.trim() || !projectId) return;
+    const targetProjectId = selectedProjectId || projectId;
+    if (!hostname.trim() || !ipAddress.trim() || !targetProjectId) return;
     setLoading(true);
     setError(null);
     try {
       const node: Node = isDemoMode
         ? {
             id: crypto.randomUUID(),
-            project_id: projectId,
+            project_id: targetProjectId,
             hostname: hostname.trim(),
             ip_address: ipAddress.trim(),
             status: "unenrolled",
             last_seen: null,
             created_at: new Date().toISOString(),
           }
-        : await createNode(projectId, hostname.trim(), ipAddress.trim());
+        : await createNode(targetProjectId, hostname.trim(), ipAddress.trim());
       setCreatedNode(node);
       onNodeCreated(node);
       if (!isDemoMode) await issueToken(node.id);
@@ -130,34 +131,36 @@ export function AddNodeModal({
       )}
       {!createdNode ? (
         <form onSubmit={submit}>
-          <div className="form-group">
-            <label htmlFor={`${id}-project`}>
-              Dự án quản lý <span aria-hidden="true">*</span>
-            </label>
-            <select
-              data-autofocus
-              id={`${id}-project`}
-              className="form-input"
-              value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
-              required
-              disabled={loading}
-            >
-              <option value="" disabled>
-                Chọn một dự án
-              </option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
+          {!selectedProjectId && (
+            <div className="form-group">
+              <label htmlFor={`${id}-project`}>
+                Dự án quản lý <span aria-hidden="true">*</span>
+              </label>
+              <select
+                id={`${id}-project`}
+                className="form-input"
+                value={projectId}
+                onChange={(event) => setProjectId(event.target.value)}
+                required
+                disabled={loading}
+              >
+                <option value="" disabled>
+                  Chọn một dự án
                 </option>
-              ))}
-            </select>
-          </div>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="form-group">
             <label htmlFor={`${id}-hostname`}>
               Hostname <span aria-hidden="true">*</span>
             </label>
             <input
+              data-autofocus
               id={`${id}-hostname`}
               className="form-input"
               placeholder="backend-01"
