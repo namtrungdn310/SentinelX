@@ -47,7 +47,12 @@ export function ProjectsView({
               }}
             >
               <div className="project-card-header">
-                <h3 className="project-card-title">{project.name}</h3>
+                <div className="project-card-top">
+                  <h3 className="project-card-title">{project.name}</h3>
+                  <span className="project-card-date">
+                    {new Date(project.created_at).toLocaleDateString("vi-VN")}
+                  </span>
+                </div>
                 <p className="project-card-desc">
                   {project.description || "Chưa có mô tả cho dự án này."}
                 </p>
@@ -56,9 +61,6 @@ export function ProjectsView({
               <div className="project-card-meta">
                 <span className="font-mono project-card-id" title={project.id}>
                   {project.id}
-                </span>
-                <span className="project-card-date">
-                  Tạo ngày {new Date(project.created_at).toLocaleDateString("vi-VN")}
                 </span>
               </div>
             </article>
