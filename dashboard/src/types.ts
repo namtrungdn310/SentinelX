@@ -25,6 +25,10 @@ export interface Node {
   latestDisk?: number;
   latestRxBytes?: number;
   latestTxBytes?: number;
+  // Hardware specifications (capacity basis)
+  cpuCores?: number;
+  totalMemoryBytes?: number;
+  totalDiskBytes?: number;
 }
 
 export interface MetricSample {

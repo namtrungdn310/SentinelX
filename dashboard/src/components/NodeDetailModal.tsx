@@ -2,7 +2,16 @@ import { useId, useState } from "react";
 import { Check, Copy, KeyRound, Server, X } from "lucide-react";
 import type { Node } from "../types";
 import { createEnrollmentToken } from "../api";
-import { healthLabels, nodeHealth, formatPercent, validMetric } from "../presentation";
+import {
+  formatCpuUsage,
+  formatDiskUsage,
+  formatMemoryUsage,
+  getNodeHardware,
+  healthLabels,
+  nodeHealth,
+  formatPercent,
+  validMetric,
+} from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -85,14 +94,35 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
           </dd>
         </div>
         <div>
-          <dt>CPU / RAM</dt>
+          <dt>CPU</dt>
           <dd className="font-mono">
-            {formatPercent(node.latestCpu)} / {formatPercent(node.latestMemory)}
+            {formatPercent(node.latestCpu)}
+            {validMetric(node.latestCpu) && (
+              <span className="spec-sub"> ({formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)})</span>
+            )}
           </dd>
         </div>
         <div>
-          <dt>Ổ đĩa</dt>
-          <dd>{validMetric(node.latestDisk) ? formatPercent(node.latestDisk) : "— · Không có dữ liệu ổ đĩa"}</dd>
+          <dt>Bộ nhớ RAM</dt>
+          <dd className="font-mono">
+            {formatPercent(node.latestMemory)}
+            {validMetric(node.latestMemory) && (
+              <span className="spec-sub"> ({formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)})</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Dung lượng ổ đĩa</dt>
+          <dd className="font-mono">
+            {validMetric(node.latestDisk) ? (
+              <>
+                {formatPercent(node.latestDisk)}
+                <span className="spec-sub"> ({formatDiskUsage(node.latestDisk, getNodeHardware(node).totalDiskBytes)})</span>
+              </>
+            ) : (
+              "— · Không có dữ liệu ổ đĩa"
+            )}
+          </dd>
         </div>
       </dl>
       <div className="token-section">

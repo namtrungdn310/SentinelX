@@ -6,7 +6,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { Node } from "../types";
-import { formatBytes, nodeHealth, validMetric } from "../presentation";
+import { formatBytes, getNodeHardware, nodeHealth, validMetric } from "../presentation";
 
 export function KPICards({
   nodes,
@@ -26,6 +26,16 @@ export function KPICards({
   const avgMem = mem.length
     ? mem.reduce((sum, node) => sum + node.latestMemory!, 0) / mem.length
     : null;
+  const totalCpuCores = cpu.reduce((sum, node) => sum + getNodeHardware(node).cpuCores, 0);
+  const usedCpuCores = cpu.reduce(
+    (sum, node) => sum + (node.latestCpu! / 100) * getNodeHardware(node).cpuCores,
+    0,
+  );
+  const totalMemBytes = mem.reduce((sum, node) => sum + getNodeHardware(node).totalMemoryBytes, 0);
+  const usedMemBytes = mem.reduce(
+    (sum, node) => sum + (node.latestMemory! / 100) * getNodeHardware(node).totalMemoryBytes,
+    0,
+  );
   const rxNodes = online.filter((node) => validMetric(node.latestRxBytes));
   const txNodes = online.filter((node) => validMetric(node.latestTxBytes));
   const rx = rxNodes.reduce((sum, node) => sum + node.latestRxBytes!, 0);
@@ -80,9 +90,10 @@ export function KPICards({
         <div className="stat-bottom">
           <span>
             {cpu.length
-              ? `${cpu.length} host có mẫu · ngưỡng 75%`
+              ? `${usedCpuCores.toFixed(1)} / ${totalCpuCores} vCPU`
               : "Chưa có dữ liệu CPU"}
           </span>
+          <span>{cpu.length ? "ngưỡng 75%" : ""}</span>
         </div>
         <div className="stat-track">
           <i
@@ -104,9 +115,10 @@ export function KPICards({
         <div className="stat-bottom">
           <span>
             {mem.length
-              ? `${mem.length} host có mẫu · ngưỡng 85%`
+              ? `${formatBytes(usedMemBytes)} / ${formatBytes(totalMemBytes)}`
               : "Chưa có dữ liệu RAM"}
           </span>
+          <span>{mem.length ? "ngưỡng 85%" : ""}</span>
         </div>
         <div className="stat-track">
           <i

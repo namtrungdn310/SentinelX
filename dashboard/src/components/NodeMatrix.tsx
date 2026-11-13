@@ -9,10 +9,19 @@ import {
   Server,
 } from "lucide-react";
 import type { Node, Project } from "../types";
-import { nodeHealthLabel, nodeHealth, formatPercent, validMetric } from "../presentation";
+import {
+  formatCpuUsage,
+  formatDiskUsage,
+  formatMemoryUsage,
+  getNodeHardware,
+  nodeHealthLabel,
+  nodeHealth,
+  formatPercent,
+  validMetric,
+} from "../presentation";
 export interface HostTableState {
   view: "table" | "grid";
-  sort: { key: "hostname" | "latestCpu" | "latestMemory"; ascending: boolean } | null;
+  sort: { key: "hostname" | "latestCpu" | "latestMemory" | "latestDisk"; ascending: boolean } | null;
 }
 interface Props {
   projects?: Project[];
@@ -51,7 +60,7 @@ export function NodeMatrix({
         return sort.ascending ? result : -result;
       })
     : nodes;
-  const toggleSort = (key: "hostname" | "latestCpu" | "latestMemory") =>
+  const toggleSort = (key: "hostname" | "latestCpu" | "latestMemory" | "latestDisk") =>
     update({ view, sort: { key, ascending: sort?.key === key ? !sort.ascending : key === "hostname" } });
   const sortDirection = (key: string) =>
     sort?.key === key
@@ -129,103 +138,138 @@ export function NodeMatrix({
                     RAM {sort?.key === "latestMemory" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
+                <th aria-sort={sortDirection("latestDisk")}>
+                  <button
+                    className="table-sort"
+                    onClick={() => toggleSort("latestDisk")}
+                  >
+                    Ổ đĩa {sort?.key === "latestDisk" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
+                  </button>
+                </th>
                 <th>
                   <span className="sr-only">Chi tiết</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((node) => (
-                <tr
-                  key={node.id}
-                  className={selectedNodeId === node.id ? "selected" : ""}
-                >
-                  <td>
-                    <button
-                      className="host-select"
-                      onClick={() => onSelectNode(node)}
-                      aria-pressed={selectedNodeId === node.id}
-                    >
-                      <span className="server-icon">
-                        <Server size={16} />
+              {sorted.map((node) => {
+                const hw = getNodeHardware(node);
+                return (
+                  <tr
+                    key={node.id}
+                    className={selectedNodeId === node.id ? "selected" : ""}
+                  >
+                    <td>
+                      <button
+                        className="host-select"
+                        onClick={() => onSelectNode(node)}
+                        aria-pressed={selectedNodeId === node.id}
+                      >
+                        <span className="server-icon">
+                          <Server size={16} />
+                        </span>
+                        <span>
+                          <strong>{node.hostname}</strong>
+                          <small>
+                            {node.ip_address}
+                            {projects?.find((p) => p.id === node.project_id)
+                              ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
+                              : ""}
+                          </small>
+                        </span>
+                      </button>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${nodeHealth(node)}`}>
+                        <i />
+                        {nodeHealthLabel(node)}
                       </span>
-                      <span>
-                        <strong>{node.hostname}</strong>
-                        <small>
-                          {node.ip_address}
-                          {projects?.find((p) => p.id === node.project_id)
-                            ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
-                            : ""}
-                        </small>
-                      </span>
-                    </button>
-                  </td>
-                  <td>
-                    <span className={`status-badge ${nodeHealth(node)}`}>
-                      <i />
-                      {nodeHealthLabel(node)}
-                    </span>
-                  </td>
-                  <td>
-                    <Metric value={node.latestCpu} />
-                  </td>
-                  <td>
-                    <Metric value={node.latestMemory} memory />
-                  </td>
-                  <td>
-                    <button
-                      className="icon-button detail-button"
-                      aria-label={`Chi tiết ${node.hostname}`}
-                      onClick={() => onOpenDetail?.(node)}
-                    >
-                      <ChevronRight size={17} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <Metric
+                        value={node.latestCpu}
+                        capacity={formatCpuUsage(node.latestCpu, hw.cpuCores)}
+                        type="cpu"
+                      />
+                    </td>
+                    <td>
+                      <Metric
+                        value={node.latestMemory}
+                        capacity={formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}
+                        type="memory"
+                      />
+                    </td>
+                    <td>
+                      <Metric
+                        value={node.latestDisk}
+                        capacity={formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}
+                        type="disk"
+                      />
+                    </td>
+                    <td>
+                      <button
+                        className="icon-button detail-button"
+                        aria-label={`Chi tiết ${node.hostname}`}
+                        onClick={() => onOpenDetail?.(node)}
+                      >
+                        <ChevronRight size={17} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="host-grid">
-          {sorted.map((node) => (
-            <article
-              className={`host-tile ${selectedNodeId === node.id ? "selected" : ""}`}
-              key={node.id}
-            >
-              <button
-                className="tile-select"
-                onClick={() => onSelectNode(node)}
-                aria-pressed={selectedNodeId === node.id}
+          {sorted.map((node) => {
+            const hw = getNodeHardware(node);
+            return (
+              <article
+                className={`host-tile ${selectedNodeId === node.id ? "selected" : ""}`}
+                key={node.id}
               >
-                <Server size={19} />
-                <strong>{node.hostname}</strong>
-                <span className={`status-badge ${nodeHealth(node)}`}>
-                  {nodeHealthLabel(node)}
-                </span>
-                <small>
-                  {node.ip_address}
-                  {projects?.find((p) => p.id === node.project_id)
-                    ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
-                    : ""}
-                </small>
-                <span className="tile-metrics">
-                  <span>
-                    CPU <b>{formatPercent(node.latestCpu)}</b>
+                <button
+                  className="tile-select"
+                  onClick={() => onSelectNode(node)}
+                  aria-pressed={selectedNodeId === node.id}
+                >
+                  <Server size={19} />
+                  <strong>{node.hostname}</strong>
+                  <span className={`status-badge ${nodeHealth(node)}`}>
+                    {nodeHealthLabel(node)}
                   </span>
-                  <span>
-                    RAM <b>{formatPercent(node.latestMemory)}</b>
+                  <small>
+                    {node.ip_address}
+                    {projects?.find((p) => p.id === node.project_id)
+                      ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
+                      : ""}
+                  </small>
+                  <span className="tile-metrics">
+                    <span>
+                      CPU <b>{formatPercent(node.latestCpu)}</b>
+                      <small className="tile-spec">{formatCpuUsage(node.latestCpu, hw.cpuCores)}</small>
+                    </span>
+                    <span>
+                      RAM <b>{formatPercent(node.latestMemory)}</b>
+                      <small className="tile-spec">{formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}</small>
+                    </span>
+                    <span>
+                      Disk <b>{formatPercent(node.latestDisk)}</b>
+                      <small className="tile-spec">{formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}</small>
+                    </span>
                   </span>
-                </span>
-              </button>
-              <button
-                className="tile-detail"
-                onClick={() => onOpenDetail?.(node)}
-              >
-                Chi tiết máy chủ <ChevronRight size={14} />
-              </button>
-            </article>
-          ))}
+                </button>
+                <button
+                  className="tile-detail"
+                  onClick={() => onOpenDetail?.(node)}
+                >
+                  Chi tiết máy chủ <ChevronRight size={14} />
+                </button>
+              </article>
+            );
+          })}
         </div>
       )}
       <div className="panel-foot">
@@ -239,22 +283,29 @@ export function NodeMatrix({
 }
 function Metric({
   value,
-  memory = false,
+  capacity,
+  type = "cpu",
 }: {
   value?: number;
-  memory?: boolean;
+  capacity?: string;
+  type?: "cpu" | "memory" | "disk";
 }) {
   return (
     <div className="table-metric">
-      <span>{formatPercent(value)}</span>
+      <div className="table-metric-top">
+        <strong>{formatPercent(value)}</strong>
+        {capacity && <span className="metric-capacity">{capacity}</span>}
+      </div>
       <span className="micro-meter">
         <i
           className={
-            validMetric(value) && value > (memory ? 85 : 75)
+            validMetric(value) && value > (type === "memory" ? 85 : 75)
               ? "warning"
-              : memory
+              : type === "memory"
                 ? "memory"
-                : ""
+                : type === "disk"
+                  ? "disk"
+                  : ""
           }
           style={{ width: `${validMetric(value) ? Math.min(100, value) : 0}%` }}
         />

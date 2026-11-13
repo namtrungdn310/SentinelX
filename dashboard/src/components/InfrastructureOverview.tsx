@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Node, Project } from "../types";
-import { healthLabels, nodeHealth, validMetric } from "../presentation";
+import { formatCpuUsage, formatMemoryUsage, getNodeHardware, healthLabels, nodeHealth, validMetric } from "../presentation";
 import type { Health } from "../presentation";
 import { AttentionPanel } from "./AttentionPanel";
 
@@ -155,7 +155,14 @@ export function InfrastructureOverview({
                       />
                       <span className="threshold-mark" style={{ left: resource === "latestCpu" ? "75%" : "85%" }} />
                     </span>
-                  <b>{node[resource]!.toFixed(1)}%</b>
+                  <div className="ranked-metric-values">
+                    <b>{node[resource]!.toFixed(1)}%</b>
+                    <small className="metric-capacity">
+                      {resource === "latestCpu"
+                        ? formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)
+                        : formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)}
+                    </small>
+                  </div>
                   <span className={`ranking-state ${node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "warning" : ""}`}>
                     {node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "Vượt ngưỡng" : "Trong ngưỡng"}
                   </span>

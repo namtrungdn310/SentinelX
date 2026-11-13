@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mergeSamples, timeTicks } from "../telemetry";
-import { formatPercent } from "../presentation";
+import { formatCpuUsage, formatMemoryUsage, formatPercent, getNodeHardware, validMetric } from "../presentation";
 import { Activity, ChevronRight, Server } from "lucide-react";
 import type { MetricSample, Node } from "../types";
 
@@ -82,22 +82,35 @@ export function TelemetryChart({
       <div className="chart-panel-header">
         <span className="chart-reading-label">Giá trị mới nhất{latest && ` · ${clock(latest.observed_at)}`}</span>
         <div className="chart-legends">
-          <button
-            className={`legend-pill ${showCpu ? "" : "series-hidden"}`}
-            aria-pressed={showCpu}
-            onClick={() => setShowCpu(!showCpu)}
-          >
-            <span className="legend-color-dot cpu" />
-            CPU <b>{formatPercent(cpu)}</b>
-          </button>
-          <button
-            className={`legend-pill ${showMem ? "" : "series-hidden"}`}
-            aria-pressed={showMem}
-            onClick={() => setShowMem(!showMem)}
-          >
-            <span className="legend-color-dot memory" />
-            RAM <b>{formatPercent(memory)}</b>
-          </button>
+          {(() => {
+            const hw = selectedNode ? getNodeHardware(selectedNode) : null;
+            return (
+              <>
+                <button
+                  className={`legend-pill ${showCpu ? "" : "series-hidden"}`}
+                  aria-pressed={showCpu}
+                  onClick={() => setShowCpu(!showCpu)}
+                >
+                  <span className="legend-color-dot cpu" />
+                  CPU <b>{formatPercent(cpu)}</b>
+                  {hw && validMetric(cpu) && (
+                    <span className="legend-capacity">({formatCpuUsage(cpu, hw.cpuCores)})</span>
+                  )}
+                </button>
+                <button
+                  className={`legend-pill ${showMem ? "" : "series-hidden"}`}
+                  aria-pressed={showMem}
+                  onClick={() => setShowMem(!showMem)}
+                >
+                  <span className="legend-color-dot memory" />
+                  RAM <b>{formatPercent(memory)}</b>
+                  {hw && validMetric(memory) && (
+                    <span className="legend-capacity">({formatMemoryUsage(memory, hw.totalMemoryBytes)})</span>
+                  )}
+                </button>
+              </>
+            );
+          })()}
         </div>
       </div>
       {!selectedNode ? (

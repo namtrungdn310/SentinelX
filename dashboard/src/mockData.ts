@@ -50,6 +50,9 @@ export const MOCK_NODES: Node[] = [
     latestDisk: 32.5,
     latestRxBytes: 18450000,
     latestTxBytes: 14200000,
+    cpuCores: 2,
+    totalMemoryBytes: 2 * 1024 * 1024 * 1024,
+    totalDiskBytes: 50 * 1024 * 1024 * 1024,
   },
   {
     id: "node-api-02",
@@ -64,6 +67,9 @@ export const MOCK_NODES: Node[] = [
     latestDisk: 45.0,
     latestRxBytes: 42100000,
     latestTxBytes: 68900000,
+    cpuCores: 4,
+    totalMemoryBytes: 4 * 1024 * 1024 * 1024,
+    totalDiskBytes: 80 * 1024 * 1024 * 1024,
   },
   {
     id: "node-db-03",
@@ -78,6 +84,9 @@ export const MOCK_NODES: Node[] = [
     latestDisk: 61.2,
     latestRxBytes: 8500000,
     latestTxBytes: 6200000,
+    cpuCores: 8,
+    totalMemoryBytes: 8 * 1024 * 1024 * 1024,
+    totalDiskBytes: 200 * 1024 * 1024 * 1024,
   },
   {
     id: "node-worker-04",
@@ -92,6 +101,9 @@ export const MOCK_NODES: Node[] = [
     latestDisk: 28.0,
     latestRxBytes: 12400000,
     latestTxBytes: 9800000,
+    cpuCores: 4,
+    totalMemoryBytes: 2 * 1024 * 1024 * 1024,
+    totalDiskBytes: 100 * 1024 * 1024 * 1024,
   },
   {
     id: "node-backup-05",
@@ -101,6 +113,9 @@ export const MOCK_NODES: Node[] = [
     status: "offline",
     last_seen: new Date(Date.now() - 180000).toISOString(),
     created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+    cpuCores: 2,
+    totalMemoryBytes: 4 * 1024 * 1024 * 1024,
+    totalDiskBytes: 500 * 1024 * 1024 * 1024,
   },
   {
     id: "node-new-06",
@@ -110,6 +125,9 @@ export const MOCK_NODES: Node[] = [
     status: "unenrolled",
     last_seen: null,
     created_at: new Date().toISOString(),
+    cpuCores: 4,
+    totalMemoryBytes: 4 * 1024 * 1024 * 1024,
+    totalDiskBytes: 100 * 1024 * 1024 * 1024,
   },
 ];
 

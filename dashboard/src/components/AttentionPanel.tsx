@@ -1,6 +1,12 @@
 import { ChevronRight, CheckCircle2, ListChecks } from "lucide-react";
 import type { Node } from "../types";
-import { nodeHealthLabel, nodeHealth } from "../presentation";
+import {
+  formatCpuUsage,
+  formatMemoryUsage,
+  getNodeHardware,
+  nodeHealthLabel,
+  nodeHealth,
+} from "../presentation";
 
 interface Props {
   nodes: Node[];
@@ -14,12 +20,13 @@ export function AttentionPanel({ nodes, onOpenDetail }: Props) {
   const reason = (node: Node) => {
     if (node.status === "offline") return "Agent mất kết nối";
     if (node.status === "unenrolled") return "Chưa hoàn tất đăng ký Agent";
+    const hw = getNodeHardware(node);
     const metrics = [
       (node.latestCpu ?? 0) > 75
-        ? `CPU ${node.latestCpu!.toFixed(1)}% > 75%`
+        ? `CPU ${node.latestCpu!.toFixed(1)}% (${formatCpuUsage(node.latestCpu, hw.cpuCores)}) > 75%`
         : "",
       (node.latestMemory ?? 0) > 85
-        ? `RAM ${node.latestMemory!.toFixed(1)}% > 85%`
+        ? `RAM ${node.latestMemory!.toFixed(1)}% (${formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}) > 85%`
         : "",
     ].filter(Boolean);
     return metrics.join(" · ") || "Agent báo trạng thái degraded";

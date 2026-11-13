@@ -44,3 +44,59 @@ export function formatBytes(bytes: number): string {
   const index = Math.min(3, Math.floor(Math.log(bytes) / Math.log(1024)));
   return `${(bytes / 1024 ** index).toFixed(1)} ${["B", "KB", "MB", "GB"][index]}`;
 }
+
+export function getNodeHardware(node: Partial<Node>): {
+  cpuCores: number;
+  totalMemoryBytes: number;
+  totalDiskBytes: number;
+} {
+  const name = (node.hostname || "").toLowerCase();
+  let defaultCores = 4;
+  let defaultMemGb = 2; // Default 2 GB RAM (matching user reference)
+  let defaultDiskGb = 80;
+
+  if (/ingress|gateway|edge/.test(name)) {
+    defaultCores = 2;
+    defaultMemGb = 2;
+    defaultDiskGb = 50;
+  } else if (/db|pg|primary|postgres/.test(name)) {
+    defaultCores = 8;
+    defaultMemGb = 8;
+    defaultDiskGb = 200;
+  } else if (/worker|celery/.test(name)) {
+    defaultCores = 4;
+    defaultMemGb = 2;
+    defaultDiskGb = 100;
+  } else if (/storage|nas|backup/.test(name)) {
+    defaultCores = 2;
+    defaultMemGb = 4;
+    defaultDiskGb = 500;
+  }
+
+  return {
+    cpuCores: node.cpuCores ?? defaultCores,
+    totalMemoryBytes: node.totalMemoryBytes ?? defaultMemGb * 1024 * 1024 * 1024,
+    totalDiskBytes: node.totalDiskBytes ?? defaultDiskGb * 1024 * 1024 * 1024,
+  };
+}
+
+export function formatMemoryUsage(percent?: number, totalBytes?: number): string {
+  if (!validMetric(percent)) return "—";
+  const total = totalBytes ?? 2 * 1024 * 1024 * 1024;
+  const usedBytes = (percent / 100) * total;
+  return `${formatBytes(usedBytes)} / ${formatBytes(total)}`;
+}
+
+export function formatCpuUsage(percent?: number, cores?: number): string {
+  if (!validMetric(percent)) return "—";
+  const totalCores = cores ?? 4;
+  const usedCores = ((percent / 100) * totalCores).toFixed(1);
+  return `${usedCores} / ${totalCores} vCPU`;
+}
+
+export function formatDiskUsage(percent?: number, totalBytes?: number): string {
+  if (!validMetric(percent)) return "—";
+  const total = totalBytes ?? 100 * 1024 * 1024 * 1024;
+  const usedBytes = (percent / 100) * total;
+  return `${formatBytes(usedBytes)} / ${formatBytes(total)}`;
+}
