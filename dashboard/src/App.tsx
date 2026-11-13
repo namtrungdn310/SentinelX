@@ -3,7 +3,6 @@ import {
   Activity,
   ChevronRight,
   Box,
-  CircleHelp,
   LayoutDashboard,
   Server,
   ShieldAlert,
@@ -36,7 +35,6 @@ import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { ProjectsView } from "./components/ProjectsView";
 import { AddProjectModal } from "./components/AddProjectModal";
-import { Modal } from "./components/Modal";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
@@ -79,7 +77,6 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sampleLimit, setSampleLimit] = useState(30);
   const [activeView, setActiveView] = useState(currentView);
-  const [showHelp, setShowHelp] = useState(false);
   const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
   const [tableState, setTableState] = useState<HostTableState>({ view: "table", sort: null });
   const selectedProject =
@@ -326,13 +323,7 @@ export function App() {
             </nav>
           </>
         )}
-        <div className="sidebar-bottom">
-          <button className="nav-item" onClick={() => setShowHelp(true)}>
-            <CircleHelp size={18} />
-            <span>Hướng dẫn sử dụng</span>
-            <ChevronRight size={15} />
-          </button>
-        </div>
+
       </aside>
       <div className="app-workspace">
         <Header
@@ -630,46 +621,7 @@ export function App() {
           onNavigate={navigate}
         />
       )}
-      {showHelp && (
-        <Modal
-          onClose={() => setShowHelp(false)}
-          labelledBy="help-title"
-          className="help-modal"
-        >
-          <div className="modal-header">
-            <h2 id="help-title">Hướng dẫn console</h2>
-            <button
-              className="icon-button"
-              aria-label="Đóng hướng dẫn"
-              onClick={() => setShowHelp(false)}
-            >
-              <X size={19} />
-            </button>
-          </div>
-          <div className="modal-body">
-            <p>SentinelX v0.1 · Foundation F14</p>
-            <p>
-              Chọn dự án, lọc theo trạng thái hoặc tìm hostname / IP để thu hẹp
-              phạm vi quan trắc.
-            </p>
-            <p>
-              Tổng quan tổng hợp toàn cụm. Chọn host trong bảng xếp hạng tài nguyên hoặc danh
-              sách máy chủ để mở Telemetry và phân tích lịch sử CPU/RAM. Nút mũi tên
-              trong bảng mở thông tin chi tiết.
-            </p>
-            <p>
-              Dùng <kbd>/</kbd> để tìm nhanh. Chế độ demo dùng dữ liệu mô phỏng;
-              nút bình thí nghiệm trên thanh công cụ chuyển sang Controller.
-            </p>
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowHelp(false)}
-            >
-              Đã hiểu <ChevronRight size={15} />
-            </button>
-          </div>
-        </Modal>
-      )}
+
     </div>
   );
 }

@@ -16,11 +16,6 @@ export function ProjectsView({
       <div className="page-heading">
         <div>
           <h1>Dự án hạ tầng</h1>
-          <div className="page-heading-context">
-            <p>
-              Chọn dự án bạn muốn làm việc để vào không gian giám sát và quản trị riêng biệt.
-            </p>
-          </div>
         </div>
         <button
           type="button"
@@ -58,19 +53,6 @@ export function ProjectsView({
               <span className="project-card-date">
                 Tạo ngày {new Date(project.created_at).toLocaleDateString("vi-VN")}
               </span>
-            </div>
-
-            <div className="project-card-footer">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectProject(project.id);
-                }}
-              >
-                Vào dự án
-              </button>
             </div>
           </article>
         ))}
