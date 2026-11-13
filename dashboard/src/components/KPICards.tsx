@@ -78,9 +78,11 @@ export function KPICards({
           {avgCpu !== null && <span>%</span>}
         </div>
         <div className="stat-bottom">
-          {cpu.length
-            ? `${cpu.length} host có mẫu · ngưỡng 75%`
-            : "Chưa có dữ liệu CPU"}
+          <span>
+            {cpu.length
+              ? `${cpu.length} host có mẫu · ngưỡng 75%`
+              : "Chưa có dữ liệu CPU"}
+          </span>
         </div>
         <div className="stat-track">
           <i
@@ -100,9 +102,11 @@ export function KPICards({
           {avgMem !== null && <span>%</span>}
         </div>
         <div className="stat-bottom">
-          {mem.length
-            ? `${mem.length} host có mẫu · ngưỡng 85%`
-            : "Chưa có dữ liệu RAM"}
+          <span>
+            {mem.length
+              ? `${mem.length} host có mẫu · ngưỡng 85%`
+              : "Chưa có dữ liệu RAM"}
+          </span>
         </div>
         <div className="stat-track">
           <i
