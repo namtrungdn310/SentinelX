@@ -410,21 +410,8 @@ export function App() {
                   <h1>{pageHeadings[effectiveView]}</h1>
                   <div className="page-heading-context">
                     <p>
-                      {projectNodes.length} máy chủ trong phạm vi ·{" "}
-                      <strong>{selectedProject?.name}</strong>
+                      <strong>{selectedProject?.name}</strong> · {projectNodes.length} máy chủ
                     </p>
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => {
-                        setSelectedProjectId(null);
-                        setSearchQuery("");
-                        navigate("projects");
-                      }}
-                      style={{ fontSize: 13, fontWeight: 500 }}
-                    >
-                      ⇄ Đổi dự án
-                    </button>
                     {statusFilter}
                   </div>
                 </div>
