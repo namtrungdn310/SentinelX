@@ -264,51 +264,68 @@ export function App() {
             </span>
           )}
         </div>
-        <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
-        <nav aria-label="Điều hướng chính">
-          {[
-            { id: "projects", label: "Dự án", Icon: Box, count: projects.length },
-            { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
-            { id: "hosts", label: "Máy chủ", Icon: Server },
-            { id: "metrics", label: "Telemetry", Icon: Activity },
-            { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
-          ].map(({ id, label, Icon, count }) => (
-            <a
-              key={id}
-              className={`nav-item ${effectiveView === id ? "active" : ""}`}
-              href={`#${id}`}
-              aria-current={effectiveView === id ? "page" : undefined}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {id === "projects" && <small>{count}</small>}
-              {id === "hosts" && <small>{projectNodes.length}</small>}
-              {effectiveView === id && <span className="nav-active-dot" />}
-            </a>
-          ))}
-        </nav>
-        <span className="nav-label" style={{ marginTop: 16 }}>AN NINH & PHÒNG THỦ</span>
-        <nav aria-label="Điều hướng an ninh">
-          {[
-            { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert, count: activeIncidentsCount, tone: "crit" },
-            { id: "defense", label: "Tường lửa nftables", Icon: Flame, count: activeBlocksCount, tone: "danger" },
-            { id: "policies", label: "Chính sách & Whitelist", Icon: Sliders },
-          ].map(({ id, label, Icon, count, tone }) => (
-            <a
-              key={id}
-              className={`nav-item ${effectiveView === id ? "active" : ""}`}
-              href={`#${id}`}
-              aria-current={effectiveView === id ? "page" : undefined}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {count !== undefined && count > 0 && (
-                <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
-              )}
-              {effectiveView === id && <span className="nav-active-dot" />}
-            </a>
-          ))}
-        </nav>
+        {selectedProject ? (
+          <>
+            <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
+            <nav aria-label="Điều hướng chính">
+              {[
+                { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
+                { id: "hosts", label: "Máy chủ", Icon: Server, count: projectNodes.length },
+                { id: "metrics", label: "Telemetry", Icon: Activity },
+                { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
+              ].map(({ id, label, Icon, count }) => (
+                <a
+                  key={id}
+                  className={`nav-item ${effectiveView === id ? "active" : ""}`}
+                  href={`#${id}`}
+                  aria-current={effectiveView === id ? "page" : undefined}
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  {count !== undefined && <small>{count}</small>}
+                  {effectiveView === id && <span className="nav-active-dot" />}
+                </a>
+              ))}
+            </nav>
+            <span className="nav-label" style={{ marginTop: 16 }}>AN NINH & PHÒNG THỦ</span>
+            <nav aria-label="Điều hướng an ninh">
+              {[
+                { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert, count: activeIncidentsCount, tone: "crit" },
+                { id: "defense", label: "Tường lửa nftables", Icon: Flame, count: activeBlocksCount, tone: "danger" },
+                { id: "policies", label: "Chính sách & Whitelist", Icon: Sliders },
+              ].map(({ id, label, Icon, count, tone }) => (
+                <a
+                  key={id}
+                  className={`nav-item ${effectiveView === id ? "active" : ""}`}
+                  href={`#${id}`}
+                  aria-current={effectiveView === id ? "page" : undefined}
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  {count !== undefined && count > 0 && (
+                    <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
+                  )}
+                  {effectiveView === id && <span className="nav-active-dot" />}
+                </a>
+              ))}
+            </nav>
+          </>
+        ) : (
+          <>
+            <span className="nav-label">CỔNG DỰ ÁN</span>
+            <nav aria-label="Điều hướng cổng dự án">
+              <a
+                className="nav-item active"
+                href="#projects"
+                aria-current="page"
+              >
+                <Box size={18} />
+                <span>Danh sách dự án</span>
+                <small>{projects.length}</small>
+              </a>
+            </nav>
+          </>
+        )}
         <div className="sidebar-bottom">
           <button className="nav-item" onClick={() => setShowHelp(true)}>
             <CircleHelp size={18} />
@@ -606,11 +623,13 @@ export function App() {
           onClose={() => setDetailNodeId(null)}
         />
       )}
-      <SecurityToast
-        toast={securityToast}
-        onClose={dismissSecurityToast}
-        onNavigate={navigate}
-      />
+      {selectedProject && (
+        <SecurityToast
+          toast={securityToast}
+          onClose={dismissSecurityToast}
+          onNavigate={navigate}
+        />
+      )}
       {showHelp && (
         <Modal
           onClose={() => setShowHelp(false)}

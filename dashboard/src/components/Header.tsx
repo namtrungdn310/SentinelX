@@ -43,11 +43,12 @@ export function Header(props: HeaderProps) {
           ref={searchRef}
           aria-label="Tìm máy chủ"
           aria-description="Tìm hostname hoặc IP. Nhấn Enter để mở danh sách kết quả."
-          placeholder="Tìm hostname hoặc địa chỉ IP…"
+          placeholder={props.selectedProject ? "Tìm hostname hoặc địa chỉ IP…" : "Vui lòng chọn dự án để tìm kiếm…"}
           value={props.searchQuery}
           onChange={(e) => props.onSearchChange(e.target.value)}
+          disabled={!props.selectedProject}
           onKeyDown={(event) => {
-            if (event.key === "Enter") props.onSearchSubmit?.();
+            if (event.key === "Enter" && props.selectedProject) props.onSearchSubmit?.();
           }}
         />
         <kbd>/</kbd>
