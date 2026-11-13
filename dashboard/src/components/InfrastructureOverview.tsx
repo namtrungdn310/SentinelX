@@ -7,32 +7,18 @@ import { AttentionPanel } from "./AttentionPanel";
 
 interface Props {
   nodes: Node[];
-  projects: Project[];
-  selectedProjectId: string | null;
+  projects?: Project[];
+  selectedProjectId?: string | null;
   onStatusSelect: (status: Health) => void;
-  onProjectSelect: (projectId: string) => void;
+  onProjectSelect?: (projectId: string) => void;
   onInspectNode: (node: Node) => void;
   onOpenDetail: (node: Node) => void;
   onViewHosts: () => void;
 }
 
-function average(nodes: Node[], key: "latestCpu" | "latestMemory"): string {
-  const reporting = nodes.filter(
-    (node) =>
-      (node.status === "online" || node.status === "degraded") &&
-      validMetric(node[key]),
-  );
-  return reporting.length
-    ? `${(reporting.reduce((sum, node) => sum + node[key]!, 0) / reporting.length).toFixed(1)}%`
-    : "—";
-}
-
 export function InfrastructureOverview({
   nodes,
-  projects,
-  selectedProjectId,
   onStatusSelect,
-  onProjectSelect,
   onInspectNode,
   onOpenDetail,
   onViewHosts,
@@ -59,9 +45,6 @@ export function InfrastructureOverview({
     )
     .sort((a, b) => b[resource]! - a[resource]!)
     .slice(0, 5);
-  const scopedProjects = projects.filter(
-    (project) => !selectedProjectId || project.id === selectedProjectId,
-  );
   return (
     <div className="infrastructure-overview" aria-label="Tổng quan toàn cụm">
       <div className="overview-grid">
@@ -122,79 +105,6 @@ export function InfrastructureOverview({
           </div>
         </section>
         <AttentionPanel nodes={nodes} onOpenDetail={onOpenDetail} />
-      </div>
-      <div className="overview-grid">
-        <section
-          className="panel project-summary-panel"
-          aria-label="Tổng hợp theo dự án"
-        >
-          <div className="panel-heading">
-            <h2>
-              Tổng hợp theo dự án
-            </h2>
-            <span className="count-badge">{scopedProjects.length}</span>
-          </div>
-          {!scopedProjects.length ? (
-            <div className="panel-empty">Chưa có dự án trong workspace.</div>
-          ) : (
-            <div className="table-scroll">
-              <table className="host-table project-summary-table">
-                <thead>
-                  <tr>
-                    <th>Dự án</th>
-                    <th>Trực tuyến / tổng</th>
-                    <th>Cần xử lý</th>
-                    <th>CPU trung bình</th>
-                    <th>RAM trung bình</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scopedProjects.map((project) => {
-                    const members = nodes.filter(
-                      (node) => node.project_id === project.id,
-                    );
-                    const online = members.filter(
-                      (node) =>
-                        node.status === "online" || node.status === "degraded",
-                    ).length;
-                    const attention = members.filter(
-                      (node) => ["warn", "crit", "unenrolled"].includes(nodeHealth(node)),
-                    ).length;
-                    return (
-                      <tr key={project.id}>
-                        <td>
-                          <button
-                            className="project-drilldown"
-                            onClick={() => onProjectSelect(project.id)}
-                          >
-                            {project.name}
-                            <ChevronRight size={13} />
-                          </button>
-                        </td>
-                        <td className="font-mono">
-                          {online} / {members.length}
-                        </td>
-                        <td>
-                          <span
-                            className={`project-attention ${members.some((node) => ["warn", "crit"].includes(nodeHealth(node))) ? "has-attention" : ""}`}
-                          >
-                            {attention}
-                          </span>
-                        </td>
-                        <td className="font-mono">
-                          {average(members, "latestCpu")}
-                        </td>
-                        <td className="font-mono">
-                          {average(members, "latestMemory")}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
         <section
           className="panel resource-ranking-panel"
           aria-label="Máy chủ sử dụng tài nguyên nhiều nhất"

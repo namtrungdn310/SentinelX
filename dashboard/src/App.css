@@ -584,7 +584,6 @@
     background: transparent;
     min-height: 56px;
 }
-.project-summary-panel .panel-heading,
 .resource-ranking-panel .panel-heading,
 .event-preview .panel-heading {
     min-height: 48px;
@@ -1900,46 +1899,6 @@
 }
 .fleet-health-panel .map-footer {
     width: 100%;
-}
-.project-summary-table td:not(:first-child),
-.project-summary-table th:not(:first-child) {
-    text-align: right;
-}
-.project-summary-table td {
-    font-size: 14px;
-    padding-top: 13px;
-    padding-bottom: 13px;
-}
-.project-summary-table {
-    min-width: 740px;
-}
-.project-summary-table th:first-child {
-    width: 36%;
-}
-.project-drilldown {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    border: 0;
-    background: transparent;
-    color: var(--text-primary);
-    text-align: left;
-    font-size: 15px;
-    padding: 2px 0;
-    font-weight: 500;
-}
-.project-drilldown:hover {
-    text-decoration: underline;
-}
-.project-drilldown svg {
-    flex-shrink: 0;
-}
-.project-attention {
-    font: 13px var(--font-mono);
-    color: var(--text-secondary);
-}
-.project-attention.has-attention {
-    color: var(--status-warn);
 }
 .resource-ranking-panel .segmented button {
     width: auto;
