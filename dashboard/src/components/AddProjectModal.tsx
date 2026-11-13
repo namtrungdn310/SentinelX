@@ -7,14 +7,12 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onCreateProject: (name: string, description: string) => Promise<Project | void>;
-  isDemoMode: boolean;
 }
 
 export function AddProjectModal({
   isOpen,
   onClose,
   onCreateProject,
-  isDemoMode,
 }: Props) {
   const id = useId();
   const [name, setName] = useState("");
@@ -98,12 +96,6 @@ export function AddProjectModal({
             disabled={loading}
           />
         </div>
-
-        {isDemoMode && (
-          <small className="form-hint">
-            Đang ở chế độ dữ liệu mẫu. Dự án mới sẽ được lưu trên phiên làm việc hiện tại.
-          </small>
-        )}
 
         <div className="modal-actions">
           <button

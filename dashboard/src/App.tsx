@@ -603,7 +603,6 @@ export function App() {
             navigate("overview");
           }
         }}
-        isDemoMode={isDemoMode}
       />
       {detailNode && (
         <NodeDetailModal
