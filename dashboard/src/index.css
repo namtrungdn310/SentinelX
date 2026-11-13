@@ -59,6 +59,9 @@
 * {
     box-sizing: border-box;
 }
+html {
+    scroll-padding-top: 68px;
+}
 body {
     margin: 0;
     min-width: 320px;

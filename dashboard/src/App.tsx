@@ -116,16 +116,20 @@ export function App() {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    const onHash = () => setActiveView(currentView());
+    const onHash = () => {
+      setActiveView(currentView());
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   useEffect(() => {
-    if (previousView.current !== activeView) {
-      mainRef.current?.focus();
-      previousView.current = activeView;
+    if (previousView.current !== effectiveView) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      mainRef.current?.focus({ preventScroll: true });
+      previousView.current = effectiveView;
     }
-  }, [activeView]);
+  }, [effectiveView]);
 
   useEffect(() => {
     const viewTitles: Record<string, string> = {
@@ -145,6 +149,7 @@ export function App() {
   const navigate = (view: string) => {
     window.location.hash = view;
     setActiveView(view);
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   };
   const handleSelectNode = (node: Node) => {
     setSelectedNodeId(node.id);
@@ -263,7 +268,8 @@ export function App() {
         href="#main-content"
         onClick={(event) => {
           event.preventDefault();
-          mainRef.current?.focus();
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+          mainRef.current?.focus({ preventScroll: true });
         }}
       >
         Đi đến nội dung
@@ -322,6 +328,9 @@ export function App() {
                   key={id}
                   className={`nav-item ${effectiveView === id ? "active" : ""}`}
                   href={`#${id}`}
+                  onClick={() => {
+                    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+                  }}
                   aria-current={effectiveView === id ? "page" : undefined}
                 >
                   <Icon size={18} />
@@ -342,6 +351,9 @@ export function App() {
                   key={id}
                   className={`nav-item ${effectiveView === id ? "active" : ""}`}
                   href={`#${id}`}
+                  onClick={() => {
+                    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+                  }}
                   aria-current={effectiveView === id ? "page" : undefined}
                 >
                   <Icon size={18} />

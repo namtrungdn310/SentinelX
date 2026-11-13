@@ -306,6 +306,7 @@
     font-size: 13px;
 }
 .main-viewport {
+    scroll-margin-top: 68px;
     padding: 20px 28px 28px;
 }
 .main-viewport:focus {
