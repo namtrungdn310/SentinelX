@@ -1849,16 +1849,19 @@
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
     letter-spacing: -1.5px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.fleet-health-summary .fleet-total-slash {
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--text-muted);
+    letter-spacing: 0;
 }
 .fleet-health-summary > span {
     font-size: 14px;
     color: var(--text-secondary);
-}
-.fleet-health-summary small {
-    display: block;
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 5px;
 }
 .fleet-health-panel .health-distribution {
     margin: 4px 0 18px;

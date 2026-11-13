@@ -34,9 +34,6 @@ export function InfrastructureOverview({
     unknown: 0,
   };
   nodes.forEach((node) => counts[nodeHealth(node)]++);
-  const healthPercentage = nodes.length
-    ? Math.round((counts.ok / nodes.length) * 100)
-    : null;
   const ranked = nodes
     .filter(
       (node) =>
@@ -50,25 +47,21 @@ export function InfrastructureOverview({
       <div className="overview-grid">
         <section
           className="panel fleet-health-panel"
-          aria-label="Tỷ lệ máy chủ ổn định"
+          aria-label="Máy chủ ổn định"
         >
           <div className="panel-heading">
             <h2>
-              Tỷ lệ máy chủ ổn định
+              Máy chủ ổn định
             </h2>
             <button className="text-button" onClick={onViewHosts}>Xem máy chủ <ChevronRight size={14} /></button>
           </div>
           <div className="fleet-health-body">
           <div className="fleet-health-summary">
             <strong>
-              {healthPercentage === null ? "—" : `${healthPercentage}%`}
+              {counts.ok}
+              <span className="fleet-total-slash">/ {nodes.length}</span>
             </strong>
-            <span>
-              máy chủ ổn định
-              <small>
-                {counts.ok} / {nodes.length} máy chủ trong phạm vi
-              </small>
-            </span>
+            <span>máy chủ ổn định</span>
           </div>
           <div className="fleet-health-distribution">
           <div
