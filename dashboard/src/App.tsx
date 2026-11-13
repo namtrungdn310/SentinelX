@@ -35,6 +35,8 @@ import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { ProjectsView } from "./components/ProjectsView";
 import { AddProjectModal } from "./components/AddProjectModal";
+import { AuthView } from "./components/AuthView";
+import { authService, type User } from "./auth";
 import { useInfrastructure } from "./useInfrastructure";
 import type { Node } from "./types";
 
@@ -79,6 +81,7 @@ export function App() {
   const [activeView, setActiveView] = useState(currentView);
   const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
   const [tableState, setTableState] = useState<HostTableState>({ view: "table", sort: null });
+  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
   const effectiveView = !selectedProjectId ? "projects" : activeView;
@@ -220,6 +223,11 @@ export function App() {
       )}
     </div>
   );
+
+  if (!currentUser) {
+    return <AuthView onAuthenticated={(user) => setCurrentUser(user)} />;
+  }
+
   return (
     <div className="app-container">
       <a
@@ -335,6 +343,34 @@ export function App() {
           </>
         )}
 
+        {currentUser && (
+          <div className="sidebar-user-footer">
+            <div className="sidebar-user-profile">
+              <span className="sidebar-user-avatar">
+                {currentUser.username.charAt(0).toUpperCase()}
+              </span>
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name" title={currentUser.username}>
+                  {currentUser.username}
+                </span>
+                <span className="sidebar-user-email" title={currentUser.email}>
+                  {currentUser.email}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="sidebar-logout-btn"
+              title="Đăng xuất khỏi hệ thống"
+              onClick={() => {
+                authService.logout();
+                setCurrentUser(null);
+              }}
+            >
+              Đăng xuất
+            </button>
+          </div>
+        )}
       </aside>
       <div className="app-workspace">
         <Header
