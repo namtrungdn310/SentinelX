@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronRight,
@@ -126,6 +126,16 @@ export function App() {
   const projectNodes = nodes.filter(
     (node) => !selectedProjectId || node.project_id === selectedProjectId,
   );
+  const displayedProjects = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.id.toLowerCase().includes(query) ||
+        (p.description && p.description.toLowerCase().includes(query)),
+    );
+  }, [projects, searchQuery]);
   const counts: Record<Health, number> = {
     ok: 0,
     warn: 0,
@@ -250,6 +260,7 @@ export function App() {
               className="project-switch-btn"
               onClick={() => {
                 setSelectedProjectId(null);
+                setSearchQuery("");
                 navigate("projects");
               }}
             >
@@ -348,9 +359,10 @@ export function App() {
         >
           {effectiveView === "projects" ? (
             <ProjectsView
-              projects={projects}
+              projects={displayedProjects}
               onSelectProject={(projectId) => {
                 setSelectedProjectId(projectId);
+                setSearchQuery("");
                 navigate("overview");
               }}
               onOpenCreateModal={() => setIsAddProjectOpen(true)}
@@ -370,6 +382,7 @@ export function App() {
                       className="text-button"
                       onClick={() => {
                         setSelectedProjectId(null);
+                        setSearchQuery("");
                         navigate("projects");
                       }}
                       style={{ fontSize: 13, fontWeight: 500 }}
