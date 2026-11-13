@@ -82,6 +82,9 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
   const [tableState, setTableState] = useState<HostTableState>({ view: "table", sort: null });
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const effectiveView = !selectedProjectId ? "projects" : activeView;
   const mainRef = useRef<HTMLElement>(null);
   const previousView = useRef(activeView);
   useEffect(() => {
@@ -108,9 +111,9 @@ export function App() {
       policies: "Chính Sách & Whitelist",
     };
     const subtitle =
-      viewTitles[activeView] || "Giám Sát Hạ Tầng & Bảo Vệ Tự Động";
+      viewTitles[effectiveView] || "Giám Sát Hạ Tầng & Bảo Vệ Tự Động";
     document.title = `SentinelX — ${subtitle}`;
-  }, [activeView]);
+  }, [effectiveView]);
   const navigate = (view: string) => {
     window.location.hash = view;
     setActiveView(view);
@@ -148,8 +151,6 @@ export function App() {
       )
     );
   });
-  const selectedProject =
-    projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedNode =
     projectNodes.find((node) => node.id === selectedNodeId) ??
     projectNodes[0] ??
@@ -190,7 +191,7 @@ export function App() {
   };
   const selectedEvents = events.filter(matchesEventScope);
   const recentEvents = notableEvents.filter(matchesEventScope);
-  const statusFilter = (activeView === "overview" || activeView === "hosts") && (
+  const statusFilter = (effectiveView === "overview" || effectiveView === "hosts") && (
     <div className="scope-filters">
       <select
         aria-label="Lọc trạng thái"
@@ -241,21 +242,27 @@ export function App() {
         </a>
         <div className="project-context-card">
           <span className="project-context-badge">
-            {selectedProject ? "DỰ ÁN HIỆN TẠI" : "PHẠM VI HẠ TẦNG"}
+            {selectedProject ? "DỰ ÁN HIỆN TẠI" : "NGỮ CẢNH"}
           </span>
           <strong className="project-context-name">
-            {selectedProject ? selectedProject.name : "Toàn bộ hạ tầng"}
+            {selectedProject ? selectedProject.name : "Chưa chọn dự án"}
           </strong>
-          <button
-            type="button"
-            className="project-switch-btn"
-            onClick={() => {
-              setSelectedProjectId(null);
-              navigate("projects");
-            }}
-          >
-            ⇄ Đổi dự án
-          </button>
+          {selectedProject ? (
+            <button
+              type="button"
+              className="project-switch-btn"
+              onClick={() => {
+                setSelectedProjectId(null);
+                navigate("projects");
+              }}
+            >
+              ⇄ Đổi dự án
+            </button>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Chọn 1 dự án để tiếp tục
+            </span>
+          )}
         </div>
         <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
         <nav aria-label="Điều hướng chính">
@@ -268,15 +275,15 @@ export function App() {
           ].map(({ id, label, Icon, count }) => (
             <a
               key={id}
-              className={`nav-item ${activeView === id ? "active" : ""}`}
+              className={`nav-item ${effectiveView === id ? "active" : ""}`}
               href={`#${id}`}
-              aria-current={activeView === id ? "page" : undefined}
+              aria-current={effectiveView === id ? "page" : undefined}
             >
               <Icon size={18} />
               <span>{label}</span>
               {id === "projects" && <small>{count}</small>}
               {id === "hosts" && <small>{projectNodes.length}</small>}
-              {activeView === id && <span className="nav-active-dot" />}
+              {effectiveView === id && <span className="nav-active-dot" />}
             </a>
           ))}
         </nav>
@@ -289,16 +296,16 @@ export function App() {
           ].map(({ id, label, Icon, count, tone }) => (
             <a
               key={id}
-              className={`nav-item ${activeView === id ? "active" : ""}`}
+              className={`nav-item ${effectiveView === id ? "active" : ""}`}
               href={`#${id}`}
-              aria-current={activeView === id ? "page" : undefined}
+              aria-current={effectiveView === id ? "page" : undefined}
             >
               <Icon size={18} />
               <span>{label}</span>
               {count !== undefined && count > 0 && (
                 <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
               )}
-              {activeView === id && <span className="nav-active-dot" />}
+              {effectiveView === id && <span className="nav-active-dot" />}
             </a>
           ))}
         </nav>
@@ -331,10 +338,9 @@ export function App() {
           className="main-viewport"
           id="main-content"
         >
-          {activeView === "projects" ? (
+          {effectiveView === "projects" ? (
             <ProjectsView
               projects={projects}
-              nodes={nodes}
               onSelectProject={(projectId) => {
                 setSelectedProjectId(projectId);
                 navigate("overview");
@@ -345,13 +351,11 @@ export function App() {
             <>
               <div className="page-heading">
                 <div>
-                  <h1>{pageHeadings[activeView]}</h1>
+                  <h1>{pageHeadings[effectiveView]}</h1>
                   <div className="page-heading-context">
                     <p>
                       {projectNodes.length} máy chủ trong phạm vi ·{" "}
-                      {selectedProject
-                        ? selectedProject.name
-                        : `${projects.length} dự án (Toàn cụm)`}
+                      <strong>{selectedProject?.name}</strong>
                     </p>
                     <button
                       type="button"
@@ -367,7 +371,7 @@ export function App() {
                     {statusFilter}
                   </div>
                 </div>
-                {(activeView === "overview" || activeView === "hosts") && (
+                {(effectiveView === "overview" || effectiveView === "hosts") && (
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -390,7 +394,7 @@ export function App() {
             </div>
           )}
 
-          {activeView === "overview" && (
+          {effectiveView === "overview" && (
             <>
               <KPICards nodes={displayedNodes} isLoading={isLoading} />
               <InfrastructureOverview
@@ -425,7 +429,7 @@ export function App() {
               />
             </>
           )}
-          {activeView === "hosts" && (
+          {effectiveView === "hosts" && (
             <NodeMatrix
               projects={projects}
               nodes={displayedNodes}
@@ -437,7 +441,7 @@ export function App() {
               onStateChange={setTableState}
             />
           )}
-          {activeView === "metrics" && (
+          {effectiveView === "metrics" && (
             <div className="telemetry-detail">
               <div className="panel telemetry-host-toolbar">
                 <label htmlFor="telemetry-host">Máy chủ phân tích</label>
@@ -535,7 +539,7 @@ export function App() {
               )}
             </div>
           )}
-          {activeView === "events" && (
+          {effectiveView === "events" && (
             <LiveEventStream
               key={JSON.stringify([
                 selectedProjectId,
@@ -549,19 +553,19 @@ export function App() {
               isDemoMode={isDemoMode}
             />
           )}
-          {activeView === "incidents" && (
+          {effectiveView === "incidents" && (
             <IncidentsView
               selectedProjectId={selectedProjectId}
               isDemoMode={isDemoMode}
             />
           )}
-          {activeView === "defense" && (
+          {effectiveView === "defense" && (
             <DefenseView
               nodes={projectNodes}
               isDemoMode={isDemoMode}
             />
           )}
-          {activeView === "policies" && (
+          {effectiveView === "policies" && (
             <PoliciesView
               selectedProjectId={selectedProjectId}
               projects={projects}

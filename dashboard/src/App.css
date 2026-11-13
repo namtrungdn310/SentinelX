@@ -3170,14 +3170,16 @@
 .project-card {
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     background: var(--bg-panel);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
-    padding: 20px;
+    padding: 22px;
     cursor: pointer;
     transition: border-color 150ms ease, box-shadow 150ms ease, transform 100ms ease;
     text-align: left;
     position: relative;
+    min-height: 175px;
 }
 
 .project-card:hover {
@@ -3192,17 +3194,15 @@
 
 .project-card-header {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 16px;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .project-card-title {
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0 0 4px 0;
+    margin: 0;
 }
 
 .project-card-desc {
@@ -3217,58 +3217,37 @@
     overflow: hidden;
 }
 
-.project-card-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    padding: 12px 14px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    margin-bottom: 16px;
-}
-
-.project-metric-item {
+.project-card-meta {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.project-metric-label {
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 14px;
+    margin-top: 16px;
+    border-top: 1px solid var(--border-subtle);
     font-size: 12px;
     color: var(--text-muted);
-    font-weight: 500;
 }
 
-.project-metric-value {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
+.project-card-id {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+}
+
+.project-card-date {
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .project-card-footer {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    border-top: 1px solid var(--border-subtle);
-    padding-top: 14px;
-    margin-top: auto;
-}
-
-.project-card-hint {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.project-card-all {
-    border-style: dashed;
-    border-color: var(--border-strong);
-    background: var(--bg-panel-header);
-}
-
-.project-card-all:hover {
-    border-color: #000000;
-    border-style: solid;
+    margin-top: 12px;
 }
 
 /* Sidebar Project Context Card */
