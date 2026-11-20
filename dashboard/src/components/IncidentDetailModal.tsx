@@ -6,6 +6,7 @@ import {
   Copy,
   Cpu,
   Globe,
+  HardDrive,
   ShieldAlert,
   X,
 } from "lucide-react";
@@ -346,10 +347,19 @@ export function IncidentDetailModal({
                             </div>
                           ) : (
                             <div className="event-proc">
-                              <Activity size={14} />
+                              {String(ev.details?.metric_name || "").includes("disk") ? (
+                                <HardDrive size={14} />
+                              ) : (
+                                <Activity size={14} />
+                              )}
                               <span>
                                 Mức đo {String(ev.details?.metric_name || "").includes("memory") ? "RAM" : String(ev.details?.metric_name || "").includes("disk") ? "Đĩa" : "CPU"}:{" "}
                                 <strong className="font-mono">{String(ev.details?.current_value ?? ev.details?.cpu_percent)}%</strong>
+                                {Boolean(ev.details?.mount_point) && (
+                                  <span className="text-muted font-mono" style={{ marginLeft: 6 }}>
+                                    (phân vùng {String(ev.details?.mount_point)})
+                                  </span>
+                                )}
                               </span>
                             </div>
                           )}
