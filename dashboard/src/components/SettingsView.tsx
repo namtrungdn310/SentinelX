@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Server,
   ShieldCheck,
-  Sliders,
   Zap,
 } from "lucide-react";
 import type {
@@ -171,30 +170,17 @@ export function SettingsView({
 
   return (
     <div className="settings-simple-container">
-      {/* 1. Header & Server Selector Bar */}
+      {/* 1. Server Selector Bar */}
       <div className="panel settings-simple-header">
-        <div className="header-info">
-          <div className="header-icon-box">
-            <Sliders size={20} />
-          </div>
-          <div>
-            <h2 className="header-title">Thiết lập cấu hình thu thập &amp; phát hiện</h2>
-            <p className="header-desc">
-              Xem và điều chỉnh chu kỳ lấy mẫu, cửa sổ phát hiện sự cố cho từng máy chủ.
-            </p>
-          </div>
-        </div>
-
-        {/* Server Picker */}
         <div className="server-select-box">
           <label htmlFor="settings-server-select" className="server-select-label">
-            <Server size={14} />
+            <Server size={15} />
             <span>Chọn máy chủ:</span>
           </label>
           <select
             id="settings-server-select"
             className="server-select-input font-mono"
-            value={selectedNode?.id || ""}
+            value={effectiveNodeId}
             onChange={(e) => setSelectedNodeId(e.target.value)}
           >
             {availableNodes.map((n) => (
