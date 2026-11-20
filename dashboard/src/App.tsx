@@ -14,7 +14,9 @@ import {
 import { InfrastructureOverview } from "./components/InfrastructureOverview";
 import {
   formatBytes,
+  formatDiskUsage,
   formatPercent,
+  getNodeHardware,
   healthLabels,
   nodeHealth,
   nodeHealthLabel,
@@ -597,7 +599,13 @@ export function App() {
                     <strong>
                       {formatPercent(selectedNode.latestDisk)}
                     </strong>
-                    {!validMetric(selectedNode.latestDisk) && <small>Không có dữ liệu ổ đĩa</small>}
+                    {validMetric(selectedNode.latestDisk) ? (
+                      <small>
+                        ({formatDiskUsage(selectedNode.latestDisk, getNodeHardware(selectedNode).totalDiskBytes)})
+                      </small>
+                    ) : (
+                      <small>Không có dữ liệu ổ đĩa</small>
+                    )}
                   </article>
                   <article className="panel">
                     <span>RX giữa hai lần đo</span>
