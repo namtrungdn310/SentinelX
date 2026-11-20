@@ -255,23 +255,11 @@ export function SettingsView({
               <div className="spec-tile">
                 <div className="spec-tile-head">
                   <Activity size={13} />
-                  <span>Cửa sổ gom gói tin</span>
+                  <span>Cửa sổ gói tin mạng</span>
                 </div>
                 <strong className="spec-tile-val font-mono">
-                  {activePreset.network_window_seconds}s
+                  {activePreset.network_window_seconds}s (sliding: {activePreset.network_step_seconds}s)
                 </strong>
-                <small>Phân tích Port Scan &amp; SYN Flood</small>
-              </div>
-
-              <div className="spec-tile">
-                <div className="spec-tile-head">
-                  <Clock size={13} />
-                  <span>Bước trượt chốt sổ</span>
-                </div>
-                <strong className="spec-tile-val font-mono">
-                  {activePreset.network_step_seconds}s / lần
-                </strong>
-                <small>Chồng lấp 50% chống lọt đợt quét</small>
               </div>
             </div>
           </div>
