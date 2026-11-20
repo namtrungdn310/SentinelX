@@ -212,55 +212,40 @@ export function SettingsView({
         </div>
       )}
 
-      {/* 2. Current Active Configuration Card */}
+      {/* 2. Current Active Configuration Specs */}
       {selectedNode && (
-        <div className="panel current-config-card">
-          <div className="current-config-top">
-            <div className="node-identity">
-              <span className="eyebrow">CẤU HÌNH HIỆN TẠI CỦA MÁY CHỦ</span>
-              <div className="node-name-row">
-                <strong className="node-name">{selectedNode.hostname}</strong>
-                <span className="font-mono node-ip">({selectedNode.ip_address})</span>
-                <span className={`status-badge ${activePreset.badgeTone}`}>
-                  <Check size={12} /> Đang chạy: {activePreset.name}
-                </span>
-              </div>
+        <div className="current-specs-grid">
+          <div className="spec-tile">
+            <div className="spec-tile-head">
+              <Clock size={14} />
+              <span>Chu kỳ lấy mẫu tài nguyên</span>
             </div>
+            <strong className="spec-tile-val font-mono">
+              {activePreset.telemetry_interval_seconds.toFixed(1)}s / lần
+            </strong>
+            <small>Agent gọi psutil đo CPU, RAM, Disk</small>
           </div>
 
-          <div className="current-specs-grid">
-            <div className="spec-tile">
-              <div className="spec-tile-head">
-                <Clock size={14} />
-                <span>Chu kỳ lấy mẫu tài nguyên</span>
-              </div>
-              <strong className="spec-tile-val font-mono">
-                {activePreset.telemetry_interval_seconds.toFixed(1)}s / lần
-              </strong>
-              <small>Agent gọi psutil đo CPU, RAM, Disk</small>
+          <div className="spec-tile">
+            <div className="spec-tile-head">
+              <Cpu size={14} />
+              <span>Thời gian kiểm chứng quá tải</span>
             </div>
+            <strong className="spec-tile-val font-mono">
+              {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
+            </strong>
+            <small>Loại trừ các đợt tăng tải tức thời</small>
+          </div>
 
-            <div className="spec-tile">
-              <div className="spec-tile-head">
-                <Cpu size={14} />
-                <span>Thời gian kiểm chứng quá tải</span>
-              </div>
-              <strong className="spec-tile-val font-mono">
-                {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
-              </strong>
-              <small>Loại trừ các đợt tăng tải tức thời</small>
+          <div className="spec-tile">
+            <div className="spec-tile-head">
+              <Globe size={14} />
+              <span>Cửa sổ gói tin mạng</span>
             </div>
-
-            <div className="spec-tile">
-              <div className="spec-tile-head">
-                <Globe size={14} />
-                <span>Cửa sổ gói tin mạng</span>
-              </div>
-              <strong className="spec-tile-val font-mono">
-                {activePreset.network_window_seconds}s (trượt {activePreset.network_step_seconds}s)
-              </strong>
-              <small>Trích xuất lưu lượng &amp; phát hiện Port Scan</small>
-            </div>
+            <strong className="spec-tile-val font-mono">
+              {activePreset.network_window_seconds}s (trượt {activePreset.network_step_seconds}s)
+            </strong>
+            <small>Trích xuất lưu lượng &amp; phát hiện Port Scan</small>
           </div>
         </div>
       )}
