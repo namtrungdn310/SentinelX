@@ -4,7 +4,6 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.agents import (
     AgentEnrollRequest,
@@ -15,34 +14,14 @@ from sentinelx_common.contracts.agents import (
     HeartbeatResponse,
 )
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
-from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.modules.defense.router import get_defense_service
 from sentinelx_controller.modules.defense.service import DefenseService
-from sentinelx_controller.modules.nodes.repository import (
-    AgentEnrollmentRepository,
-    NodeRepository,
-)
+from sentinelx_controller.modules.nodes.dependencies import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
-from sentinelx_controller.modules.projects.router import get_project_service
-from sentinelx_controller.modules.projects.service import ProjectService
 from sentinelx_controller.modules.recovery.router import get_recovery_service
 from sentinelx_controller.modules.recovery.service import RecoveryService
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
-
-
-def get_node_service(
-    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
-    project_service: Annotated[ProjectService, Depends(get_project_service)],
-) -> NodeService:
-    """Dependency providing NodeService."""
-    node_repo = NodeRepository(session)
-    enrollment_repo = AgentEnrollmentRepository(session)
-    return NodeService(
-        node_repo=node_repo,
-        project_service=project_service,
-        enrollment_repo=enrollment_repo,
-    )
 
 
 @router.post(
@@ -84,13 +63,20 @@ async def process_heartbeat(
     recovery_service: Annotated[RecoveryService, Depends(get_recovery_service)],
 ) -> HeartbeatResponse:
     try:
+        # Authenticate before scanning recovery state or claiming commands.
+        response = await service.process_heartbeat(request)
         node_uuid = uuid.UUID(request.node_id)
         await recovery_service.scan_and_revert_expired_actions(node_uuid)
-        commands = await defense_service.get_pending_commands_for_node(node_uuid)
+        commands = (
+            await defense_service.get_pending_commands_for_node(
+                node_uuid, request.supported_actions
+            )
+            if request.command_protocol_version == 2
+            else []
+        )
     except ValueError:
         commands = []
-    return await service.process_heartbeat(request, commands=commands)
-
+    return response.model_copy(update={"commands": commands})
 
 
 @router.get(
@@ -154,4 +140,3 @@ async def revoke_enrollment_token(
     service: Annotated[NodeService, Depends(get_node_service)],
 ) -> EnrollmentTokenResponse:
     return await service.revoke_enrollment_token(node_id, token_id)
-

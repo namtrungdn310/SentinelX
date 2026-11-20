@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.policy import (
@@ -13,6 +13,7 @@ from sentinelx_common.contracts.policy import (
     IPWhitelistCreateRequest,
     IPWhitelistListResponse,
     IPWhitelistResponse,
+    PolicyDecisionResponse,
     PolicyEvaluationRequest,
     PolicyEvaluationResult,
 )
@@ -28,15 +29,30 @@ router = APIRouter(tags=["policy"])
 
 
 def get_policy_service(
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     engine: Annotated[PolicyEngine, Depends(get_policy_engine)],
 ) -> PolicyService:
     """Dependency injection for PolicyService."""
     repo = PolicyRepository(session)
-    return PolicyService(repository=repo, engine=engine)
+    return PolicyService(
+        repository=repo,
+        engine=engine,
+        protected_cidrs=request.app.state.settings.safety.protected_cidrs,
+    )
 
 
 # ─── DEFENSE POLICIES ───
+
+
+@router.get("/policy-decisions", response_model=list[PolicyDecisionResponse])
+async def list_decisions(
+    service: Annotated[PolicyService, Depends(get_policy_service)],
+    node_id: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[PolicyDecisionResponse]:
+    return await service.list_decisions(node_id, limit, offset)
 
 
 @router.post(

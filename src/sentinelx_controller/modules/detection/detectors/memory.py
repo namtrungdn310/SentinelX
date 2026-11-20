@@ -75,7 +75,16 @@ class MemoryExhaustionDetector(BaseDetector):
                 window_duration_seconds=duration_seconds,
                 consecutive_samples=self._consecutive_samples,
                 extra_context={
-                    "window_memory_values": [round(s.memory_percent, 2) for s in recent_samples]
+                    "window_memory_values": [round(s.memory_percent, 2) for s in recent_samples],
+                    "process_name": latest_sample.top_process_name,
+                    "pid": latest_sample.top_process_pid,
+                    "process_percent": latest_sample.top_process_memory_percent
+                    if latest_sample.top_process_memory_percent is not None
+                    else latest_sample.top_process_cpu_percent,
+                    "process_memory_percent": latest_sample.top_process_memory_percent,
+                    "process_cpu_percent": latest_sample.top_process_cpu_percent,
+                    "process_count": latest_sample.top_process_count,
+                    "cgroup": latest_sample.top_process_cgroup,
                 },
             ),
             detected_at=latest_sample.observed_at or datetime.now(UTC),

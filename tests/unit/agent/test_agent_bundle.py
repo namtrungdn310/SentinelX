@@ -119,3 +119,28 @@ def test_build_contains_only_agent_common_and_locked_runtime(
     assert "--frozen" in commands[0] and "--no-dev" in commands[0]
     for dependency in ("fastapi", "uvicorn", "sqlalchemy", "asyncpg", "alembic"):
         assert dependency in commands[0]
+
+
+def test_defense_permission_profile_only_changes_its_own_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    layout = manager.Layout("sentinelx-agent-qa", root=tmp_path)
+
+    def write(path: Path, content: str, mode: int) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    monkeypatch.setattr(manager, "atomic_write", write)
+    monkeypatch.setattr(manager.shutil, "which", lambda name: "/usr/sbin/nft")
+    manager.defense_permissions(layout, True)
+    directory = layout.unit.with_name(layout.name + ".service.d")
+    override = directory / "60-sentinelx-defense.conf"
+    assert "CAP_NET_ADMIN" in override.read_text() and "AF_NETLINK" in override.read_text()
+    operator = directory / "90-operator.conf"
+    operator.write_text("# retained", encoding="utf-8")
+    manager.defense_permissions(layout, False)
+    assert not override.exists() and operator.read_text() == "# retained"
+    manager.defense_permissions(layout, True)
+    override.write_text("# customized", encoding="utf-8")
+    with pytest.raises(ValueError, match="customized"):
+        manager.defense_permissions(layout, False)

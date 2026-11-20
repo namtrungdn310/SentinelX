@@ -107,7 +107,7 @@ async def test_m5_end_to_end_telemetry_detection_incident_policy_flow(
             json={
                 "name": "Auto Restart On CPU Spike",
                 "event_type": "cpu_threshold_detector",
-                "action_type": "RESTART_SERVICE",
+                "action_type": "ALERT_ONLY",
                 "target_params": {"service_name": "sentinelx-app"},
                 "cooldown_seconds": 300,
                 "block_duration_seconds": 1800,

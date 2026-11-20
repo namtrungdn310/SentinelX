@@ -22,7 +22,6 @@ from sentinelx_common.contracts.incidents import (
 from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
-from sentinelx_controller.modules.detection.repository import DetectionRepository
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.models import IncidentModel
 from sentinelx_controller.modules.incidents.repository import IncidentRepository
@@ -36,6 +35,15 @@ SEVERITY_WEIGHT = {
     DetectionSeverity.CRITICAL.value: 4,
 }
 
+DETECTOR_TITLES: dict[str, str] = {
+    "syn_flood_detector": "Tấn công SYN Flood",
+    "port_scan_detector": "Dò quét cổng",
+    "traffic_spike_detector": "Tấn công UDP Flood",
+    "cpu_threshold_detector": "Quá tải CPU",
+    "memory_exhaustion_detector": "Cạn kiệt RAM",
+    "disk_saturation_detector": "Tràn dung lượng ổ đĩa",
+}
+
 
 class IncidentService:
     """Service orchestrating Incident correlation, lifecycle, and queries."""
@@ -43,14 +51,12 @@ class IncidentService:
     def __init__(
         self,
         repository: IncidentRepository,
-        detection_repo: DetectionRepository,
         detection_service: DetectionService | None = None,
         realtime_hub: RealtimeHub | None = None,
         publisher: CommittedPublisher | None = None,
         correlation_window_minutes: int = 10,
     ) -> None:
         self._repo = repository
-        self._detection_repo = detection_repo
         self._detection_service = detection_service
         self._realtime_hub = realtime_hub
         self._publisher = publisher
@@ -61,7 +67,7 @@ class IncidentService:
         project_id: uuid.UUID,
         node_id: uuid.UUID,
         events: list[DetectionEventContract],
-    ) -> list[tuple[IncidentModel, list[DetectionEventContract]]]:
+    ) -> list[tuple[IncidentResponse, list[DetectionEventContract]]]:
         """Gom nhóm các detection events vào incident hiện có hoặc tạo mới."""
         if not events:
             return []
@@ -70,27 +76,62 @@ class IncidentService:
         since = now - self._correlation_window
 
         # 1. Tìm incident đang hoạt động gần nhất của project
-        active_incident = await self._repo.find_active_incident(project_id, since)
+        await self._repo.lock_node(node_id)
+        correlation_key = (
+            "network:" + events[0].attacker_ip if events[0].attacker_ip else "resource"
+        )
+        # Split different attacker contexts rather than grouping every project event together.
+        groups: dict[str, list[DetectionEventContract]] = {}
+        for event in events:
+            key = "network:" + event.attacker_ip if event.attacker_ip else "resource"
+            groups.setdefault(key, []).append(event)
+        if len(groups) > 1:
+            combined: list[tuple[IncidentResponse, list[DetectionEventContract]]] = []
+            for group in groups.values():
+                combined.extend(await self.correlate_events(project_id, node_id, group))
+            return combined
+        active_incident = await self._repo.find_active_incident(
+            project_id,
+            since,
+            node_id=node_id,
+            correlation_key=correlation_key,
+        )
         is_new = False
 
         if active_incident is None:
             is_new = True
             first_event = events[0]
+            if first_event.detector_name == "traffic_spike_detector":
+                attack_type = getattr(first_event.details, "attack_type", None)
+                if not attack_type and isinstance(first_event.details, dict):
+                    attack_type = first_event.details.get("attack_type")
+                if attack_type == "TRAFFIC_SPIKE":
+                    title = "Đột biến lưu lượng mạng"
+                else:
+                    title = "Tấn công UDP Flood"
+            else:
+                title = DETECTOR_TITLES.get(
+                    first_event.detector_name,
+                    f"Sự cố {first_event.detector_name}",
+                )
             active_incident = IncidentModel(
                 project_id=project_id,
-                title=f"Sự cố an ninh: {first_event.detector_name} trên node {str(node_id)[:8]}",
+                title=title,
                 status=IncidentStatus.DETECTED.value,
-                severity=first_event.severity.value,
+                severity=max(
+                    events, key=lambda e: SEVERITY_WEIGHT[e.severity.value]
+                ).severity.value,
                 started_at=first_event.detected_at,
                 summary=f"Khởi phát bởi {first_event.detector_name}",
+                node_id=node_id,
+                correlation_key=correlation_key,
+                last_event_at=max(e.detected_at for e in events),
             )
             await self._repo.create(active_incident)
         else:
             # Kiểm tra leo thang mức độ nghiêm trọng (Escalation)
             current_weight = SEVERITY_WEIGHT.get(active_incident.severity, 0)
-            highest_event_weight = max(
-                SEVERITY_WEIGHT.get(e.severity.value, 0) for e in events
-            )
+            highest_event_weight = max(SEVERITY_WEIGHT.get(e.severity.value, 0) for e in events)
             if highest_event_weight > current_weight:
                 for k, v in SEVERITY_WEIGHT.items():
                     if v == highest_event_weight:
@@ -101,6 +142,7 @@ class IncidentService:
                 f"Đã ghi nhận thêm {len(events)} sự kiện bất thường lúc {time_str}"
             )
             await self._repo.save(active_incident)
+        active_incident.last_event_at = max(e.detected_at for e in events)
 
         # 2. Cập nhật incident_id cho từng event và lưu vào DB
         event_uuids: list[uuid.UUID] = []
@@ -108,7 +150,8 @@ class IncidentService:
             ev.incident_id = str(active_incident.id)
             event_uuids.append(uuid.UUID(ev.id))
 
-        await self._detection_repo.link_events_to_incident(event_uuids, active_incident.id)
+        if self._detection_service is not None:
+            await self._detection_service.link_to_incident(event_uuids, active_incident.id)
 
         # 3. Phát WebSocket thông báo
         event_type = (
@@ -143,7 +186,59 @@ class IncidentService:
             is_new,
         )
 
-        return [(active_incident, events)]
+        return [
+            (
+                IncidentResponse(
+                    id=str(active_incident.id),
+                    project_id=str(active_incident.project_id),
+                    title=active_incident.title,
+                    status=IncidentStatus(active_incident.status),
+                    severity=DetectionSeverity(active_incident.severity),
+                    started_at=active_incident.started_at,
+                    resolved_at=active_incident.resolved_at,
+                    summary=active_incident.summary,
+                    event_count=len(events),
+                ),
+                events,
+            )
+        ]
+
+    async def mark_mitigating(self, incident_id: uuid.UUID) -> None:
+        incident = await self._repo.get_by_id(incident_id)
+        if incident is not None and incident.status == "DETECTED":
+            incident.status = "MITIGATING"
+            await self._repo.save(incident)
+
+    async def resolve_if_quiet(self, incident_id: uuid.UUID, quiet_after: datetime) -> bool:
+        incident = await self._repo.get_by_id(incident_id)
+        if incident is None or incident.status not in {"DETECTED", "MITIGATING"}:
+            return True
+        if self._detection_service is None or not await self._detection_service.observed_quiet(
+            incident_id,
+            quiet_after,
+            network=bool(
+                incident.correlation_key and incident.correlation_key.startswith("network:")
+            ),
+        ):
+            return False
+        await self.update_incident(
+            str(incident_id), IncidentUpdateRequest(status=IncidentStatus.RESOLVED)
+        )
+        return True
+
+    async def validate_action_context(self, incident_id: uuid.UUID, node_id: uuid.UUID) -> None:
+        incident = await self._repo.get_by_id(incident_id)
+        if incident is None:
+            raise HTTPException(404, "Incident not found")
+        if incident.node_id != node_id:
+            raise HTTPException(409, "Incident is not correlated to this node")
+        if incident.status not in {"DETECTED", "MITIGATING"}:
+            raise HTTPException(409, "Incident is already closed")
+
+    async def _event_count(self, incident_id: uuid.UUID) -> int:
+        if self._detection_service is None:
+            return 0
+        return (await self._detection_service.incident_counts([incident_id])).get(incident_id, 0)
 
     async def list_incidents(
         self,
@@ -177,12 +272,18 @@ class IncidentService:
         )
 
         items: list[IncidentResponse] = []
+        counts = (
+            await self._detection_service.incident_counts([m.id for m in models])
+            if self._detection_service is not None
+            else {}
+        )
         for m in models:
-            count = await self._repo.count_events_for_incident(m.id)
+            count = counts.get(m.id, 0)
             items.append(
                 IncidentResponse(
                     id=str(m.id),
                     project_id=str(m.project_id),
+                    node_id=str(m.node_id) if m.node_id else None,
                     title=m.title,
                     status=IncidentStatus(m.status),
                     severity=DetectionSeverity(m.severity),
@@ -212,7 +313,7 @@ class IncidentService:
                 detail="Incident not found",
             )
 
-        count = await self._repo.count_events_for_incident(model.id)
+        count = await self._event_count(model.id)
         events_list: list[DetectionEventResponse] = []
         if self._detection_service is not None:
             events_resp = await self._detection_service.list_events(
@@ -224,6 +325,7 @@ class IncidentService:
         return IncidentDetailResponse(
             id=str(model.id),
             project_id=str(model.project_id),
+            node_id=str(model.node_id) if model.node_id else None,
             title=model.title,
             status=IncidentStatus(model.status),
             severity=DetectionSeverity(model.severity),
@@ -286,10 +388,11 @@ class IncidentService:
         elif self._realtime_hub is not None:
             await self._realtime_hub.broadcast(msg)
 
-        count = await self._repo.count_events_for_incident(model.id)
+        count = await self._event_count(model.id)
         return IncidentResponse(
             id=str(model.id),
             project_id=str(model.project_id),
+            node_id=str(model.node_id) if model.node_id else None,
             title=model.title,
             status=IncidentStatus(model.status),
             severity=DetectionSeverity(model.severity),

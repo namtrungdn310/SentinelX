@@ -3,7 +3,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_NO_CACHE=1
 ARG INSTALL_NETWORK_CAPTURE=0
 RUN if [ "$INSTALL_NETWORK_CAPTURE" = "1" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends libpcap0.8 && \
+      apt-get update && apt-get install -y --no-install-recommends libpcap0.8 nftables iproute2 && \
       rm -rf /var/lib/apt/lists/*; \
     fi
 RUN pip install --no-cache-dir uv

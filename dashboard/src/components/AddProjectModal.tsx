@@ -63,38 +63,40 @@ export function AddProjectModal({
       </div>
 
       <form onSubmit={handleSubmit} className="project-form">
-        {error && (
-          <div className="feedback-banner feedback-error" role="alert">
-            <span>{error}</span>
+        <div className="modal-body">
+          {error && (
+            <div className="feedback-banner feedback-error" role="alert">
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label htmlFor={`${id}-name`}>Tên dự án *</label>
+            <input
+              id={`${id}-name`}
+              type="text"
+              className="form-input"
+              placeholder="VD: Payment Service, Staging Cluster..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={loading}
+              data-autofocus
+              required
+            />
           </div>
-        )}
 
-        <div className="form-group">
-          <label htmlFor={`${id}-name`}>Tên dự án *</label>
-          <input
-            id={`${id}-name`}
-            type="text"
-            className="form-input"
-            placeholder="VD: Payment Service, Staging Cluster..."
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={loading}
-            data-autofocus
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor={`${id}-desc`}>Mô tả dự án</label>
-          <textarea
-            id={`${id}-desc`}
-            className="form-input"
-            rows={3}
-            placeholder="Mô tả mục đích và phạm vi hạ tầng của dự án..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={loading}
-          />
+          <div className="form-group">
+            <label htmlFor={`${id}-desc`}>Mô tả</label>
+            <textarea
+              id={`${id}-desc`}
+              className="form-input"
+              rows={3}
+              placeholder="Mô tả ngắn gọn về dự án..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={loading}
+            />
+          </div>
         </div>
 
         <div className="modal-actions">

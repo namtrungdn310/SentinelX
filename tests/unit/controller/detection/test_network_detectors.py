@@ -30,6 +30,7 @@ def make_window(
 
 # ─── 1. SYN FLOOD DETECTOR TESTS ───
 
+
 def test_syn_flood_detector_normal_traffic_no_alert() -> None:
     detector = SynFloodDetector(min_syn=50, syn_ack_ratio=3.0)
     node_id = uuid.uuid4()
@@ -97,6 +98,7 @@ def test_syn_flood_detector_triggers_critical_on_no_ack_or_high_volume() -> None
 
 # ─── 2. PORT SCAN DETECTOR TESTS ───
 
+
 def test_port_scan_detector_normal_ports_no_alert() -> None:
     detector = PortScanDetector(port_threshold=15)
     node_id = uuid.uuid4()
@@ -159,6 +161,7 @@ def test_port_scan_detector_triggers_high_on_30_ports_or_truncated() -> None:
 
 
 # ─── 3. TRAFFIC SPIKE DETECTOR TESTS ───
+
 
 def test_traffic_spike_detector_normal_no_alert() -> None:
     detector = TrafficSpikeDetector(
@@ -225,6 +228,7 @@ def test_traffic_spike_detector_triggers_critical_on_high_volumetric_packets() -
 
 # ─── 4. NETWORK ENGINE EVALUATE STATE & COOLDOWN TESTS ───
 
+
 def test_network_engine_cooldown_and_multi_attacker_isolation() -> None:
     engine = DetectionEngine(cooldown_seconds=60)
     node_id = uuid.uuid4()
@@ -242,7 +246,7 @@ def test_network_engine_cooldown_and_multi_attacker_isolation() -> None:
         destination_ports=[80],
     )
     win1 = make_window([feature_a], start=now)
-    events1, state1 = engine.evaluate_network_state(node_id, [win1], {})
+    events1, state1 = engine.evaluate_network_state(node_id, [win1], {}, now=win1.window_end)
 
     assert len(events1) == 1
     assert events1[0].attacker_ip == "203.0.113.10"
@@ -273,7 +277,7 @@ def test_network_engine_cooldown_and_multi_attacker_isolation() -> None:
         destination_ports=[443],
     )
     win2 = make_window([feature_a2, feature_b], start=now2)
-    events2, state2 = engine.evaluate_network_state(node_id, [win2], state1)
+    events2, state2 = engine.evaluate_network_state(node_id, [win2], state1, now=win2.window_end)
 
     # Attacker A should be suppressed by cooldown, but Attacker B MUST be alerted!
     assert len(events2) == 1
@@ -298,7 +302,7 @@ def test_network_engine_escalation_bypasses_cooldown() -> None:
         destination_ports=[80],
     )
     win1 = make_window([feature_high], start=now)
-    events1, state1 = engine.evaluate_network_state(node_id, [win1], {})
+    events1, state1 = engine.evaluate_network_state(node_id, [win1], {}, now=win1.window_end)
     assert len(events1) == 1
     assert events1[0].severity == DetectionSeverity.HIGH
 
@@ -315,7 +319,7 @@ def test_network_engine_escalation_bypasses_cooldown() -> None:
         destination_ports=[80],
     )
     win2 = make_window([feature_crit], start=now2)
-    events2, state2 = engine.evaluate_network_state(node_id, [win2], state1)
+    events2, state2 = engine.evaluate_network_state(node_id, [win2], state1, now=win2.window_end)
 
     # Escalation from HIGH to CRITICAL must bypass cooldown!
     assert len(events2) == 1

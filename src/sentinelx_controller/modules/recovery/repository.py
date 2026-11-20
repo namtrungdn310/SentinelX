@@ -15,6 +15,43 @@ class RecoveryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def pending(self, node_id: uuid.UUID | None) -> Sequence[RecoveryActionModel]:
+        query = select(RecoveryActionModel).where(RecoveryActionModel.status == "PENDING")
+        if node_id is not None:
+            query = query.where(RecoveryActionModel.node_id == node_id)
+        return (
+            (
+                await self._session.execute(
+                    query.limit(100).execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    async def completed_for_resolution(
+        self, node_id: uuid.UUID | None
+    ) -> Sequence[RecoveryActionModel]:
+        query = (
+            select(RecoveryActionModel)
+            .where(
+                RecoveryActionModel.status == "SUCCESS",
+                RecoveryActionModel.resolution_done.is_(False),
+            )
+            .order_by(RecoveryActionModel.executed_at)
+        )
+        if node_id is not None:
+            query = query.where(RecoveryActionModel.node_id == node_id)
+        return (
+            (
+                await self._session.execute(
+                    query.limit(100).execution_options(populate_existing=True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     async def create_recovery(self, recovery: RecoveryActionModel) -> RecoveryActionModel:
         """Persist a new recovery action record."""
         self._session.add(recovery)

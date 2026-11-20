@@ -1,28 +1,12 @@
-# SentinelX Agent Daemon Dockerfile
-FROM python:3.12-slim
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
-
+# Container lab Agent: non-root, separate identity, shares only its backend network namespace.
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app/src
 WORKDIR /app
-
-# Install Linux networking and firewall utilities required by PBL4
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    iptables \
-    nftables \
-    iproute2 \
-    tcpdump \
-    libpcap0.8 \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY pyproject.toml README.md /app/
-COPY src/ /app/src/
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
-
-COPY configs/ /app/configs/
-
-CMD ["python", "-m", "sentinelx_agent.main"]
+RUN apt-get update && apt-get install -y --no-install-recommends nftables iproute2 libpcap0.8 util-linux && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ src/
+COPY deploy/docker/bootstrap_agent.py /app/bootstrap_agent.py
+RUN uv sync --frozen --no-dev && mkdir -p /var/lib/sentinelx-agent && chown 10001:10001 /var/lib/sentinelx-agent
+ENV SENTINELX_IDENTITY_PATH=/var/lib/sentinelx-agent/identity.json
+ENTRYPOINT ["setpriv", "--reuid=10001", "--regid=10001", "--clear-groups", "--inh-caps=+net_raw,+net_admin", "--ambient-caps=+net_raw,+net_admin", "--bounding-set=-all,+net_raw,+net_admin", "/app/.venv/bin/python", "/app/bootstrap_agent.py"]

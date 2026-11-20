@@ -32,16 +32,19 @@ class SynFloodDetector(BaseNetworkDetector):
         for feature in window.features:
             if feature.protocol != "tcp":
                 continue
+            if feature.direction == "outbound":
+                continue
+            scale = 10 / (window.window_end - window.window_start).total_seconds()
+            normalized_syn = feature.syn_count * scale
 
             ack_divisor = max(feature.ack_count, 1)
             ratio = feature.syn_count / ack_divisor
             is_unbalanced = (feature.ack_count == 0) or (ratio >= self.syn_ack_ratio)
 
-            if feature.syn_count >= self.min_syn and is_unbalanced:
+            if normalized_syn >= self.min_syn and is_unbalanced:
                 severity = (
                     DetectionSeverity.CRITICAL
-                    if feature.syn_count >= 200
-                    or (feature.syn_count >= 100 and feature.ack_count == 0)
+                    if normalized_syn >= 200 or (normalized_syn >= 100 and feature.ack_count == 0)
                     else DetectionSeverity.HIGH
                 )
                 confidence = 0.98 if feature.ack_count == 0 else min(0.95, 0.85 + (ratio * 0.01))
@@ -66,6 +69,8 @@ class SynFloodDetector(BaseNetworkDetector):
                         extra_context={
                             "interface": window.interface,
                             "window_id": str(window.window_id),
+                            "direction": feature.direction,
+                            "syn_per_second": feature.syn_count * scale / 10,
                         },
                     ),
                     detected_at=window.window_end,

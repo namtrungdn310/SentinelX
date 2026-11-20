@@ -1,0 +1,54 @@
+# Disposable PostgreSQL and separate network namespaces. Never mount the host firewall.
+services:
+  postgres:
+    extends:
+      file: ../m123/compose.acceptance.yaml
+      service: postgres
+  controller:
+    extends:
+      file: ../m123/compose.acceptance.yaml
+      service: controller
+  peer:
+    build:
+      context: ../..
+      dockerfile: deploy/m1/Dockerfile
+      args:
+        INSTALL_NETWORK_CAPTURE: "1"
+    cap_drop: [ALL]
+    user: "10001:10001"
+    environment:
+      CORE_PROBE_TARGET: http://agent-check:9088/
+    entrypoint: [/app/.venv/bin/python, -m, tests.core_peer]
+  agent-check:
+    extends:
+      file: ../m123/compose.acceptance.yaml
+      service: agent-check
+    environment:
+      SENTINELX_CORE_CONTROLLER_URL: http://controller:8000
+      SENTINELX_CORE_PEER_URL: http://observer:8089
+      SENTINELX_CORE_POSTGRES_URL: postgresql+asyncpg://m1_test:m1_isolated_lab_only@postgres:5432/m1_test
+    depends_on:
+      peer:
+        condition: service_started
+      observer:
+        condition: service_started
+    cap_drop: [ALL]
+    cap_add: [NET_RAW, NET_ADMIN, SETUID, SETGID, SETPCAP]
+    entrypoint:
+      - setpriv
+      - --reuid=10001
+      - --regid=10001
+      - --clear-groups
+      - --inh-caps=+net_raw,+net_admin
+      - --ambient-caps=+net_raw,+net_admin
+      - --bounding-set=-all,+net_raw,+net_admin
+      - /app/.venv/bin/python
+      - -m
+      - pytest
+    command: [tests/e2e/test_core_live.py, tests/e2e/test_core_postgres.py, -v, -p, "no:cacheprovider", "--basetemp=/tmp/sentinelx-core-qa"]
+  observer:
+    extends:
+      service: peer
+    environment:
+      CORE_PROBE_TARGET: http://peer:8089/probe
+      CORE_PROBE_RELAY: "1"

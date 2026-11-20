@@ -103,8 +103,8 @@ export function useInfrastructure() {
         setSecurityToast({
           id: `toast-def-${Date.now()}`,
           type: "defense",
-          title: "Tường lửa nftables đã kích hoạt",
-          message: `Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)`,
+          title: "Tường lửa đã kích hoạt",
+          message: "Đã khóa địa chỉ IP nguồn tấn công",
           attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
           targetView: "defense",
         });
@@ -235,12 +235,20 @@ export function useInfrastructure() {
     } catch {
       if (ticket === requestId.current && !quiet)
         setConnectionError(
-          "Chưa thể kết nối Controller. Kiểm tra địa chỉ API và trạng thái dịch vụ, rồi thử lại.",
+          "Chưa thể kết nối Controller tại http://127.0.0.1:8000. Kiểm tra dịch vụ backend rồi thử lại.",
         );
     } finally {
       if (ticket === requestId.current) setIsRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    // Tự động thử kết nối Controller ngay khi tải trang
+    const timer = window.setTimeout(() => {
+      void loadData(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
 
   useEffect(() => {
     if (!isConnected || snapshot.isDemoMode) return;
@@ -357,11 +365,12 @@ export function useInfrastructure() {
                 timestamp: now,
                 data: {
                   id: `inc-demo-${Date.now()}`,
-                  title: "SYN Flood vượt ngưỡng cảnh báo (750 pps)",
+                  title: "Tấn công SYN Flood",
                   severity: "CRITICAL",
                   attacker_ip: "198.51.100.19",
                   node_id: eventNode.id,
-                  summary: "Phát hiện bão gói tin TCP SYN tấn công cổng web 443",
+                  summary:
+                    "Phát hiện 750 gói tin TCP SYN với tỷ lệ bất đối xứng SYN/ACK vượt ngưỡng cảnh báo (>= 3.0) tấn công cổng web 443.",
                 },
               }
             : {
@@ -380,7 +389,6 @@ export function useInfrastructure() {
           newNotable = [secEvent, ...newNotable].slice(0, 20);
 
           if (isAttack) {
-            setActiveIncidentsCount((c) => c + 1);
             setSecurityToast({
               id: `toast-demo-${Date.now()}`,
               type: "incident",
@@ -391,12 +399,11 @@ export function useInfrastructure() {
               targetView: "incidents",
             });
           } else {
-            setActiveBlocksCount((c) => c + 1);
             setSecurityToast({
               id: `toast-demo-${Date.now()}`,
               type: "defense",
-              title: "Tường lửa nftables đã kích hoạt",
-              message: "Đã khóa địa chỉ IP tại bảng inet sentinelx (DROP)",
+              title: "Tường lửa đã kích hoạt",
+              message: "Đã khóa địa chỉ IP nguồn tấn công",
               attackerIp: "198.51.100.19",
               targetView: "defense",
             });

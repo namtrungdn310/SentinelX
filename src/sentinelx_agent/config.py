@@ -1,5 +1,6 @@
 """Configuration settings for SentinelX Agent daemon."""
 
+import ipaddress
 import os
 import platform
 import socket
@@ -48,8 +49,14 @@ class AgentSettings(BaseSettings):
     )
     nftables_table_name: str = Field(
         default="sentinelx",
+        pattern=r"^[A-Za-z_][A-Za-z0-9_]{0,31}$",
         description="nftables table name for SentinelX firewall rules",
     )
+    protected_cidrs: list[str] = Field(default_factory=list)
+    max_block_seconds: int = Field(default=86400, ge=1, le=86400)
+    command_journal_path: Path | None = None
+    command_queue_size: int = Field(default=64, ge=1, le=1024)
+    nftables_hook: Literal["input", "forward"] = "input"
     telemetry_interval_seconds: float = Field(
         default=5.0,
         ge=0.01,
@@ -142,6 +149,11 @@ class AgentSettings(BaseSettings):
             raise ValueError("Controller URL must be HTTP(S), without credentials/query/fragment")
         return v.rstrip("/")
 
+    @field_validator("protected_cidrs")
+    @classmethod
+    def valid_protected_cidrs(cls, value: list[str]) -> list[str]:
+        return [str(ipaddress.ip_network(item, strict=False)) for item in value]
+
     @field_validator("node_id")
     @classmethod
     def valid_node_id(cls, value: str | None) -> str | None:
@@ -171,7 +183,7 @@ class AgentSettings(BaseSettings):
                             yaml_data["timeout_seconds"] = controller_section["timeout_seconds"]
                     if isinstance(agent_section, dict):
                         for name in cls.model_fields:
-                            if name.startswith("network_") and name in agent_section:
+                            if name in agent_section:
                                 yaml_data[name] = agent_section[name]
                         if "node_id" in agent_section:
                             yaml_data["node_id"] = agent_section["node_id"]
@@ -200,8 +212,9 @@ class AgentSettings(BaseSettings):
         env_kwargs: dict[str, Any] = {}
         for name in cls.model_fields:
             key = "SENTINELX_" + name.upper()
-            if name.startswith("network_") and key in os.environ:
-                env_kwargs[name] = os.environ[key]
+            if key in os.environ:
+                # Let BaseSettings decode JSON list values using its normal env source.
+                yaml_data.pop(name, None)
         if "SENTINELX_CONTROLLER_URL" in os.environ:
             env_kwargs["controller_url"] = os.environ["SENTINELX_CONTROLLER_URL"]
         if "SENTINELX_NODE_ID" in os.environ:

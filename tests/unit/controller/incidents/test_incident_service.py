@@ -39,7 +39,7 @@ def make_event(
 @pytest.mark.asyncio
 async def test_correlate_events_creates_new_incident_then_attaches() -> None:
     repo = AsyncMock()
-    detection_repo = AsyncMock()
+    detection_service = AsyncMock()
     repo.find_active_incident.return_value = None
 
     created_incident = None
@@ -54,7 +54,7 @@ async def test_correlate_events_creates_new_incident_then_attaches() -> None:
 
     service = IncidentService(
         repository=repo,
-        detection_repo=detection_repo,
+        detection_service=detection_service,
         correlation_window_minutes=10,
     )
 
@@ -70,7 +70,7 @@ async def test_correlate_events_creates_new_incident_then_attaches() -> None:
     assert inc1.severity == DetectionSeverity.MEDIUM.value
     assert event1.incident_id == str(inc1.id)
     assert repo.create.await_count == 1
-    assert detection_repo.link_events_to_incident.await_count == 1
+    assert detection_service.link_to_incident.await_count == 1
 
     # 2. Second event arrives within correlation window -> links to same incident and escalates
     repo.find_active_incident.return_value = created_incident
@@ -87,7 +87,7 @@ async def test_correlate_events_creates_new_incident_then_attaches() -> None:
 @pytest.mark.asyncio
 async def test_update_incident_lifecycle() -> None:
     repo = AsyncMock()
-    detection_repo = AsyncMock()
+    detection_service = AsyncMock()
     incident_id = uuid.uuid4()
     project_id = uuid.uuid4()
 
@@ -100,11 +100,11 @@ async def test_update_incident_lifecycle() -> None:
         started_at=datetime.now(UTC) - timedelta(minutes=5),
     )
     repo.get_by_id.return_value = active_model
-    repo.count_events_for_incident.return_value = 2
+    detection_service.incident_counts.return_value = {incident_id: 2}
 
     service = IncidentService(
         repository=repo,
-        detection_repo=detection_repo,
+        detection_service=detection_service,
     )
 
     # Resolve incident

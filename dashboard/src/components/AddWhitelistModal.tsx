@@ -31,7 +31,7 @@ export function AddWhitelistModal({
     e.preventDefault();
     const trimmedCidr = cidr.trim();
     if (!trimmedCidr) {
-      setError("Vui lòng nhập dải IP hoặc định dạng CIDR");
+      setError("Vui lòng nhập IP hoặc định dạng CIDR");
       return;
     }
 
@@ -78,9 +78,9 @@ export function AddWhitelistModal({
       <div className="modal-header">
         <div>
           <span className="modal-eyebrow">
-            <ShieldCheck size={15} style={{ color: "var(--status-ok)" }} /> Danh sách loại trừ an toàn
+            <ShieldCheck size={15} style={{ color: "var(--status-ok)" }} /> Danh sách an toàn
           </span>
-          <h2 id={`${id}-title`}>Thêm Dải IP An Toàn (Whitelist)</h2>
+          <h2 id={`${id}-title`}>Thêm IP an toàn</h2>
         </div>
         <button
           className="icon-button"
@@ -102,7 +102,7 @@ export function AddWhitelistModal({
           )}
 
           <div className="form-group">
-            <label htmlFor={`${id}-cidr`}>Dải IP hoặc CIDR (IPv4 / IPv6)</label>
+            <label htmlFor={`${id}-cidr`}>IP hoặc CIDR (IPv4 / IPv6)</label>
             <input
               id={`${id}-cidr`}
               type="text"
@@ -114,16 +114,16 @@ export function AddWhitelistModal({
               data-autofocus
             />
             <small className="form-hint">
-              Các IP trong dải này sẽ được bảo vệ tuyệt đối — Controller và Agent sẽ không bao giờ kích hoạt DROP tại tường lửa.
+              Các địa chỉ IP này sẽ được bảo vệ tuyệt đối — hệ thống sẽ không bao giờ kích hoạt khóa tại tường lửa.
             </small>
           </div>
 
           <div className="form-group">
-            <label htmlFor={`${id}-desc`}>Mô tả mục đích sử dụng</label>
+            <label htmlFor={`${id}-desc`}>Mô tả</label>
             <input
               id={`${id}-desc`}
               type="text"
-              placeholder="ví dụ: Dải mạng VPN kỹ thuật, IP máy chủ DNS, Gateway..."
+              placeholder="ví dụ: VPN kỹ thuật, máy chủ DNS, gateway..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={loading}
@@ -131,11 +131,7 @@ export function AddWhitelistModal({
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            <ShieldCheck size={16} />
-            {loading ? "Đang lưu..." : "Thêm vào danh sách an toàn"}
-          </button>
+        <div className="modal-actions">
           <button
             type="button"
             className="btn btn-outline"
@@ -143,6 +139,10 @@ export function AddWhitelistModal({
             disabled={loading}
           >
             Hủy bỏ
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            <ShieldCheck size={16} />
+            {loading ? "Đang lưu..." : "Thêm vào danh sách an toàn"}
           </button>
         </div>
       </form>

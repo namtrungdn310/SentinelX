@@ -33,6 +33,7 @@ def make_event(
             threshold_value=80.0,
             window_duration_seconds=15,
             consecutive_samples=3,
+            extra_context={"direction": "inbound"},
         ),
         detected_at=datetime.now(UTC),
     )
@@ -87,7 +88,7 @@ def test_no_matching_policy_or_disabled() -> None:
         project_id=project_id,
         name="Disabled Policy",
         event_type="cpu_threshold_detector",
-        action_type="RESTART_SERVICE",
+        action_type="ALERT_ONLY",
         target_params={"service_name": "backend"},
         enabled=False,
     )
@@ -104,7 +105,7 @@ def test_cooldown_prevents_rapid_service_restart() -> None:
         project_id=project_id,
         name="Auto Restart on Overload",
         event_type="cpu_threshold_detector",
-        action_type="RESTART_SERVICE",
+        action_type="ALERT_ONLY",
         target_params={"service_name": "nginx"},
         cooldown_seconds=300,
         enabled=True,
@@ -116,14 +117,16 @@ def test_cooldown_prevents_rapid_service_restart() -> None:
     res1 = engine.evaluate(event, policies=[policy], whitelists=[])
     assert res1.authorized is True
     assert res1.status == PolicyEvaluationStatus.ACTION_AUTHORIZED
-    assert res1.action_type == PolicyActionType.RESTART_SERVICE
-    assert res1.target == "nginx"
+    assert res1.action_type == PolicyActionType.ALERT_ONLY
+    assert res1.target == event.node_id
 
     # Immediate second call should be denied by cooldown
-    res2 = engine.evaluate(event, policies=[policy], whitelists=[])
+    res2 = engine.evaluate(
+        event, policies=[policy], whitelists=[], last_authorized_at=datetime.now(UTC)
+    )
     assert res2.authorized is False
     assert res2.status == PolicyEvaluationStatus.DENIED_COOLDOWN
-    assert "hạ nhiệt" in res2.reason
+    assert "cooldown" in res2.reason
 
 
 def test_duplicate_prevention_for_ip_blocking() -> None:
@@ -150,7 +153,9 @@ def test_duplicate_prevention_for_ip_blocking() -> None:
     assert res1.target == "203.0.113.88"
 
     # Immediate second call: denied by duplicate (active block duration)
-    res2 = engine.evaluate(event, policies=[policy], whitelists=[])
+    res2 = engine.evaluate(
+        event, policies=[policy], whitelists=[], last_authorized_at=datetime.now(UTC)
+    )
     assert res2.authorized is False
     assert res2.status == PolicyEvaluationStatus.DENIED_DUPLICATE
-    assert "đang có hiệu lực" in res2.reason
+    assert "recently authorized" in res2.reason

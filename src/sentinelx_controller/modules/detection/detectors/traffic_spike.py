@@ -36,18 +36,20 @@ class TrafficSpikeDetector(BaseNetworkDetector):
     ) -> list[DetectionEventContract]:
         events: list[DetectionEventContract] = []
         for feature in window.features:
-            is_udp_flood = (
-                feature.protocol == "udp" and feature.packet_count >= self.udp_threshold
-            )
+            if feature.direction == "outbound":
+                continue
+            scale = 10 / (window.window_end - window.window_start).total_seconds()
+            packets = feature.packet_count * scale
+            byte_count = feature.byte_count * scale
+            is_udp_flood = feature.protocol == "udp" and packets >= self.udp_threshold
             is_volumetric_spike = (
-                feature.packet_count >= self.packet_threshold
-                or feature.byte_count >= self.byte_threshold
+                packets >= self.packet_threshold or byte_count >= self.byte_threshold
             )
 
             if is_udp_flood or is_volumetric_spike:
                 severity = (
                     DetectionSeverity.CRITICAL
-                    if feature.packet_count >= 2000 or feature.byte_count >= 10_000_000
+                    if packets >= 2000 or byte_count >= 10_000_000
                     else DetectionSeverity.HIGH
                 )
                 confidence = 0.92 if is_udp_flood else 0.85
@@ -72,6 +74,9 @@ class TrafficSpikeDetector(BaseNetworkDetector):
                             "interface": window.interface,
                             "window_id": str(window.window_id),
                             "is_udp_flood": is_udp_flood,
+                            "direction": feature.direction,
+                            "packets_per_second": packets / 10,
+                            "bytes_per_second": byte_count / 10,
                         },
                     ),
                     detected_at=window.window_end,
@@ -79,4 +84,3 @@ class TrafficSpikeDetector(BaseNetworkDetector):
                 events.append(event)
 
         return events
-

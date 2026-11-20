@@ -30,6 +30,8 @@ networks:
 volumes:
   sentinelx_pgdata:
     name: sentinelx_pgdata
+  agent01_identity:
+  agent02_identity:
 
 services:
   # ----------------------------------------------------------------------------
@@ -76,11 +78,7 @@ services:
       SENTINELX_ENVIRONMENT: ${SENTINELX_ENV:-development}
       SENTINELX_SERVER__HOST: 0.0.0.0
       SENTINELX_SERVER__PORT: 8000
-      SENTINELX_DB_HOST: postgres_db
-      SENTINELX_DB_PORT: 5432
-      SENTINELX_DB_USER: ${SENTINELX_DB_USER:-sentinelx}
-      SENTINELX_DB_PASSWORD: ${SENTINELX_DB_PASSWORD:-sentinelx_password}
-      SENTINELX_DB_NAME: ${SENTINELX_DB_NAME:-sentinelx}
+      SENTINELX_DATABASE__URL: postgresql+asyncpg://${SENTINELX_DB_USER:-sentinelx}:${SENTINELX_DB_PASSWORD:-sentinelx_password}@postgres_db:5432/${SENTINELX_DB_NAME:-sentinelx}
       SENTINELX_LOGGING__LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
       SENTINELX_LOGGING__JSON_FORMAT: "true"
     networks:
@@ -159,18 +157,21 @@ services:
     container_name: sentinelx_agent01
     restart: unless-stopped
     profiles: [lab, attack]
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP]
+    volumes: [agent01_identity:/var/lib/sentinelx-agent]
+    network_mode: service:backend01
     depends_on:
-      - sentinelx_controller
+      sentinelx_controller:
+        condition: service_healthy
+      backend01:
+        condition: service_started
     environment:
-      SENTINELX_NODE_ID: node-backend01
+      SENTINELX_LAB_BOOTSTRAP: "1"
+      SENTINELX_LAB_NODE_IP: 172.28.2.31
+      SENTINELX_HOSTNAME: backend01
       SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
-      SENTINELX_ENROLLMENT_TOKEN: ${SENTINELX_LAB_DEFAULT_TOKEN:-sentinelx-lab-default-token}
-      SENTINELX_HEARTBEAT_INTERVAL: 5
-    networks:
-      sentinelx_internal:
+      SENTINELX_HEARTBEAT_INTERVAL_SECONDS: 5
 
   agent02:
     build:
@@ -180,18 +181,21 @@ services:
     container_name: sentinelx_agent02
     restart: unless-stopped
     profiles: [lab, attack]
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, SETUID, SETGID, SETPCAP]
+    volumes: [agent02_identity:/var/lib/sentinelx-agent]
+    network_mode: service:backend02
     depends_on:
-      - sentinelx_controller
+      sentinelx_controller:
+        condition: service_healthy
+      backend02:
+        condition: service_started
     environment:
-      SENTINELX_NODE_ID: node-backend02
+      SENTINELX_LAB_BOOTSTRAP: "1"
+      SENTINELX_LAB_NODE_IP: 172.28.2.32
+      SENTINELX_HOSTNAME: backend02
       SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
-      SENTINELX_ENROLLMENT_TOKEN: ${SENTINELX_LAB_DEFAULT_TOKEN:-sentinelx-lab-default-token}
-      SENTINELX_HEARTBEAT_INTERVAL: 5
-    networks:
-      sentinelx_internal:
+      SENTINELX_HEARTBEAT_INTERVAL_SECONDS: 5
 
   # ----------------------------------------------------------------------------
   # 6. Attacker & Traffic Generator

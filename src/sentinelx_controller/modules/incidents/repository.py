@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sentinelx_controller.modules.detection.models import DetectionEventModel
+from sentinelx_controller.infrastructure.database.locking import lock_node_transaction
 from sentinelx_controller.modules.incidents.models import IncidentModel
 
 
@@ -15,6 +15,9 @@ class IncidentRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def lock_node(self, node_id: uuid.UUID) -> None:
+        await lock_node_transaction(self._session, node_id)
 
     async def create(self, incident: IncidentModel) -> IncidentModel:
         """Thêm mới một sự cố vào database."""
@@ -37,6 +40,9 @@ class IncidentRepository:
         self,
         project_id: uuid.UUID,
         since: datetime,
+        *,
+        node_id: uuid.UUID | None = None,
+        correlation_key: str | None = None,
     ) -> IncidentModel | None:
         """Tìm sự cố đang mở (DETECTED hoặc MITIGATING) gần nhất trong project."""
         stmt = (
@@ -44,11 +50,16 @@ class IncidentRepository:
             .where(
                 IncidentModel.project_id == project_id,
                 IncidentModel.status.in_(["DETECTED", "MITIGATING"]),
-                IncidentModel.started_at >= since,
             )
             .order_by(IncidentModel.started_at.desc())
             .limit(1)
         )
+        if node_id is not None:
+            stmt = stmt.where(
+                IncidentModel.node_id == node_id, IncidentModel.correlation_key == correlation_key
+            )
+        else:
+            stmt = stmt.where(IncidentModel.started_at >= since)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -94,13 +105,3 @@ class IncidentRepository:
         )
         result = await self._session.execute(stmt)
         return total, list(result.scalars().all())
-
-    async def count_events_for_incident(self, incident_id: uuid.UUID) -> int:
-        """Đếm số lượng detection events thuộc incident."""
-        stmt = (
-            select(func.count())
-            .select_from(DetectionEventModel)
-            .where(DetectionEventModel.incident_id == incident_id)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar() or 0

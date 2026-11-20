@@ -22,7 +22,7 @@ from sentinelx_controller.modules.detection.router import get_detection_service
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.router import get_incident_service
 from sentinelx_controller.modules.incidents.service import IncidentService
-from sentinelx_controller.modules.nodes.router import get_node_service
+from sentinelx_controller.modules.nodes.dependencies import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
 from sentinelx_controller.modules.policy.router import get_policy_service
 from sentinelx_controller.modules.policy.service import PolicyService

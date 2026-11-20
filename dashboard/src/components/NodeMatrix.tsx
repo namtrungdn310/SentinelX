@@ -118,7 +118,7 @@ export function NodeMatrix({
                     className="table-sort"
                     onClick={() => toggleSort("hostname")}
                   >
-                    Hostname / IP {sort?.key === "hostname" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
+                    Tên máy chủ / IP {sort?.key === "hostname" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
                 <th>Trạng thái</th>
@@ -170,7 +170,13 @@ export function NodeMatrix({
                         </span>
                         <span>
                           <strong>{node.hostname}</strong>
-                          <small>
+                          <small
+                            title={`${node.ip_address}${
+                              projects?.find((p) => p.id === node.project_id)
+                                ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
+                                : ""
+                            }`}
+                          >
                             {node.ip_address}
                             {projects?.find((p) => p.id === node.project_id)
                               ? ` · ${projects.find((p) => p.id === node.project_id)!.name}`
@@ -248,15 +254,18 @@ export function NodeMatrix({
                   </small>
                   <span className="tile-metrics">
                     <span>
-                      CPU <b>{formatPercent(node.latestCpu)}</b>
+                      <span className="tile-metric-label">CPU</span>
+                      <b>{formatPercent(node.latestCpu)}</b>
                       <small className="tile-spec">{formatCpuUsage(node.latestCpu, hw.cpuCores)}</small>
                     </span>
                     <span>
-                      RAM <b>{formatPercent(node.latestMemory)}</b>
+                      <span className="tile-metric-label">RAM</span>
+                      <b>{formatPercent(node.latestMemory)}</b>
                       <small className="tile-spec">{formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}</small>
                     </span>
                     <span>
-                      Disk <b>{formatPercent(node.latestDisk)}</b>
+                      <span className="tile-metric-label">Ổ đĩa</span>
+                      <b>{formatPercent(node.latestDisk)}</b>
                       <small className="tile-spec">{formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}</small>
                     </span>
                   </span>
@@ -275,7 +284,7 @@ export function NodeMatrix({
       <div className="panel-foot">
         <span>Hiển thị {nodes.length} máy chủ</span>
         <span>
-          Chọn host để xem telemetry <ChevronRight size={12} />
+          Chọn máy chủ để xem telemetry <ChevronRight size={12} />
         </span>
       </div>
     </section>

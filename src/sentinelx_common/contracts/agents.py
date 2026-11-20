@@ -158,6 +158,9 @@ class HeartbeatRequest(SentinelXBaseModel):
         ...,
         description="Time when Agent sent the heartbeat in UTC",
     )
+    supported_actions: list[str] = Field(default_factory=list, max_length=16)
+    executor_mode: str = Field(default="unknown", max_length=20)
+    command_protocol_version: int = Field(default=1, ge=1, le=2)
 
 
 class HeartbeatResponse(SentinelXBaseModel):

@@ -97,12 +97,8 @@ try {
                 "Overview summarizes the fleet without duplicating telemetry or host inventory",
                 () => {
                     assert.ok(html.includes('aria-label="Tổng quan toàn cụm"'));
-                    assert.ok(
-                        html.includes('aria-label="Tổng hợp theo dự án"'),
-                    );
                     assert.ok(html.includes('aria-label="Máy chủ sử dụng tài nguyên nhiều nhất"'));
-                    assert.ok(html.includes('aria-label="Tỷ lệ máy chủ ổn định"'));
-                    assert.ok(html.includes("Sự kiện gần nhất"));
+                    assert.ok(html.includes('aria-label="Máy chủ ổn định"'));
                     assert.ok(
                         !html.includes('aria-label="Biểu đồ tài nguyên"'),
                     );
@@ -204,15 +200,15 @@ try {
         id: "detection-1", node_id: node.id, severity: "CRITICAL", detector_name: "cpu_threshold_detector",
         details: { metric_name: "cpu_percent", current_value: 98, threshold_value: 95, consecutive_samples: 3 },
     }};
-    check("Detection alerts show severity and resource details with text, and belong to Status", () => {
+    check("Detection alerts show severity and resource details with text, and belong to Alert category", () => {
         const html = renderToStaticMarkup(createElement(LiveEventStream, { events: [detection], nodes: [node], isConnected: true, isDemoMode: false }));
         assert.ok(html.includes("Nghiêm trọng"));
         assert.ok(html.includes("CPU 98% ≥ 95%"));
         assert.ok(html.includes("3 mẫu liên tiếp"));
         assert.ok(html.includes("Bất thường tài nguyên"));
         assert.ok(html.includes('event-type warn'));
-        assert.equal(eventMatchesCategory("detection_alert", "status"), true);
-        assert.deepEqual(filterEvents([detection], [node], "status", "cpu_percent"), [detection]);
+        assert.equal(eventMatchesCategory("detection_alert", "alert"), true);
+        assert.deepEqual(filterEvents([detection], [node], "alert", "cpu_percent"), [detection]);
     });
     check("REST detection history merges with WebSocket replay by stable event ID", () => {
         const older = { ...detection, timestamp: "2026-11-06T09:00:00Z", data: { ...detection.data, id: "detection-2" } };
@@ -224,7 +220,8 @@ try {
     check("Event categories keep All exhaustive and filter without reordering or mutating", () => {
         assert.deepEqual(filterEvents(eventFixture, [node], "all", ""), eventFixture);
         assert.deepEqual(filterEvents(eventFixture, [node], "telemetry", ""), [eventFixture[0]]);
-        assert.deepEqual(filterEvents(eventFixture, [node], "status", ""), eventFixture.slice(1, 5));
+        assert.deepEqual(filterEvents(eventFixture, [node], "alert", ""), [eventFixture[1]]);
+        assert.deepEqual(filterEvents(eventFixture, [node], "status", ""), eventFixture.slice(2, 5));
         assert.equal(eventMatchesCategory("future_event", "status"), false);
         assert.equal(eventLabel("future_event"), "Sự kiện khác");
         assert.equal(eventLabel("toString"), "Sự kiện khác");
@@ -239,10 +236,12 @@ try {
     check("Event stream defaults to All, exposes raw IDs and keeps source/state explicit", () => {
         const html = renderToStaticMarkup(createElement(LiveEventStream, { events: eventFixture, nodes: [node], isConnected: true, isDemoMode: true }));
         assert.ok(html.includes('aria-pressed="true">Tất cả'));
-        assert.ok(html.includes("Trạng thái &amp; cảnh báo"));
+        assert.ok(html.includes(">Cảnh báo<"));
+        assert.ok(html.includes(">An ninh<"));
+        assert.ok(html.includes(">Trạng thái kết nối<"));
+        assert.ok(html.includes(">Telemetry<"));
         assert.ok(html.includes("Sự kiện khác"));
         assert.ok(html.includes("future_event"));
-        assert.ok(html.includes("Đang cập nhật · mô phỏng"));
         assert.ok(html.includes('class="event-controls"'));
     });
     check("Node filtering empty state is actionable", () => {
@@ -273,7 +272,6 @@ try {
             createElement(KPICards, { nodes: MOCK_NODES, isLoading: false }),
         );
         assert.ok(html.includes("Mạng · mẫu gần nhất"));
-        assert.ok(html.includes("Byte giữa hai lần đo của từng host"));
         assert.ok(!html.includes("tích lũy"));
         assert.ok(!html.includes("B/s"));
     });

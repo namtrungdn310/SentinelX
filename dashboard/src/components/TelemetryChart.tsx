@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mergeSamples, timeTicks } from "../telemetry";
 import { formatCpuUsage, formatMemoryUsage, formatPercent, getNodeHardware, validMetric } from "../presentation";
-import { Activity, ChevronRight, Server } from "lucide-react";
+import { Activity, Server } from "lucide-react";
 import type { MetricSample, Node } from "../types";
 
 interface Props {
@@ -26,26 +26,31 @@ export function TelemetryChart({
   onRetry,
 }: Props) {
   const containerRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [tooltipWidth, setTooltipWidth] = useState(260);
   const [width, setWidth] = useState(720);
+  const [height, setHeight] = useState(260);
+  const data = mergeSamples([], samples);
+  const count = data.length;
   useEffect(() => {
-    const element = containerRef.current;
+    const element = canvasRef.current ?? containerRef.current;
     if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(240, entry.contentRect.width)));
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(Math.max(240, Math.round(entry.contentRect.width)));
+      if (entry.contentRect.height > 100) {
+        setHeight(Math.round(entry.contentRect.height));
+      }
+    });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [count]);
   const [showCpu, setShowCpu] = useState(true);
   const [showMem, setShowMem] = useState(true);
   const [activeTime, setActiveTime] = useState<string | null>(null);
-  const [showTable, setShowTable] = useState(false);
-  const data = mergeSamples([], samples);
-  const count = data.length;
-  const height = width < 600 ? 240 : 300;
-  const pad = { top: 22, right: 16, bottom: 32, left: 52 };
+  const pad = { top: 16, right: 16, bottom: 36, left: 48 };
   const graphWidth = width - pad.left - pad.right;
-  const graphHeight = height - pad.top - pad.bottom;
+  const graphHeight = Math.max(60, height - pad.top - pad.bottom);
   const firstTime = count ? Date.parse(data[0].observed_at) : 0;
   const duration =
     count > 1 ? Date.parse(data[count - 1].observed_at) - firstTime : 0;
@@ -87,23 +92,31 @@ export function TelemetryChart({
             return (
               <>
                 <button
+                  type="button"
                   className={`legend-pill ${showCpu ? "" : "series-hidden"}`}
                   aria-pressed={showCpu}
                   onClick={() => setShowCpu(!showCpu)}
                 >
-                  <span className="legend-color-dot cpu" />
-                  CPU <b>{formatPercent(cpu)}</b>
+                  <div className="legend-pill-header">
+                    <span className="legend-color-dot cpu" />
+                    <span>CPU</span>
+                  </div>
+                  <b>{formatPercent(cpu)}</b>
                   {hw && validMetric(cpu) && (
                     <span className="legend-capacity">({formatCpuUsage(cpu, hw.cpuCores)})</span>
                   )}
                 </button>
                 <button
+                  type="button"
                   className={`legend-pill ${showMem ? "" : "series-hidden"}`}
                   aria-pressed={showMem}
                   onClick={() => setShowMem(!showMem)}
                 >
-                  <span className="legend-color-dot memory" />
-                  RAM <b>{formatPercent(memory)}</b>
+                  <div className="legend-pill-header">
+                    <span className="legend-color-dot memory" />
+                    <span>RAM</span>
+                  </div>
+                  <b>{formatPercent(memory)}</b>
                   {hw && validMetric(memory) && (
                     <span className="legend-capacity">({formatMemoryUsage(memory, hw.totalMemoryBytes)})</span>
                   )}
@@ -137,7 +150,7 @@ export function TelemetryChart({
           <p>Biểu đồ sẽ xuất hiện khi Agent gửi dữ liệu.</p>
         </div>
       ) : (
-        <div className="chart-canvas-container">
+        <div ref={canvasRef} className="chart-canvas-container">
           {hoverIndex !== null && active && (
             <div ref={tooltipRef} className="chart-tooltip-box" style={{ left: tooltipLeft }}>
               <time dateTime={active.observed_at}>{clock(active.observed_at)}</time>
@@ -148,7 +161,7 @@ export function TelemetryChart({
           <svg
             className="telemetry-svg"
             viewBox={`0 0 ${width} ${height}`}
-            style={{ height }}
+            style={{ width: "100%", height: "100%", display: "block" }}
             role="img"
             tabIndex={0}
             aria-label={`${count} mẫu tài nguyên của ${selectedNode.hostname}. CPU ${formatPercent(cpu)}, RAM ${formatPercent(memory)} mới nhất. Dùng phím mũi tên để xem từng mẫu.`}
@@ -216,7 +229,7 @@ export function TelemetryChart({
             )}
             {timeTicks(firstTime, firstTime + duration, graphWidth).map((time, index, ticks) => (
               <text key={time} x={duration ? pad.left + (time - firstTime) / duration * graphWidth : x(0)}
-                y={height - 7} className="chart-axis" textAnchor={ticks.length === 1 ? "middle" : index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}>
+                y={height - 12} className="chart-axis" textAnchor={ticks.length === 1 ? "middle" : index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}>
                 {clock(new Date(time).toISOString())}
               </text>
             ))}
@@ -284,41 +297,7 @@ export function TelemetryChart({
         <span>
           {count} mẫu · CPU / RAM (%) {count > 0 && `· Mẫu mới nhất ${clock(data[count - 1].observed_at)}`}
         </span>
-        <button
-          className="text-button"
-          aria-expanded={showTable}
-          onClick={() => setShowTable(!showTable)}
-          disabled={!count}
-        >
-          {showTable ? "Ẩn dữ liệu" : "Xem dữ liệu"}
-          <ChevronRight size={13} />
-        </button>
       </div>
-      {showTable && count > 0 && (
-        <div className="chart-data-table table-scroll">
-          <table className="host-table">
-            <caption className="sr-only">
-              Giá trị tài nguyên theo thời gian
-            </caption>
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>CPU (%)</th>
-                <th>RAM (%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((sample, index) => (
-                <tr key={index}>
-                  <td>{clock(sample.observed_at)}</td>
-                  <td>{sample.cpu_percent.toFixed(1)}</td>
-                  <td>{sample.memory_percent.toFixed(1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </section>
   );
 }

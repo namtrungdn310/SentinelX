@@ -86,9 +86,9 @@ export function ManualBlockModal({
       <div className="modal-header">
         <div>
           <span className="modal-eyebrow">
-            <Flame size={15} style={{ color: "var(--status-crit)" }} /> Tường lửa hạt nhân
+            <Flame size={15} style={{ color: "var(--status-crit)" }} /> Tường lửa nftables
           </span>
-          <h2 id={`${id}-title`}>Thực thi Chặn IP Thủ công</h2>
+          <h2 id={`${id}-title`}>Thực thi chặn IP thủ công</h2>
         </div>
         <button
           className="icon-button"
@@ -110,7 +110,7 @@ export function ManualBlockModal({
           )}
 
           <div className="form-group">
-            <label htmlFor={`${id}-ip`}>Địa chỉ IP cần chặn (IPv4 hoặc IPv6)</label>
+            <label htmlFor={`${id}-ip`}>IP cần chặn (IPv4 hoặc IPv6)</label>
             <input
               id={`${id}-ip`}
               type="text"
@@ -122,12 +122,12 @@ export function ManualBlockModal({
               data-autofocus
             />
             <small className="form-hint">
-              Hệ thống sẽ từ chối nếu IP là loopback (127.0.0.1), IP máy chủ hoặc nằm trong Whitelist an toàn.
+              Hệ thống sẽ từ chối nếu IP là loopback (127.0.0.1), IP máy chủ hoặc nằm trong danh sách an toàn.
             </small>
           </div>
 
           <div className="form-group">
-            <label htmlFor={`${id}-node`}>Máy chủ thực thi tường lửa (Node)</label>
+            <label htmlFor={`${id}-node`}>Máy chủ áp dụng</label>
             <select
               id={`${id}-node`}
               value={nodeId}
@@ -136,7 +136,7 @@ export function ManualBlockModal({
             >
               {nodes.map((n) => (
                 <option key={n.id} value={n.id}>
-                  {n.hostname} · {n.ip_address} ({n.status})
+                  {n.hostname} · {n.ip_address}
                 </option>
               ))}
             </select>
@@ -151,13 +151,13 @@ export function ManualBlockModal({
                 onChange={(e) => setActionType(e.target.value)}
                 disabled={loading}
               >
-                <option value="BLOCK_IP_NFTABLES">Khóa IP bằng nftables (DROP)</option>
+                <option value="BLOCK_IP_NFTABLES">Khóa địa chỉ IP bằng tường lửa</option>
                 <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label htmlFor={`${id}-duration`}>Thời hạn khóa (Phút)</label>
+              <label htmlFor={`${id}-duration`}>Thời gian khóa</label>
               <select
                 id={`${id}-duration`}
                 value={durationMinutes}
@@ -166,20 +166,16 @@ export function ManualBlockModal({
               >
                 <option value={5}>5 phút</option>
                 <option value={15}>15 phút</option>
-                <option value={30}>30 phút (Mặc định)</option>
+                <option value={30}>30 phút</option>
                 <option value={60}>1 giờ</option>
                 <option value={1440}>24 giờ</option>
-                <option value={0}>Vĩnh viễn (0)</option>
+                <option value={0}>Vĩnh viễn đến khi gỡ thủ công</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            <Flame size={16} />
-            {loading ? "Đang gửi lệnh..." : "Kích hoạt lệnh Chặn ngay"}
-          </button>
+        <div className="modal-actions">
           <button
             type="button"
             className="btn btn-outline"
@@ -187,6 +183,10 @@ export function ManualBlockModal({
             disabled={loading}
           >
             Hủy bỏ
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            <Flame size={16} />
+            {loading ? "Đang gửi lệnh..." : "Kích hoạt lệnh chặn ngay"}
           </button>
         </div>
       </form>

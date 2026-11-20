@@ -81,13 +81,14 @@ async def test_processor_executes_valid_command_and_acks_applied(mock_client: As
 
     await processor.process_command(cmd, mock_client)
 
-    executor.execute.assert_awaited_once_with(cmd)
+    assert executor.execute.await_count == 1
+    assert executor.execute.call_args.args[0].id == cmd.id
     mock_client.ack_defense_action.assert_awaited_once()
     call_args = mock_client.ack_defense_action.call_args
     ack_req = call_args[0][1]
-    assert ack_req.status == DefenseActionStatus.APPLIED
+    assert ack_req.status == DefenseActionStatus.SIMULATED
     assert ack_req.error_message is None
-    assert ack_req.execution_metadata == {"simulated": True}
+    assert ack_req.execution_metadata["simulated"] is True
 
 
 @pytest.mark.asyncio

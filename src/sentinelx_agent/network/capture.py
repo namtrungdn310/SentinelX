@@ -3,9 +3,11 @@
 import sys
 import threading
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
+import psutil
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
@@ -55,12 +57,19 @@ class PacketCapture:
         self.aggregator = aggregator
         self._sniffer: Any = None
         self._socket: Any = None
+        self._local_ips: set[str] = set()
 
     def start(self) -> None:
         if sys.platform != "linux":
             raise RuntimeError("Live capture is supported only on Linux")
         from scapy.config import conf
         from scapy.sendrecv import AsyncSniffer
+
+        self._local_ips = {
+            address.address.split("%")[0]
+            for addresses in psutil.net_if_addrs().values()
+            for address in addresses
+        }
 
         conf.use_pcap = True
         if not conf.use_pcap:
@@ -89,6 +98,14 @@ class PacketCapture:
         try:
             observation = decode_packet(packet)
             if observation is not None:
+                direction = (
+                    "outbound"
+                    if observation.source_ip in self._local_ips
+                    else "inbound"
+                    if observation.destination_ip in self._local_ips
+                    else "unknown"
+                )
+                observation = replace(observation, direction=direction)
                 self.aggregator.add(observation, time.monotonic())
         except (AttributeError, TypeError, ValueError, IndexError):
             # Malformed/truncated packets are not allowed to kill the capture loop.

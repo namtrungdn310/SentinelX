@@ -82,7 +82,9 @@ export function App() {
     securityToast,
     dismissSecurityToast,
   } = useInfrastructure();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(getSavedProjectId);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    () => getSavedProjectId() ?? projects[0]?.id ?? null,
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
@@ -133,17 +135,17 @@ export function App() {
 
   useEffect(() => {
     const viewTitles: Record<string, string> = {
-      projects: "Dự Án Hạ Tầng",
-      overview: "Tổng Quan Hạ Tầng",
-      hosts: "Ma Trận Máy Chủ",
-      metrics: "Chỉ Số Đo Lường",
-      events: "Nhật Ký Sự Kiện",
-      incidents: "Quản Lý Sự Cố An Ninh",
-      defense: "Tường Lửa & Lệnh Phòng Thủ",
-      policies: "Chính Sách & Whitelist",
+      projects: "Dự án hạ tầng",
+      overview: "Tổng quan hạ tầng",
+      hosts: "Ma trận máy chủ",
+      metrics: "Chỉ số đo lường",
+      events: "Nhật ký sự kiện",
+      incidents: "Sự cố an ninh",
+      defense: "Tường lửa nftables",
+      policies: "Chính sách bảo vệ",
     };
     const subtitle =
-      viewTitles[effectiveView] || "Giám Sát Hạ Tầng & Bảo Vệ Tự Động";
+      viewTitles[effectiveView] || "Giám sát hạ tầng & bảo vệ tự động";
     document.title = `SentinelX — ${subtitle}`;
   }, [effectiveView]);
   const navigate = (view: string) => {
@@ -219,9 +221,9 @@ export function App() {
     hosts: "Danh sách máy chủ",
     metrics: "Telemetry tài nguyên",
     events: "Nhật ký hệ thống",
-    incidents: "Quản lý Sự cố An ninh",
-    defense: "Tường lửa & Lệnh phòng thủ",
-    policies: "Chính sách phòng thủ & Danh sách an toàn",
+    incidents: "Sự cố an ninh",
+    defense: "Tường lửa nftables",
+    policies: "Chính sách bảo vệ",
   };
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
@@ -340,12 +342,12 @@ export function App() {
                 </a>
               ))}
             </nav>
-            <span className="nav-label" style={{ marginTop: 16 }}>AN NINH & PHÒNG THỦ</span>
-            <nav aria-label="Điều hướng an ninh">
+            <span className="nav-label" style={{ marginTop: 16 }}>BẢO MẬT & TƯỜNG LỬA</span>
+            <nav aria-label="Điều hướng bảo mật và tường lửa">
               {[
                 { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert, count: activeIncidentsCount, tone: "crit" },
                 { id: "defense", label: "Tường lửa nftables", Icon: Flame, count: activeBlocksCount, tone: "danger" },
-                { id: "policies", label: "Chính sách & Whitelist", Icon: Sliders },
+                { id: "policies", label: "Chính sách bảo vệ", Icon: Sliders },
               ].map(({ id, label, Icon, count, tone }) => (
                 <a
                   key={id}
@@ -446,17 +448,10 @@ export function App() {
             />
           ) : (
             <>
-              <div className="page-heading">
-                <div>
-                  <h1>{pageHeadings[effectiveView]}</h1>
-                  <div className="page-heading-context">
-                    <p>
-                      <strong>{selectedProject?.name}</strong> · {projectNodes.length} máy chủ
-                    </p>
-                    {statusFilter}
-                  </div>
-                </div>
-                {(effectiveView === "overview" || effectiveView === "hosts") && (
+              <h1 className="sr-only">{pageHeadings[effectiveView]}</h1>
+              {(effectiveView === "overview" || effectiveView === "hosts") && (
+                <div className="page-heading">
+                  {statusFilter}
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -464,8 +459,8 @@ export function App() {
                   >
                     + Thêm máy chủ
                   </button>
-                )}
-              </div>
+                </div>
+              )}
           {connectionError && (
             <div className="connection-error" role="alert">
               <span>{connectionError}</span>
@@ -528,13 +523,13 @@ export function App() {
           )}
           {effectiveView === "metrics" && (
             <div className="telemetry-detail">
-              <div className="panel telemetry-host-toolbar">
-                <label htmlFor="telemetry-host">Máy chủ phân tích</label>
+              <div className="telemetry-host-toolbar">
                 <select
                   id="telemetry-host"
                   value={nodeId ?? ""}
                   onChange={(event) => setSelectedNodeId(event.target.value)}
                   disabled={!projectNodes.length}
+                  aria-label="Chọn máy chủ phân tích"
                 >
                   {!projectNodes.length && (
                     <option value="">Không có máy chủ phù hợp</option>
@@ -556,7 +551,7 @@ export function App() {
                     className="text-button"
                     onClick={() => openDetail(selectedNode)}
                   >
-                    Chi tiết host <ChevronRight size={14} />
+                    Chi tiết máy chủ <ChevronRight size={14} />
                   </button>
                 )}
               </div>
@@ -595,7 +590,7 @@ export function App() {
               {selectedNode && (
                 <section
                   className="telemetry-snapshot"
-                  aria-label="Mẫu tài nguyên host gần nhất"
+                  aria-label="Mẫu tài nguyên máy chủ gần nhất"
                 >
                   <article className="panel">
                     <span>Ổ đĩa sử dụng</span>
@@ -641,12 +636,13 @@ export function App() {
           {effectiveView === "incidents" && (
             <IncidentsView
               selectedProjectId={selectedProjectId}
+              nodes={nodes}
               isDemoMode={isDemoMode}
             />
           )}
           {effectiveView === "defense" && (
             <DefenseView
-              nodes={projectNodes}
+              nodes={nodes}
               isDemoMode={isDemoMode}
             />
           )}

@@ -1,10 +1,11 @@
 """Settings and configuration for Controller."""
 
+import ipaddress
 import os
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -48,6 +49,30 @@ class DetectionSettings(BaseModel):
     max_gap_seconds: int = Field(default=60, ge=1, le=3600)
     max_sample_age_seconds: int = Field(default=86400, ge=1, le=604800)
     future_skew_seconds: int = Field(default=30, ge=0, le=300)
+    network_state_max_entries: int = Field(default=2048, ge=16, le=10000)
+    network_state_ttl_seconds: int = Field(default=3600, ge=60, le=86400)
+
+
+class CoreSafetySettings(BaseModel):
+    protected_cidrs: list[str] = Field(default_factory=list)
+    command_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+    command_lease_seconds: int = Field(default=30, ge=10, le=300)
+    command_max_attempts: int = Field(default=5, ge=1, le=20)
+    recovery_max_attempts: int = Field(default=3, ge=1, le=10)
+    recovery_backoff_seconds: int = Field(default=30, ge=1, le=3600)
+    recovery_quiet_seconds: int = Field(default=120, ge=30, le=3600)
+
+    @field_validator("protected_cidrs")
+    @classmethod
+    def valid_protected_cidrs(cls, value: list[str]) -> list[str]:
+        return [str(ipaddress.ip_network(item, strict=False)) for item in value]
+
+
+class RetentionSettings(BaseModel):
+    metric_days: int = Field(default=7, ge=1, le=3650)
+    network_days: int = Field(default=3, ge=1, le=3650)
+    policy_audit_days: int = Field(default=90, ge=7, le=3650)
+    batch_size: int = Field(default=1000, ge=1, le=10000)
 
 
 class ControllerSettings(BaseSettings):
@@ -68,6 +93,8 @@ class ControllerSettings(BaseSettings):
     )
 
     _yaml_path: ClassVar[Path | None] = None
+    safety: CoreSafetySettings = Field(default_factory=CoreSafetySettings)
+    retention: RetentionSettings = Field(default_factory=RetentionSettings)
 
     environment: str = Field(default="development", description="Runtime environment")
     service_name: str = Field(default="sentinelx-controller", description="Service name identifier")

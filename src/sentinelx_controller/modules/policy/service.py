@@ -3,9 +3,11 @@
 import ipaddress
 import logging
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 
+from sentinelx_common.contracts.command_parameters import SUPPORTED_ACTIONS
 from sentinelx_common.contracts.detection import DetectionEventContract
 from sentinelx_common.contracts.policy import (
     DefensePolicyCreateRequest,
@@ -16,11 +18,16 @@ from sentinelx_common.contracts.policy import (
     IPWhitelistListResponse,
     IPWhitelistResponse,
     PolicyActionType,
+    PolicyDecisionResponse,
     PolicyEvaluationRequest,
     PolicyEvaluationResult,
 )
 from sentinelx_controller.modules.policy.engine import PolicyEngine
-from sentinelx_controller.modules.policy.models import DefensePolicyModel, IPWhitelistModel
+from sentinelx_controller.modules.policy.models import (
+    DefensePolicyModel,
+    IPWhitelistModel,
+    PolicyDecisionModel,
+)
 from sentinelx_controller.modules.policy.repository import PolicyRepository
 
 logger = logging.getLogger(__name__)
@@ -43,11 +50,32 @@ class PolicyService:
         self,
         repository: PolicyRepository,
         engine: PolicyEngine,
+        protected_cidrs: list[str] | None = None,
     ) -> None:
         self._repo = repository
         self._engine = engine
+        self._protected_cidrs = protected_cidrs or []
 
     # ─── DEFENSE POLICIES CRUD ───
+
+    async def list_decisions(
+        self, node_id: str | None, limit: int, offset: int
+    ) -> list[PolicyDecisionResponse]:
+        try:
+            node = uuid.UUID(node_id) if node_id else None
+        except ValueError as error:
+            raise HTTPException(422, "Invalid node UUID") from error
+        rows = await self._repo.decisions(node, limit, offset)
+        return [
+            PolicyDecisionResponse(
+                id=str(row.id),
+                node_id=str(row.node_id),
+                event_id=row.event_id,
+                created_at=row.created_at,
+                snapshot=row.snapshot,
+            )
+            for row in rows
+        ]
 
     async def create_policy(
         self,
@@ -63,6 +91,7 @@ class PolicyService:
                 detail="Invalid project UUID format",
             ) from err
 
+        self._validate_action(request.action_type.value, request.block_duration_seconds)
         model = DefensePolicyModel(
             project_id=project_uuid,
             name=request.name,
@@ -73,6 +102,7 @@ class PolicyService:
             cooldown_seconds=request.cooldown_seconds,
             block_duration_seconds=request.block_duration_seconds,
             enabled=request.enabled,
+            priority=request.priority,
         )
         saved = await self._repo.create_policy(model)
         return self._to_policy_response(saved)
@@ -138,6 +168,12 @@ class PolicyService:
         if request.name is not None:
             model.name = request.name
         if request.action_type is not None:
+            self._validate_action(
+                request.action_type.value,
+                request.block_duration_seconds
+                if request.block_duration_seconds is not None
+                else model.block_duration_seconds,
+            )
             model.action_type = request.action_type.value
         if request.target_params is not None:
             model.target_params = request.target_params
@@ -146,9 +182,12 @@ class PolicyService:
         if request.cooldown_seconds is not None:
             model.cooldown_seconds = request.cooldown_seconds
         if request.block_duration_seconds is not None:
+            self._validate_action(model.action_type, request.block_duration_seconds)
             model.block_duration_seconds = request.block_duration_seconds
         if request.enabled is not None:
             model.enabled = request.enabled
+        if request.priority is not None:
+            model.priority = request.priority
 
         saved = await self._repo.save_policy(model)
         return self._to_policy_response(saved)
@@ -243,16 +282,60 @@ class PolicyService:
         project_id: uuid.UUID,
         event: DetectionEventContract,
         controller_ip: str | None = None,
+        *,
+        dry_run: bool = False,
     ) -> PolicyEvaluationResult:
         """Đánh giá sự kiện và kiểm tra quy tắc phòng thủ."""
         policies = await self._repo.list_policies(project_id=project_id)
         whitelists = await self._repo.list_whitelist(project_id=project_id)
-        return self._engine.evaluate(
+        result = self._engine.evaluate(
             event=event,
             policies=policies,
             whitelists=whitelists,
             controller_ip=controller_ip,
+            protected_cidrs=self._protected_cidrs,
         )
+        if result.policy_id is not None:
+            state = await self._repo.cooldown(
+                uuid.UUID(event.node_id),
+                result.policy_id,
+                result.target or event.node_id,
+                lock=not dry_run,
+            )
+            result = self._engine.evaluate(
+                event,
+                policies,
+                whitelists,
+                controller_ip,
+                last_authorized_at=state.last_authorized_at if state else None,
+                protected_cidrs=self._protected_cidrs,
+            )
+            if state is not None and not dry_run and result.authorized and result.is_auto_execute:
+                state.last_authorized_at = datetime.now(UTC)
+        if not dry_run:
+            await self._repo.audit(
+                PolicyDecisionModel(
+                    node_id=uuid.UUID(event.node_id),
+                    event_id=event.id,
+                    snapshot={
+                        "event": event.model_dump(mode="json"),
+                        "result": result.model_dump(mode="json"),
+                        "policies": [
+                            self._to_policy_response(p).model_dump(mode="json") for p in policies
+                        ],
+                        "protected_cidrs": self._protected_cidrs,
+                        "whitelists": [w.ip_or_cidr for w in whitelists],
+                    },
+                )
+            )
+        return result
+
+    @staticmethod
+    def _validate_action(action: str, duration: int) -> None:
+        if action not in SUPPORTED_ACTIONS or action == "UNBLOCK_IP_NFTABLES":
+            raise HTTPException(422, "Action has no supported automatic CORE executor")
+        if action == "BLOCK_IP_NFTABLES" and not 1 <= duration <= 86400:
+            raise HTTPException(422, "Block duration must be between 1 and 86400 seconds")
 
     async def dry_run_evaluation(
         self,
@@ -271,6 +354,7 @@ class PolicyService:
         return await self.evaluate_event(
             project_id=project_uuid,
             event=request.event,
+            dry_run=True,
         )
 
     def _to_policy_response(self, model: DefensePolicyModel) -> DefensePolicyResponse:
@@ -285,6 +369,7 @@ class PolicyService:
             cooldown_seconds=model.cooldown_seconds,
             block_duration_seconds=model.block_duration_seconds,
             enabled=model.enabled,
+            priority=model.priority if model.priority is not None else 100,
         )
 
     def _to_whitelist_response(self, model: IPWhitelistModel) -> IPWhitelistResponse:

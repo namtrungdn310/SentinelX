@@ -1,13 +1,16 @@
 """Application service for managing Defense Actions and Command Pipeline."""
 
+import ipaddress
 import logging
+import secrets
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
 
+from sentinelx_common.contracts.command_parameters import normalize_command
 from sentinelx_common.contracts.defense import (
     AgentCommandContract,
     CommandAckRequest,
@@ -17,18 +20,20 @@ from sentinelx_common.contracts.defense import (
     DefenseActionStatus,
     ManualDefenseActionCreateRequest,
 )
-from sentinelx_common.contracts.incidents import IncidentStatus
 from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
+from sentinelx_common.utils.time import ensure_utc
+from sentinelx_controller.config import CoreSafetySettings
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.defense.models import DefenseActionModel
 from sentinelx_controller.modules.defense.repository import DefenseRepository
-from sentinelx_controller.modules.incidents.repository import IncidentRepository
+from sentinelx_controller.modules.incidents.service import IncidentService
+from sentinelx_controller.modules.nodes.service import NodeService
 
 logger = logging.getLogger("sentinelx_controller.defense.service")
 
 
-RecoveryAckHandler = Callable[[DefenseActionModel, str, str | None], Awaitable[None]]
+RecoveryAckHandler = Callable[[DefenseActionResponse, str, str | None], Awaitable[None]]
 
 
 class DefenseService:
@@ -39,14 +44,21 @@ class DefenseService:
         defense_repo: DefenseRepository,
         realtime_hub: RealtimeHub | None = None,
         publisher: CommittedPublisher | None = None,
-        incident_repo: IncidentRepository | None = None,
+        incident_service: IncidentService | None = None,
         recovery_ack_handler: RecoveryAckHandler | None = None,
+        node_service: NodeService | None = None,
+        safety: CoreSafetySettings | None = None,
     ) -> None:
         self._repo = defense_repo
         self._realtime_hub = realtime_hub
         self._publisher = publisher
-        self._incident_repo = incident_repo
+        self._incidents = incident_service
         self._recovery_ack_handler = recovery_ack_handler
+        self._nodes = node_service
+        self._safety = safety or CoreSafetySettings()
+
+    def attach_recovery_handler(self, handler: RecoveryAckHandler) -> None:
+        self._recovery_ack_handler = handler
 
     def _to_response(self, model: DefenseActionModel) -> DefenseActionResponse:
         return DefenseActionResponse(
@@ -61,7 +73,40 @@ class DefenseService:
             agent_ack_at=model.agent_ack_at,
             error_message=model.error_message,
             created_at=model.created_at,
+            expires_at=model.expires_at,
+            applied_at=model.applied_at,
+            effective_until=model.effective_until,
+            attempts=model.attempts or 0,
+            execution_metadata=model.execution_metadata or {},
         )
+
+    async def _validate_target(
+        self,
+        node_id: uuid.UUID,
+        action_type: str,
+        target_ip: str | None,
+        payload: dict[str, Any],
+    ) -> tuple[str | None, dict[str, Any]]:
+        try:
+            if "effective_until" in payload:
+                raise ValueError("effective_until is assigned only by the Agent execution journal")
+            target, parameters = normalize_command(action_type, target_ip, payload)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        if target and action_type == "BLOCK_IP_NFTABLES":
+            ip = ipaddress.ip_address(target)
+            if ip.is_loopback or ip.is_unspecified or ip.is_multicast or ip.is_link_local:
+                raise HTTPException(422, "Protected/non-unicast target")
+            for cidr in self._safety.protected_cidrs:
+                if ip in ipaddress.ip_network(cidr, strict=False):
+                    raise HTTPException(422, "Target belongs to protected infrastructure")
+            if self._nodes is not None:
+                node = await self._nodes.get_node(str(node_id))
+                if ip == ipaddress.ip_address(node.ip_address):
+                    raise HTTPException(422, "Cannot block the node's own address")
+        elif self._nodes is not None:
+            await self._nodes.get_node(str(node_id))
+        return target, parameters
 
     async def _broadcast(self, event_type: RealtimeEventType, payload: dict[str, Any]) -> None:
         msg = RealtimeMessage(
@@ -74,6 +119,51 @@ class DefenseService:
         elif self._realtime_hub is not None:
             await self._realtime_hub.broadcast(msg)
 
+    async def lock_node(self, node_id: uuid.UUID) -> None:
+        await self._repo.lock_node(node_id)
+
+    async def lock_action(self, action_id: uuid.UUID) -> DefenseActionResponse | None:
+        model = await self._repo.lock_action(action_id)
+        return self._to_response(model) if model is not None else None
+
+    async def applied_actions(self, node_id: uuid.UUID | None) -> list[DefenseActionResponse]:
+        return [
+            self._to_response(a) for a in await self._repo.get_applied_blocking_actions(node_id)
+        ]
+
+    async def has_active_incident_actions(self, incident_id: uuid.UUID) -> bool:
+        return await self._repo.has_active_blocking_actions_for_incident(incident_id)
+
+    async def mark_reverted(self, action_id: uuid.UUID) -> None:
+        model = await self._repo.lock_action(action_id)
+        if model is not None and model.status == "APPLIED":
+            model.status = "REVERTED"
+            await self._broadcast(
+                RealtimeEventType.DEFENSE_ACTION_REVERTED,
+                self._to_response(model).model_dump(mode="json"),
+            )
+
+    async def queue_unblock(self, original: DefenseActionResponse) -> DefenseActionResponse:
+        now = datetime.now(UTC)
+        model = DefenseActionModel(
+            id=uuid.uuid4(),
+            node_id=uuid.UUID(original.node_id),
+            incident_id=uuid.UUID(original.incident_id) if original.incident_id else None,
+            policy_id=uuid.UUID(original.policy_id) if original.policy_id else None,
+            action_type="UNBLOCK_IP_NFTABLES",
+            target_ip=original.target_ip,
+            command_payload={"original_defense_action_id": original.id},
+            status="PENDING",
+            created_at=now,
+            expires_at=now + timedelta(seconds=self._safety.command_ttl_seconds),
+        )
+        saved = await self._repo.create_action(model)
+        result = self._to_response(saved)
+        await self._broadcast(
+            RealtimeEventType.DEFENSE_ACTION_CREATED, result.model_dump(mode="json")
+        )
+        return result
+
     async def create_action_from_policy(
         self,
         node_id: uuid.UUID,
@@ -84,7 +174,14 @@ class DefenseService:
         policy_id: uuid.UUID | None = None,
     ) -> DefenseActionResponse | None:
         """Create a defense action triggered automatically by PolicyEngine."""
-        # 1. Duplicate check: Avoid stacking identical active actions
+        target_ip, parameters = await self._validate_target(
+            node_id,
+            action_type,
+            target_ip,
+            command_payload or {},
+        )
+        await self._repo.lock_node(node_id)
+        # Serialized duplicate check includes manual and automatic actions.
         if await self._repo.has_active_action(node_id, action_type, target_ip):
             logger.info(
                 "Duplicate active action suppressed: node=%s type=%s target=%s",
@@ -102,9 +199,10 @@ class DefenseService:
             node_id=node_id,
             action_type=action_type,
             target_ip=target_ip,
-            command_payload=command_payload or {},
+            command_payload=parameters,
             status=DefenseActionStatus.PENDING.value,
             created_at=now,
+            expires_at=now + timedelta(seconds=self._safety.command_ttl_seconds),
         )
         saved = await self._repo.create_action(action)
         resp = self._to_response(saved)
@@ -137,6 +235,19 @@ class DefenseService:
                     detail="Invalid incident UUID format",
                 ) from err
 
+        if request.action_type.value == "UNBLOCK_IP_NFTABLES":
+            raise HTTPException(422, "Use the recovery endpoint to unblock an owned action")
+        if inc_uuid is not None and self._incidents is not None:
+            await self._incidents.validate_action_context(inc_uuid, node_uuid)
+        target, parameters = await self._validate_target(
+            node_uuid,
+            request.action_type.value,
+            request.target_ip,
+            request.command_payload,
+        )
+        await self._repo.lock_node(node_uuid)
+        if await self._repo.has_active_action(node_uuid, request.action_type.value, target):
+            raise HTTPException(409, "An active action already owns this target")
         now = datetime.now(UTC)
         action = DefenseActionModel(
             id=uuid.uuid4(),
@@ -144,10 +255,11 @@ class DefenseService:
             policy_id=None,
             node_id=node_uuid,
             action_type=request.action_type.value,
-            target_ip=request.target_ip,
-            command_payload=request.command_payload,
+            target_ip=target,
+            command_payload=parameters,
             status=DefenseActionStatus.PENDING.value,
             created_at=now,
+            expires_at=now + timedelta(seconds=self._safety.command_ttl_seconds),
         )
         saved = await self._repo.create_action(action)
         resp = self._to_response(saved)
@@ -174,6 +286,24 @@ class DefenseService:
                 detail="Defense action not found",
             )
         return self._to_response(action)
+
+    async def cancel_pending(self, action_id: uuid.UUID) -> DefenseActionResponse:
+        action = await self._repo.lock_action(action_id)
+        if action is None:
+            raise HTTPException(404, "Defense action not found")
+        if action.status == "CANCELLED":
+            return self._to_response(action)
+        if action.status != "PENDING":
+            raise HTTPException(
+                409, "Only an undelivered command can be cancelled; recover applied blocks"
+            )
+        action.status = "CANCELLED"
+        action.error_message = "Cancelled by operator before delivery"
+        response = self._to_response(action)
+        await self._broadcast(
+            RealtimeEventType.DEFENSE_ACTION_UPDATED, response.model_dump(mode="json")
+        )
+        return response
 
     async def list_actions(
         self,
@@ -219,9 +349,15 @@ class DefenseService:
     async def get_pending_commands_for_node(
         self,
         node_id: uuid.UUID,
+        supported_actions: list[str] | None = None,
     ) -> list[AgentCommandContract]:
         """Fetch pending commands for heartbeat piggyback and transition to SENT."""
-        actions = await self._repo.get_and_mark_pending_commands(node_id=node_id)
+        actions = await self._repo.get_and_mark_pending_commands(
+            node_id=node_id,
+            lease_seconds=self._safety.command_lease_seconds,
+            max_attempts=self._safety.command_max_attempts,
+            supported_actions=supported_actions,
+        )
         commands: list[AgentCommandContract] = []
         for a in actions:
             commands.append(
@@ -231,6 +367,9 @@ class DefenseService:
                     target_ip=a.target_ip,
                     command_payload=a.command_payload,
                     created_at=a.created_at,
+                    node_id=str(a.node_id),
+                    expires_at=ensure_utc(a.expires_at),
+                    delivery_token=a.delivery_token or "",
                 )
             )
         return commands
@@ -249,21 +388,80 @@ class DefenseService:
                 detail="Invalid action UUID format",
             ) from err
 
-        action = await self._repo.get_by_id(action_uuid)
+        if request.action_id != action_id_str:
+            raise HTTPException(422, "Body action_id must match path action_id")
+        if (
+            self._nodes is None
+            or not request.node_id
+            or not request.agent_id
+            or not await self._nodes.verify_agent(request.node_id, request.agent_id)
+        ):
+            raise HTTPException(403, "An enrolled Agent identity is required for ACK")
+        action = await self._repo.lock_action(action_uuid)
         if action is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Defense action not found",
             )
 
+        if str(action.node_id) != request.node_id:
+            raise HTTPException(403, "Action belongs to another node")
+        if not action.delivery_token or not secrets.compare_digest(
+            action.delivery_token,
+            request.delivery_token,
+        ):
+            raise HTTPException(409, "Missing or invalid command delivery token")
         now = datetime.now(UTC)
         # Idempotent ACK handling
-        if action.status == request.status.value and action.agent_ack_at is not None:
+        same_result = action.status == request.status.value or (
+            action.status == "REVERTED" and request.status == DefenseActionStatus.APPLIED
+        )
+        if same_result and action.agent_ack_at is not None:
+            if (
+                action.execution_metadata != request.execution_metadata
+                or action.error_message != request.error_message
+                or action.executed_at is None
+                or request.executed_at is None
+                or ensure_utc(action.executed_at) != request.executed_at
+            ):
+                raise HTTPException(409, "Conflicting replay of a completed ACK")
             return CommandAckResponse(
                 status="ok",
                 action_id=action_id_str,
                 acknowledged_at=action.agent_ack_at,
             )
+
+        if action.status not in {"SENT", "EXPIRED"}:
+            raise HTTPException(409, "Only a delivered, nonterminal command may be acknowledged")
+        if action.status == "EXPIRED" and request.status == DefenseActionStatus.APPLIED:
+            if await self._repo.has_active_action(
+                action.node_id, action.action_type, action.target_ip
+            ):
+                raise HTTPException(
+                    409, "Late receipt conflicts with a newer active action; reconcile host"
+                )
+        executed = request.executed_at
+        if executed is None or executed > now + timedelta(seconds=30):
+            raise HTTPException(422, "ACK requires a valid execution timestamp")
+        if executed < ensure_utc(action.created_at) - timedelta(seconds=30):
+            raise HTTPException(422, "Execution precedes command creation")
+        if request.status == DefenseActionStatus.APPLIED:
+            if executed > ensure_utc(action.expires_at):
+                raise HTTPException(409, "Command was executed after expiry")
+            if request.execution_metadata.get("executor") != "nftables":
+                raise HTTPException(422, "APPLIED requires a real executor outcome")
+            if request.execution_metadata.get("simulated") or request.execution_metadata.get(
+                "noop"
+            ):
+                raise HTTPException(422, "Simulation cannot report APPLIED")
+            action.applied_at = executed
+            if action.action_type == "BLOCK_IP_NFTABLES":
+                action.effective_until = executed + timedelta(
+                    seconds=int(action.command_payload["duration_seconds"]),
+                )
+        action.execution_metadata = request.execution_metadata
+        action.executed_at = executed
+        action.leased_until = None
 
         updated = await self._repo.record_ack(
             action=action,
@@ -275,22 +473,16 @@ class DefenseService:
         # Transition associated incident to MITIGATING when action is confirmed APPLIED
         if (
             action.incident_id is not None
-            and self._incident_repo is not None
+            and self._incidents is not None
             and request.status == DefenseActionStatus.APPLIED
             and action.action_type != "UNBLOCK_IP_NFTABLES"
         ):
-            inc = await self._incident_repo.get_by_id(action.incident_id)
-            if inc and inc.status == IncidentStatus.DETECTED.value:
-                inc.status = IncidentStatus.MITIGATING.value
-                await self._incident_repo.save(inc)
+            await self._incidents.mark_mitigating(action.incident_id)
 
         # Trigger recovery completion hook if unblock action was acknowledged
-        if (
-            self._recovery_ack_handler is not None
-            and action.action_type == "UNBLOCK_IP_NFTABLES"
-        ):
+        if self._recovery_ack_handler is not None and action.action_type == "UNBLOCK_IP_NFTABLES":
             await self._recovery_ack_handler(
-                action,
+                self._to_response(action),
                 request.status.value,
                 request.error_message,
             )

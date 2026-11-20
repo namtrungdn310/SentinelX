@@ -155,6 +155,7 @@ async def test_m4_end_to_end_network_telemetry_detection_incident_policy_flow(
                             "source_ip": "203.0.113.195",
                             "destination_ip": "192.168.1.100",
                             "protocol": "tcp",
+                            "direction": "inbound",
                             "packet_count": 210,
                             "byte_count": 10500,
                             "syn_count": 200,
@@ -214,6 +215,8 @@ async def test_m4_end_to_end_network_telemetry_detection_incident_policy_flow(
                 "agent_id": agent_id,
                 "sequence": 1,
                 "sent_at": now.isoformat(),
+                "command_protocol_version": 2,
+                "supported_actions": ["BLOCK_IP_NFTABLES", "UNBLOCK_IP_NFTABLES", "ALERT_ONLY"],
             },
         )
         assert hb_res.status_code == 200
@@ -242,6 +245,7 @@ async def test_m4_end_to_end_network_telemetry_detection_incident_policy_flow(
                             "source_ip": "192.168.1.50",
                             "destination_ip": "192.168.1.100",
                             "protocol": "tcp",
+                            "direction": "inbound",
                             "packet_count": 250,
                             "byte_count": 12000,
                             "syn_count": 220,

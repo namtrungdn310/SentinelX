@@ -23,6 +23,7 @@ class IncidentResponse(SentinelXBaseModel):
 
     id: str = Field(..., description="UUID của incident")
     project_id: str = Field(..., description="UUID của project liên quan")
+    node_id: str | None = Field(default=None, description="UUID của máy chủ liên quan")
     title: str = Field(..., description="Tiêu đề vụ việc")
     status: IncidentStatus = Field(..., description="Trạng thái hiện tại của incident")
     severity: DetectionSeverity = Field(..., description="Mức độ nghiêm trọng tổng hợp")

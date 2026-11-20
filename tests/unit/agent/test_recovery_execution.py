@@ -16,7 +16,7 @@ def test_validator_accepts_valid_unblock_command() -> None:
         id="c1111111-1111-1111-1111-111111111111",
         action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip="203.0.113.100",
-        command_payload={},
+        command_payload={"original_defense_action_id": "c4444444-4444-4444-4444-444444444444"},
         created_at=datetime.now(UTC),
     )
 
@@ -31,7 +31,7 @@ def test_validator_rejects_unblock_command_without_target_ip() -> None:
         id="c2222222-2222-2222-2222-222222222222",
         action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip=None,
-        command_payload={},
+        command_payload={"original_defense_action_id": "c4444444-4444-4444-4444-444444444444"},
         created_at=datetime.now(UTC),
     )
 
@@ -46,7 +46,7 @@ def test_validator_rejects_unblock_command_with_invalid_ip() -> None:
         id="c3333333-3333-3333-3333-333333333333",
         action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip="999.999.999.999",
-        command_payload={},
+        command_payload={"original_defense_action_id": "c4444444-4444-4444-4444-444444444444"},
         created_at=datetime.now(UTC),
     )
 
@@ -63,7 +63,7 @@ async def test_simulated_executor_tracks_block_and_unblock() -> None:
         id="c4444444-4444-4444-4444-444444444444",
         action_type=PolicyActionType.BLOCK_IP_NFTABLES.value,
         target_ip="203.0.113.50",
-        command_payload={},
+        command_payload={"original_defense_action_id": "c4444444-4444-4444-4444-444444444444"},
         created_at=datetime.now(UTC),
     )
 
@@ -76,7 +76,7 @@ async def test_simulated_executor_tracks_block_and_unblock() -> None:
         id="c5555555-5555-5555-5555-555555555555",
         action_type=PolicyActionType.UNBLOCK_IP_NFTABLES.value,
         target_ip="203.0.113.50",
-        command_payload={},
+        command_payload={"original_defense_action_id": "c4444444-4444-4444-4444-444444444444"},
         created_at=datetime.now(UTC),
     )
 

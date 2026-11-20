@@ -290,6 +290,11 @@ class NodeService:
 
         now = datetime.now(UTC)
         await self._node_repo.record_heartbeat(node_id=n_uuid, last_seen_at=now)
+        node.agent_capabilities = {
+            "protocol_version": request.command_protocol_version,
+            "executor_mode": request.executor_mode,
+            "supported_actions": request.supported_actions,
+        }
 
         return HeartbeatResponse(
             status="ok",
@@ -313,8 +318,6 @@ class NodeService:
 
         return await repo.verify_agent_credentials(node_id=n_uuid, agent_id=a_uuid)
 
-
-
     def _ensure_enrollment_repo(self) -> AgentEnrollmentRepository:
         if self._enrollment_repo is None:
             raise RuntimeError("AgentEnrollmentRepository is not configured on NodeService")
@@ -331,6 +334,7 @@ class NodeService:
             os_info=model.os_info,
             last_seen=ensure_utc(model.last_seen_at) if model.last_seen_at else None,
             created_at=ensure_utc(model.created_at),
+            agent_capabilities=model.agent_capabilities or {},
         )
 
     @staticmethod
@@ -344,5 +348,3 @@ class NodeService:
             enrolled_at=ensure_utc(model.enrolled_at) if model.enrolled_at else None,
             created_at=ensure_utc(model.created_at),
         )
-
-

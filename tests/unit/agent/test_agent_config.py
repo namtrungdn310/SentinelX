@@ -68,6 +68,30 @@ def test_agent_settings_rejects_unknown_collector() -> None:
         AgentSettings.model_validate({"telemetry_collector_type": "typo"})
 
 
+def test_defense_yaml_fields_and_environment_are_not_silently_ignored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "defense.yaml"
+    config.write_text(
+        "agent:\n  defense_executor_type: nftables\n  nftables_table_name: guard_qa\n"
+        "  nftables_hook: forward\n  protected_cidrs: [192.0.2.1/24]\n"
+        "  max_block_seconds: 90\n",
+        encoding="utf-8",
+    )
+    settings = AgentSettings.load(config)
+    assert settings.defense_executor_type == "nftables" and settings.nftables_hook == "forward"
+    assert settings.nftables_table_name == "guard_qa"
+    assert settings.protected_cidrs == ["192.0.2.0/24"] and settings.max_block_seconds == 90
+    monkeypatch.setenv("SENTINELX_DEFENSE_EXECUTOR_TYPE", "noop")
+    monkeypatch.setenv("SENTINELX_PROTECTED_CIDRS", '["198.51.100.0/24"]')
+    override = AgentSettings.load(config)
+    assert override.defense_executor_type == "noop" and override.protected_cidrs == [
+        "198.51.100.0/24"
+    ]
+    with pytest.raises(ValidationError):
+        AgentSettings(protected_cidrs=["typo"])
+
+
 def test_collector_yaml_and_environment_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

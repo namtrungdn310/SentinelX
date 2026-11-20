@@ -13,7 +13,10 @@ class TelemetryMetricSampleModel(Base):
     """Database table storing time-series metric measurements from nodes."""
 
     __tablename__ = "telemetry_metric_samples"
-    __table_args__ = (Index("idx_telemetry_node_time", "node_id", "observed_at"),)
+    __table_args__ = (
+        Index("idx_telemetry_node_time", "node_id", "observed_at"),
+        Index("idx_telemetry_retention", "received_at"),
+    )
 
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"),

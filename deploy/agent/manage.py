@@ -24,6 +24,12 @@ CAPTURE_OVERRIDE = (
     "RestrictAddressFamilies=AF_PACKET AF_NETLINK\n"
 )
 
+DEFENSE_OVERRIDE = (
+    "# Managed by SentinelX: opt-in M7 nftables execution.\n"
+    "[Service]\nCapabilityBoundingSet=CAP_NET_ADMIN\nAmbientCapabilities=CAP_NET_ADMIN\n"
+    "RestrictAddressFamilies=AF_NETLINK\n"
+)
+
 
 @dataclass(frozen=True)
 class Layout:
@@ -139,6 +145,23 @@ def capture_permissions(layout: Layout, enabled: bool) -> None:
         raise ValueError("Capture override was customized; refusing to overwrite/remove it")
     if enabled:
         atomic_write(override, CAPTURE_OVERRIDE, 0o644)
+    else:
+        override.unlink(missing_ok=True)
+        if directory.is_dir() and not any(directory.iterdir()):
+            directory.rmdir()
+
+
+def defense_permissions(layout: Layout, enabled: bool) -> None:
+    directory = layout.unit.with_name(layout.name + ".service.d")
+    override = directory / "60-sentinelx-defense.conf"
+    if directory.is_symlink() or override.is_symlink():
+        raise ValueError("Defense override must not be a symbolic link")
+    if override.exists() and override.read_text() != DEFENSE_OVERRIDE:
+        raise ValueError("Defense override was customized; refusing to overwrite/remove it")
+    if enabled:
+        if shutil.which("nft") is None:
+            raise ValueError("Install nftables before enabling defense permissions")
+        atomic_write(override, DEFENSE_OVERRIDE, 0o644)
     else:
         override.unlink(missing_ok=True)
         if directory.is_dir() and not any(directory.iterdir()):
@@ -381,6 +404,10 @@ def main() -> int:
     capture_choice = capture.add_mutually_exclusive_group(required=True)
     capture_choice.add_argument("--enable", action="store_true")
     capture_choice.add_argument("--disable", action="store_true")
+    defense = sub.add_parser("defense-permissions", help="Opt in/out of CAP_NET_ADMIN for M7")
+    defense_choice = defense.add_mutually_exclusive_group(required=True)
+    defense_choice.add_argument("--enable", action="store_true")
+    defense_choice.add_argument("--disable", action="store_true")
     for action in ("check", "status", "restart", "rollback", "uninstall"):
         command = sub.add_parser(action)
         if action == "uninstall":
@@ -408,9 +435,11 @@ def main() -> int:
             elif args.action == "capture-permissions":
                 capture_permissions(layout, args.enable)
                 execute(["systemctl", "daemon-reload"])
-                print(
-                    "Capture permissions updated; configure capture, then restart explicitly."
-                )
+                print("Capture permissions updated; configure capture, then restart explicitly.")
+            elif args.action == "defense-permissions":
+                defense_permissions(layout, args.enable)
+                execute(["systemctl", "daemon-reload"])
+                print("Defense permissions updated; configure nftables, then restart explicitly.")
             elif args.action == "rollback":
                 previous = release_at(layout, "previous")
                 current = release_at(layout, "current")
@@ -431,6 +460,7 @@ def main() -> int:
                     execute(["systemctl", "disable", "--now", f"{layout.name}.service"])
                 layout.unit.unlink(missing_ok=True)
                 capture_permissions(layout, False)
+                defense_permissions(layout, False)
                 execute(["systemctl", "daemon-reload"])
                 # Only a marked, fixed-name installation is removable. Never follow symlinks.
                 if args.purge:

@@ -34,12 +34,17 @@ class DetectionEngine:
         max_gap_seconds: int = 60,
         max_sample_age_seconds: int = 86400,
         future_skew_seconds: int = 30,
+        network_state_max_entries: int = 2048,
+        network_state_ttl_seconds: int = 3600,
     ) -> None:
         if not 3 <= window_size <= 100 or min(cooldown_seconds, future_skew_seconds) < 0:
             raise ValueError("Invalid detection window/cooldown")
         if min(max_gap_seconds, max_sample_age_seconds) <= 0:
             raise ValueError("Detection age/gap limits must be positive")
         self._window_size, self._cooldown_seconds = window_size, cooldown_seconds
+        self._network_state_max = network_state_max_entries
+        self._network_state_ttl = network_state_ttl_seconds
+        self._last_anomaly_at: datetime | None = None
         self._max_gap, self._max_age, self._future_skew = (
             max_gap_seconds,
             max_sample_age_seconds,
@@ -91,6 +96,8 @@ class DetectionEngine:
             window.append(sample)
             for detector in self._detectors:
                 event = detector.evaluate(node_id, list(window))
+                if event is not None:
+                    self._last_anomaly_at = sample.observed_at
                 if event is not None and self._should_emit_alert(node_id, event):
                     self._last_alerts[(node_id, event.detector_name)] = (
                         event.detected_at,
@@ -134,6 +141,15 @@ class DetectionEngine:
             for (node, name), (stamp, severity) in local._last_alerts.items()
             if node == node_id
         }
+        if local._last_anomaly_at is not None:
+            updated["last_anomaly_at"] = max(
+                local._last_anomaly_at,
+                datetime.fromisoformat(
+                    state.get("last_anomaly_at", local._last_anomaly_at.isoformat())
+                ),
+            ).isoformat()
+        if local._windows[node_id]:
+            updated["resource_observed_at"] = local._windows[node_id][-1].observed_at.isoformat()
         return events, updated
 
     def evaluate_network_state(
@@ -149,13 +165,38 @@ class DetectionEngine:
             return [], dict(state)
 
         updated: dict[str, Any] = dict(state)
-        network_alerts: dict[str, dict[str, str]] = dict(state.get("network_alerts", {}))
+        received = now or datetime.now(UTC)
+        network_alerts: dict[str, dict[str, str]] = {
+            key: alert
+            for key, alert in state.get("network_alerts", {}).items()
+            if 0
+            <= (received - datetime.fromisoformat(alert["time"])).total_seconds()
+            <= self._network_state_ttl
+        }
+        cursors: dict[str, str] = dict(state.get("network_cursors", {}))
         events: list[DetectionEventContract] = []
 
-        for window in windows:
+        for window in sorted(windows, key=lambda w: (w.window_end, str(w.window_id))):
+            age = (received - window.window_end).total_seconds()
+            if age > self._max_age or age < -self._future_skew:
+                continue
+            previous_end = cursors.get(window.interface)
+            if previous_end and window.window_end <= datetime.fromisoformat(previous_end):
+                continue
+            cursors[window.interface] = window.window_end.isoformat()
+            updated["network_observed_at"] = window.window_end.isoformat()
+            updated["network_observation_complete"] = not (
+                window.omitted_packets or window.skipped_windows
+            )
             for detector in self._network_detectors:
                 candidates = detector.evaluate(node_id, window)
                 for candidate in candidates:
+                    updated["last_anomaly_at"] = max(
+                        candidate.detected_at,
+                        datetime.fromisoformat(
+                            updated.get("last_anomaly_at", candidate.detected_at.isoformat())
+                        ),
+                    ).isoformat()
                     alert_key = f"{candidate.detector_name}:{candidate.attacker_ip}"
                     previous = network_alerts.get(alert_key)
                     should_emit = True
@@ -179,7 +220,13 @@ class DetectionEngine:
                         }
                         events.append(candidate)
 
-        updated["network_alerts"] = network_alerts
+        updated["network_alerts"] = dict(
+            sorted(
+                network_alerts.items(),
+                key=lambda pair: pair[1]["time"],
+            )[-self._network_state_max :]
+        )
+        updated["network_cursors"] = dict(sorted(cursors.items(), key=lambda pair: pair[1])[-16:])
         return events, updated
 
     def _should_emit_alert(self, node_id: uuid.UUID, event: DetectionEventContract) -> bool:
