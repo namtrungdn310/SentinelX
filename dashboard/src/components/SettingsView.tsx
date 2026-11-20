@@ -220,7 +220,7 @@ export function SettingsView({
           <div className="spec-category-block">
             <div className="spec-category-header">
               <Cpu size={15} />
-              <span>Cửa sổ tài nguyên máy chủ (CPU, RAM, Đĩa)</span>
+              <span>Cửa sổ tài nguyên (CPU, RAM, Đĩa)</span>
             </div>
             <div className="spec-category-grid">
               <div className="spec-tile">
