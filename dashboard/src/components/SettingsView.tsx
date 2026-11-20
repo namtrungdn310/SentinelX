@@ -245,11 +245,11 @@ export function SettingsView({
             </div>
           </div>
 
-          {/* Nhóm 2: Cửa sổ An ninh mạng & Bắt gói tin */}
+          {/* Nhóm 2: Cửa sổ và kiểm chứng sự cố mạng */}
           <div className="spec-category-block">
             <div className="spec-category-header">
               <Globe size={15} />
-              <span>Cửa sổ an ninh mạng (Network &amp; Port Scan)</span>
+              <span>Cửa sổ và kiểm chứng sự cố mạng (Network &amp; Port Scan)</span>
             </div>
             <div className="spec-category-grid">
               <div className="spec-tile">
