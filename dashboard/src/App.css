@@ -4394,49 +4394,6 @@ body:has(.event-full) .event-full {
     padding-bottom: 30px;
 }
 
-.settings-simple-header {
-    display: flex;
-    align-items: center;
-    padding: 12px 18px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm, 6px);
-}
-
-.server-select-box {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.server-select-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-primary);
-    white-space: nowrap;
-}
-
-.server-select-input {
-    padding: 7px 12px;
-    font-size: 13px;
-    font-weight: 500;
-    border-radius: 6px;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-panel);
-    color: var(--text-primary);
-    min-width: 260px;
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease;
-}
-
-.server-select-input:focus {
-    border-color: var(--brand-indigo, #3459c7);
-}
-
 .settings-simple-toast {
     display: flex;
     align-items: center;

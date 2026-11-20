@@ -7,7 +7,6 @@ import {
   Globe,
   Leaf,
   RefreshCw,
-  Server,
   ShieldCheck,
   Zap,
 } from "lucide-react";
@@ -18,6 +17,7 @@ import type {
 } from "../types";
 import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "../mockData";
 import { updateProjectSettings } from "../api";
+import { nodeHealth, nodeHealthLabel } from "../presentation";
 
 interface Props {
   selectedProjectId: string | null;
@@ -170,26 +170,30 @@ export function SettingsView({
 
   return (
     <div className="settings-simple-container">
-      {/* 1. Server Selector Bar */}
-      <div className="panel settings-simple-header">
-        <div className="server-select-box">
-          <label htmlFor="settings-server-select" className="server-select-label">
-            <Server size={15} />
-            <span>Chọn máy chủ:</span>
-          </label>
-          <select
-            id="settings-server-select"
-            className="server-select-input font-mono"
-            value={effectiveNodeId}
-            onChange={(e) => setSelectedNodeId(e.target.value)}
-          >
-            {availableNodes.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.hostname} · {n.ip_address}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* 1. Server Selector Toolbar (Identical to Telemetry view) */}
+      <div className="telemetry-host-toolbar">
+        <select
+          id="settings-host"
+          value={effectiveNodeId}
+          onChange={(event) => setSelectedNodeId(event.target.value)}
+          disabled={!availableNodes.length}
+          aria-label="Chọn máy chủ"
+        >
+          {!availableNodes.length && (
+            <option value="">Không có máy chủ phù hợp</option>
+          )}
+          {availableNodes.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.hostname} · {node.ip_address}
+            </option>
+          ))}
+        </select>
+        {selectedNode && (
+          <span className={`status-badge ${nodeHealth(selectedNode)}`}>
+            <i />
+            {nodeHealthLabel(selectedNode)}
+          </span>
+        )}
       </div>
 
       {/* Success Notification */}
