@@ -252,7 +252,7 @@ export function SettingsView({
             <div className="spec-tile">
               <div className="spec-tile-head">
                 <Cpu size={14} />
-                <span>Cửa sổ xác nhận quá tải</span>
+                <span>Thời gian kiểm chứng quá tải</span>
               </div>
               <strong className="spec-tile-val font-mono">
                 {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
@@ -322,7 +322,7 @@ export function SettingsView({
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
-                  <div>• Xác nhận quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
+                  <div>• Kiểm chứng quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
                   <div>• Cửa sổ mạng: <strong>{preset.network_window_seconds}s (trượt {preset.network_step_seconds}s)</strong></div>
                   <div>• Tải CPU Agent: <strong>{preset.agent_cpu_impact}</strong></div>
                 </div>
@@ -372,7 +372,7 @@ export function SettingsView({
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
-                  <div>• Xác nhận quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
+                  <div>• Kiểm chứng quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
                   <div>• Cửa sổ mạng: <strong>{preset.network_window_seconds}s (trượt {preset.network_step_seconds}s)</strong></div>
                   <div>• Tải CPU Agent: <strong>{preset.agent_cpu_impact}</strong></div>
                 </div>
@@ -422,7 +422,7 @@ export function SettingsView({
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
-                  <div>• Xác nhận quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
+                  <div>• Kiểm chứng quá tải: <strong>{preset.cpu_overload_window_seconds}s</strong></div>
                   <div>• Cửa sổ mạng: <strong>{preset.network_window_seconds}s (trượt {preset.network_step_seconds}s)</strong></div>
                   <div>• Tải CPU Agent: <strong>{preset.agent_cpu_impact}</strong></div>
                 </div>
