@@ -194,6 +194,14 @@ export function SettingsView({
             {nodeHealthLabel(selectedNode)}
           </span>
         )}
+
+        {/* Right Corner Update Timestamp */}
+        <div className="config-meta font-mono" style={{ marginLeft: "auto" }}>
+          <Clock size={13} />
+          <span>
+            Cập nhật: {new Date(lastUpdated).toLocaleTimeString("vi-VN")} · {new Date(lastUpdated).toLocaleDateString("vi-VN")}
+          </span>
+        </div>
       </div>
 
       {/* Success Notification */}
@@ -217,13 +225,6 @@ export function SettingsView({
                   <Check size={12} /> Đang chạy: {activePreset.name}
                 </span>
               </div>
-            </div>
-
-            <div className="config-meta font-mono">
-              <Clock size={13} />
-              <span>
-                Cập nhật: {new Date(lastUpdated).toLocaleTimeString("vi-VN")} · {new Date(lastUpdated).toLocaleDateString("vi-VN")}
-              </span>
             </div>
           </div>
 
