@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import {
+  Activity,
   Check,
   CheckCircle2,
   Clock,
@@ -212,40 +213,69 @@ export function SettingsView({
         </div>
       )}
 
-      {/* 2. Current Active Configuration Specs */}
+      {/* 2. Window Monitoring - Split Resource vs Network */}
       {selectedNode && (
-        <div className="current-specs-grid">
-          <div className="spec-tile">
-            <div className="spec-tile-head">
-              <Clock size={14} />
-              <span>Chu kỳ lấy mẫu tài nguyên</span>
+        <div className="specs-split-container">
+          {/* Nhóm 1: Cửa sổ Tài nguyên (CPU / RAM / Disk) */}
+          <div className="spec-category-block">
+            <div className="spec-category-header">
+              <Cpu size={15} />
+              <span>Cửa sổ tài nguyên máy chủ (CPU, RAM, Đĩa)</span>
             </div>
-            <strong className="spec-tile-val font-mono">
-              {activePreset.telemetry_interval_seconds.toFixed(1)}s / lần
-            </strong>
-            <small>Agent gọi psutil đo CPU, RAM, Disk</small>
+            <div className="spec-category-grid">
+              <div className="spec-tile">
+                <div className="spec-tile-head">
+                  <Clock size={13} />
+                  <span>Chu kỳ lấy mẫu</span>
+                </div>
+                <strong className="spec-tile-val font-mono">
+                  {activePreset.telemetry_interval_seconds.toFixed(1)}s / lần
+                </strong>
+                <small>Agent gọi psutil đo CPU, RAM, Disk</small>
+              </div>
+
+              <div className="spec-tile">
+                <div className="spec-tile-head">
+                  <ShieldCheck size={13} />
+                  <span>Kiểm chứng quá tải</span>
+                </div>
+                <strong className="spec-tile-val font-mono">
+                  {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
+                </strong>
+                <small>Loại trừ tăng tải tức thời cho CPU &amp; RAM</small>
+              </div>
+            </div>
           </div>
 
-          <div className="spec-tile">
-            <div className="spec-tile-head">
-              <Cpu size={14} />
-              <span>Thời gian kiểm chứng quá tải</span>
+          {/* Nhóm 2: Cửa sổ An ninh mạng & Bắt gói tin */}
+          <div className="spec-category-block">
+            <div className="spec-category-header">
+              <Globe size={15} />
+              <span>Cửa sổ an ninh mạng (Network &amp; Port Scan)</span>
             </div>
-            <strong className="spec-tile-val font-mono">
-              {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
-            </strong>
-            <small>Loại trừ các đợt tăng tải tức thời</small>
-          </div>
+            <div className="spec-category-grid">
+              <div className="spec-tile">
+                <div className="spec-tile-head">
+                  <Activity size={13} />
+                  <span>Cửa sổ gom gói tin</span>
+                </div>
+                <strong className="spec-tile-val font-mono">
+                  {activePreset.network_window_seconds}s
+                </strong>
+                <small>Phân tích Port Scan &amp; SYN Flood</small>
+              </div>
 
-          <div className="spec-tile">
-            <div className="spec-tile-head">
-              <Globe size={14} />
-              <span>Cửa sổ gói tin mạng</span>
+              <div className="spec-tile">
+                <div className="spec-tile-head">
+                  <Clock size={13} />
+                  <span>Bước trượt chốt sổ</span>
+                </div>
+                <strong className="spec-tile-val font-mono">
+                  {activePreset.network_step_seconds}s / lần
+                </strong>
+                <small>Chồng lấp 50% chống lọt đợt quét</small>
+              </div>
             </div>
-            <strong className="spec-tile-val font-mono">
-              {activePreset.network_window_seconds}s (trượt {activePreset.network_step_seconds}s)
-            </strong>
-            <small>Trích xuất lưu lượng &amp; phát hiện Port Scan</small>
           </div>
         </div>
       )}

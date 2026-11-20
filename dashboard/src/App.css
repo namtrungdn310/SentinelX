@@ -4420,16 +4420,49 @@ body:has(.event-full) .event-full {
     border: 1px solid var(--border-subtle);
 }
 
-.current-specs-grid {
+.specs-split-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
     margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .specs-split-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.spec-category-block {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.spec-category-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.spec-category-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 520px) {
+    .spec-category-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .spec-tile {
     background: var(--bg-subtle);
-    padding: 14px 18px;
+    padding: 14px 16px;
     border-radius: 6px;
     border: 1px solid var(--border-subtle);
     display: flex;
