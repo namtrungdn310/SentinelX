@@ -29,6 +29,12 @@ export function SecurityToast({ toast, onClose, onNavigate }: Props) {
   if (!toast) return null;
 
   const isDefense = toast.type === "defense";
+  const severityLabels: Record<string, string> = {
+    CRITICAL: "Khẩn cấp",
+    HIGH: "Cao",
+    MEDIUM: "Trung bình",
+    LOW: "Thấp",
+  };
 
   return (
     <div
@@ -40,13 +46,15 @@ export function SecurityToast({ toast, onClose, onNavigate }: Props) {
         <div className="toast-header">
           <strong>{toast.title}</strong>
           {!isDefense && toast.severity && (
-            <span className="toast-severity-badge font-mono">{toast.severity}</span>
+            <span className="toast-severity-badge font-mono">
+              {severityLabels[toast.severity] ?? toast.severity}
+            </span>
           )}
         </div>
         <p className="toast-message">{toast.message}</p>
         {toast.attackerIp && (
           <div className="toast-meta">
-            <span>Mục tiêu IP:</span>
+            <span>IP mục tiêu:</span>
             <code className="font-mono ip-pill-toast">{toast.attackerIp}</code>
           </div>
         )}

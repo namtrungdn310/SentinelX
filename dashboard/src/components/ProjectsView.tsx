@@ -14,12 +14,11 @@ export function ProjectsView({
   return (
     <div className="projects-view">
       <div className="page-heading">
-        <div>
-          <h1>Dự án hạ tầng</h1>
-        </div>
+        <h1 className="sr-only">Dự án hạ tầng</h1>
         <button
           type="button"
           className="btn btn-primary"
+          style={{ marginLeft: "auto" }}
           onClick={onOpenCreateModal}
         >
           + Tạo dự án mới

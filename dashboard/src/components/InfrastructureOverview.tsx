@@ -124,7 +124,7 @@ export function InfrastructureOverview({
           </div>
           {!ranked.length ? (
             <div className="panel-empty">
-              Chưa có mẫu tài nguyên từ host trực tuyến.
+              Chưa có mẫu tài nguyên từ máy chủ trực tuyến.
             </div>
           ) : (
             <div className="resource-ranking">
@@ -172,8 +172,8 @@ export function InfrastructureOverview({
             </div>
           )}
           <div className="panel-foot">
-            <span>Tối đa 5 máy chủ · mẫu gần nhất · Vạch ngưỡng {resource === "latestCpu" ? "75%" : "85%"}</span>
-            <span>Chọn host để phân tích</span>
+            <span>Tối đa 5 máy chủ · mẫu gần nhất · vạch ngưỡng {resource === "latestCpu" ? "75%" : "85%"}</span>
+            <span>Chọn máy chủ để phân tích</span>
           </div>
         </section>
       </div>

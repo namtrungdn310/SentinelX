@@ -70,99 +70,99 @@ export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
           <X size={19} />
         </button>
       </div>
-      <div className="host-detail-summary">
-        <span className={`status-badge ${nodeHealth(node)}`}>
-          <i />
-          {healthLabels[nodeHealth(node)]}
-        </span>
-      </div>
-      <dl className="detail-properties">
-        <div>
-          <dt>Node ID</dt>
-          <dd className="font-mono">{node.id}</dd>
+      <div className="modal-body">
+        <div className="host-detail-summary">
+          <span className={`status-badge ${nodeHealth(node)}`}>
+            <i />
+            {healthLabels[nodeHealth(node)]}
+          </span>
         </div>
-        <div>
-          <dt>Địa chỉ IP</dt>
-          <dd className="font-mono">{node.ip_address}</dd>
-        </div>
-        <div>
-          <dt>Phản hồi gần nhất</dt>
-          <dd>
-            {node.last_seen
-              ? new Date(node.last_seen).toLocaleString("vi-VN")
-              : "Chưa có phản hồi"}
-          </dd>
-        </div>
-        <div>
-          <dt>CPU</dt>
-          <dd className="font-mono">
-            {formatPercent(node.latestCpu)}
+        <dl className="detail-properties">
+          <div>
+            <dt>Mã máy chủ</dt>
+            <dd className="font-mono">{node.id}</dd>
+          </div>
+          <div>
+            <dt>Địa chỉ IP</dt>
+            <dd className="font-mono">{node.ip_address}</dd>
+          </div>
+          <div>
+            <dt>Phản hồi gần nhất</dt>
+            <dd>
+              {node.last_seen
+                ? new Date(node.last_seen).toLocaleString("vi-VN")
+                : "Chưa có phản hồi"}
+            </dd>
+          </div>
+        </dl>
+        <div className="detail-resource-grid">
+          <div>
+            <span>CPU</span>
+            <strong className="font-mono">{formatPercent(node.latestCpu)}</strong>
             {validMetric(node.latestCpu) && (
-              <span className="spec-sub"> ({formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)})</span>
+              <small>{formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)}</small>
             )}
-          </dd>
-        </div>
-        <div>
-          <dt>Bộ nhớ RAM</dt>
-          <dd className="font-mono">
-            {formatPercent(node.latestMemory)}
+          </div>
+          <div>
+            <span>Bộ nhớ RAM</span>
+            <strong className="font-mono">{formatPercent(node.latestMemory)}</strong>
             {validMetric(node.latestMemory) && (
-              <span className="spec-sub"> ({formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)})</span>
+              <small>{formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)}</small>
             )}
-          </dd>
-        </div>
-        <div>
-          <dt>Dung lượng ổ đĩa</dt>
-          <dd className="font-mono">
+          </div>
+          <div>
+            <span>Dung lượng ổ đĩa</span>
+            <strong className="font-mono">{formatPercent(node.latestDisk)}</strong>
             {validMetric(node.latestDisk) ? (
-              <>
-                {formatPercent(node.latestDisk)}
-                <span className="spec-sub"> ({formatDiskUsage(node.latestDisk, getNodeHardware(node).totalDiskBytes)})</span>
-              </>
+              <small>{formatDiskUsage(node.latestDisk, getNodeHardware(node).totalDiskBytes)}</small>
             ) : (
-              "— · Không có dữ liệu ổ đĩa"
+              <small>Không có dữ liệu ổ đĩa</small>
             )}
-          </dd>
+          </div>
         </div>
-      </dl>
-      <div className="token-section">
-        <h3>
-          <KeyRound size={16} /> Enrollment token
-        </h3>
-        <p className="text-body">
-          {isDemoMode
-            ? "Máy chủ mẫu không cấp token thật. Kết nối Controller để đăng ký Agent."
-            : "Cấp token mới để kích hoạt Agent trên máy Linux. Token có hiệu lực 24 giờ."}
-        </p>
-        <button
-          className="btn btn-outline"
-          onClick={generate}
-          disabled={loading || isDemoMode}
-        >
-          <KeyRound size={14} />
-          {loading ? "Đang cấp token…" : token ? "Cấp lại token" : "Tạo token"}
-        </button>
+        <div className="token-section">
+          <div className="token-section-header">
+            <h3>
+              <KeyRound size={16} /> Token đăng ký Agent
+            </h3>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={generate}
+              disabled={loading || isDemoMode}
+              title={isDemoMode ? "Cần kết nối Controller để tạo token" : undefined}
+            >
+              {loading ? "Đang cấp token…" : token ? "Cấp lại token" : "Tạo token"}
+            </button>
+          </div>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          {token && (
+            <div className="token-result">
+              <div className="code-box">{token}</div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                aria-label="Sao chép token đăng ký"
+                onClick={copy}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? "Đã sao chép" : "Sao chép token"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      {token && (
-        <div className="token-result">
-          <div className="code-box">{token}</div>
-          <button
-            className="btn btn-outline"
-            aria-label="Sao chép enrollment token"
-            onClick={copy}
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? "Đã sao chép" : "Sao chép token"}
-          </button>
-        </div>
-      )}
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={close} disabled={loading}>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={close}
+          disabled={loading}
+        >
           Đóng chi tiết
         </button>
       </div>

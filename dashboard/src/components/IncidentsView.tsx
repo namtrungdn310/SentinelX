@@ -2,25 +2,27 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   AlertOctagon,
   CheckCircle2,
-  ChevronRight,
   Filter,
   RefreshCw,
   Search,
+  Server,
   ShieldAlert,
   ShieldCheck,
   ShieldX,
 } from "lucide-react";
-import type { Incident, IncidentStatus, DetectionSeverity } from "../types";
+import type { Incident, IncidentStatus, DetectionSeverity, Node } from "../types";
 import { fetchIncidents } from "../api";
 import { MOCK_INCIDENTS } from "../mockData";
+import { getPortSummary } from "../presentation";
 import { IncidentDetailModal } from "./IncidentDetailModal";
 
 interface Props {
   selectedProjectId: string | null;
+  nodes?: Node[];
   isDemoMode: boolean;
 }
 
-export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
+export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
   const [incidents, setIncidents] = useState<Incident[]>(() => {
     if (isDemoMode) {
       return selectedProjectId
@@ -113,7 +115,7 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
       case "MITIGATING":
         return (
           <span className="status-badge warn">
-            <i /> Đang phòng thủ
+            <i /> Đang ngăn chặn
           </span>
         );
       case "DETECTED":
@@ -136,25 +138,25 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
       case "CRITICAL":
         return (
           <span className="severity-badge crit">
-            <AlertOctagon size={13} /> {severity}
+            <AlertOctagon size={13} /> Khẩn cấp
           </span>
         );
       case "HIGH":
         return (
           <span className="severity-badge warn">
-            <ShieldX size={13} /> {severity}
+            <ShieldX size={13} /> Cao
           </span>
         );
       case "MEDIUM":
         return (
           <span className="severity-badge medium">
-            <ShieldAlert size={13} /> {severity}
+            <ShieldAlert size={13} /> Trung bình
           </span>
         );
       default:
         return (
           <span className="severity-badge low">
-            <ShieldCheck size={13} /> {severity}
+            <ShieldCheck size={13} /> Thấp
           </span>
         );
     }
@@ -170,7 +172,7 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
             <ShieldAlert size={18} className="kpi-icon" />
           </div>
           <div className="kpi-value">{incidents.length}</div>
-          <span className="kpi-footnote">Ghi nhận qua Detector M3 & M4</span>
+          <span className="kpi-footnote">Tự động phát hiện từ lưu lượng &amp; tài nguyên</span>
         </div>
 
         <div className="panel kpi-card">
@@ -181,12 +183,12 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
           <div className="kpi-value" style={{ color: "var(--status-crit)" }}>
             {countDetected}
           </div>
-          <span className="kpi-footnote">Cần rà soát hoặc kích hoạt phòng thủ</span>
+          <span className="kpi-footnote">Cần rà soát hoặc kích hoạt ngăn chặn</span>
         </div>
 
         <div className="panel kpi-card">
           <div className="kpi-head">
-            <span className="kpi-label">Đang phòng thủ</span>
+            <span className="kpi-label">Đang ngăn chặn</span>
             <ShieldX size={18} style={{ color: "var(--status-warn)" }} />
           </div>
           <div className="kpi-value" style={{ color: "var(--status-warn)" }}>
@@ -203,7 +205,7 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
           <div className="kpi-value" style={{ color: "var(--status-ok)" }}>
             {countResolved}
           </div>
-          <span className="kpi-footnote">Đã unblock hoặc xử lý an toàn</span>
+          <span className="kpi-footnote">Đã gỡ chặn hoặc xử lý an toàn</span>
         </div>
       </div>
 
@@ -213,7 +215,7 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
           <Search size={16} aria-hidden="true" />
           <input
             type="search"
-            placeholder="Tìm theo tiêu đề, IP kẻ tấn công, mã sự cố..."
+            placeholder="Tìm theo tiêu đề, IP nguồn, mã sự cố..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -227,9 +229,9 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
             aria-label="Lọc theo trạng thái sự cố"
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="DETECTED">Đang diễn ra (Detected)</option>
-            <option value="MITIGATING">Đang phòng thủ (Mitigating)</option>
-            <option value="RESOLVED">Đã giải quyết (Resolved)</option>
+            <option value="DETECTED">Đang diễn ra</option>
+            <option value="MITIGATING">Đang ngăn chặn</option>
+            <option value="RESOLVED">Đã giải quyết</option>
           </select>
 
           <select
@@ -238,10 +240,10 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
             aria-label="Lọc theo mức độ nghiêm trọng"
           >
             <option value="all">Tất cả mức độ</option>
-            <option value="CRITICAL">Khẩn cấp (Critical)</option>
-            <option value="HIGH">Cao (High)</option>
-            <option value="MEDIUM">Trung bình (Medium)</option>
-            <option value="LOW">Thấp (Low)</option>
+            <option value="CRITICAL">Khẩn cấp</option>
+            <option value="HIGH">Cao</option>
+            <option value="MEDIUM">Trung bình</option>
+            <option value="LOW">Thấp</option>
           </select>
 
           <button
@@ -271,18 +273,19 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
           <table className="host-table" aria-label="Bảng danh sách sự cố an ninh">
             <thead>
               <tr>
-                <th>Vụ việc an ninh</th>
+                <th>Sự cố an ninh</th>
+                <th>Máy chủ</th>
+                <th>Cổng sự cố</th>
                 <th>Mức độ</th>
                 <th>Trạng thái</th>
                 <th>Số sự kiện</th>
                 <th>Thời điểm phát hiện</th>
-                <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {filteredIncidents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: "48px 20px" }}>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "48px 20px" }}>
                     <div className="attention-empty" style={{ justifyContent: "center" }}>
                       <ShieldCheck size={28} style={{ color: "var(--status-ok)" }} />
                       <div>
@@ -297,42 +300,64 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
                   </td>
                 </tr>
               ) : (
-                filteredIncidents.map((inc) => (
-                  <tr key={inc.id} onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
-                    <td>
-                      <div className="incident-title-cell">
-                        <strong className="incident-title-text">{inc.title}</strong>
-                        <small className="font-mono" style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                          ID: {inc.id.slice(0, 8)}...
-                        </small>
-                      </div>
-                    </td>
-                    <td>{getSeverityBadge(inc.severity)}</td>
-                    <td>{getStatusBadge(inc.status)}</td>
-                    <td>
-                      <span className="font-mono count-badge">
-                        {inc.event_count} events
-                      </span>
-                    </td>
-                    <td>
-                      <span className="font-mono" style={{ fontSize: 13 }}>
-                        {new Date(inc.started_at).toLocaleTimeString("vi-VN")} · {new Date(inc.started_at).toLocaleDateString("vi-VN")}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedIncident(inc);
-                        }}
-                      >
-                        Chi tiết <ChevronRight size={13} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filteredIncidents.map((inc) => {
+                  const node = nodes?.find((n) => n.id === inc.node_id);
+                  return (
+                    <tr key={inc.id} onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
+                      <td>
+                        <div className="incident-title-cell">
+                          <strong className="incident-title-text">{inc.title}</strong>
+                          <small className="font-mono" style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                            Mã: {inc.id}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="incident-node-cell">
+                          <span className="node-host-name">
+                            <Server size={13} className="text-muted" style={{ display: "inline", marginRight: 5, verticalAlign: -1 }} />
+                            <strong>{node?.hostname || (inc.node_id ? inc.node_id.slice(0, 8) : "—")}</strong>
+                          </span>
+                          {node?.ip_address && (
+                            <small className="font-mono text-muted">
+                              {node.ip_address}
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {(() => {
+                          const summary = getPortSummary(inc.targeted_ports);
+                          if (!summary) return <span className="font-mono text-muted">—</span>;
+                          return (
+                            <span
+                              className="font-mono text-muted port-summary-wrap"
+                              style={{ fontWeight: 500, fontSize: 13, whiteSpace: "nowrap" }}
+                              title={inc.targeted_ports?.join(", ")}
+                            >
+                              <span>{summary.visible}</span>
+                              {summary.remaining > 0 && (
+                                <span className="port-overflow-badge">+{summary.remaining}</span>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>{getSeverityBadge(inc.severity)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{getStatusBadge(inc.status)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="font-mono count-badge">
+                          {inc.event_count} sự kiện
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="font-mono" style={{ fontSize: 13 }}>
+                          {new Date(inc.started_at).toLocaleTimeString("vi-VN")} · {new Date(inc.started_at).toLocaleDateString("vi-VN")}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -344,6 +369,7 @@ export function IncidentsView({ selectedProjectId, isDemoMode }: Props) {
         <IncidentDetailModal
           key={selectedIncident.id}
           incident={selectedIncident}
+          nodes={nodes}
           isOpen={Boolean(selectedIncident)}
           onClose={() => setSelectedIncident(null)}
           onIncidentUpdated={handleIncidentUpdated}

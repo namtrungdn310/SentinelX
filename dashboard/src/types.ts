@@ -76,6 +76,7 @@ export type DetectionSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export interface Incident {
   id: string;
   project_id: string;
+  node_id?: string | null;
   title: string;
   status: IncidentStatus;
   severity: DetectionSeverity;
@@ -83,6 +84,9 @@ export interface Incident {
   resolved_at: string | null;
   summary: string | null;
   event_count: number;
+  attacker_ip?: string | null;
+  targeted_ports?: number[];
+  targeted_service?: string | null;
 }
 
 export interface DetectionEventResponse {

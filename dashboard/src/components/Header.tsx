@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Search, Radio } from "lucide-react";
+import { Search, Radio, RefreshCw } from "lucide-react";
 import type { Project } from "../types";
 
 interface HeaderProps {
@@ -44,12 +44,12 @@ export function Header(props: HeaderProps) {
           aria-label={props.selectedProject ? "Tìm máy chủ" : "Tìm dự án"}
           aria-description={
             props.selectedProject
-              ? "Tìm hostname hoặc IP. Nhấn Enter để mở danh sách kết quả."
+              ? "Tìm tên máy chủ hoặc IP. Nhấn Enter để mở danh sách kết quả."
               : "Tìm kiếm dự án theo tên hoặc mô tả."
           }
           placeholder={
             props.selectedProject
-              ? "Tìm hostname hoặc địa chỉ IP…"
+              ? "Tìm tên máy chủ hoặc địa chỉ IP…"
               : "Tìm kiếm dự án…"
           }
           value={props.searchQuery}
@@ -66,10 +66,19 @@ export function Header(props: HeaderProps) {
       {props.selectedProject && (
         <div className="topbar-actions">
           <span
-            className={`connection-state ${!props.isDemoMode && props.isConnected ? "connected" : ""}`}
+            className={`connection-state ${
+              !props.isDemoMode && props.isConnected
+                ? "connected"
+                : !props.isDemoMode
+                  ? "reconnecting"
+                  : "offline"
+            }`}
             role="status"
           >
-            <Radio size={14} />
+            <Radio
+              size={14}
+              className={!props.isDemoMode && !props.isConnected ? "spin-animation" : ""}
+            />
             <span>
               {props.isDemoMode
                 ? "Dữ liệu mô phỏng"
@@ -88,23 +97,37 @@ export function Header(props: HeaderProps) {
             className="btn btn-outline btn-sm"
             onClick={props.onRefresh}
             disabled={props.isRefreshing}
-            aria-label="Thử lại kết nối và làm mới dữ liệu"
+            aria-label={
+              props.isDemoMode
+                ? "Thử lại kết nối Controller"
+                : "Làm mới dữ liệu từ Controller"
+            }
           >
-            {props.isRefreshing ? "Đang thử lại..." : "Thử lại"}
+            <RefreshCw
+              size={13}
+              className={props.isRefreshing ? "spin-animation" : ""}
+            />
+            <span>
+              {props.isRefreshing
+                ? "Đang kết nối..."
+                : props.isDemoMode
+                  ? "Thử lại"
+                  : "Làm mới"}
+            </span>
           </button>
 
-          <button
-            type="button"
-            className="btn btn-primary btn-sm source-action"
-            aria-label={
-              props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"
-            }
-            title={props.isDemoMode ? "Kết nối Controller" : "Bật dữ liệu mẫu"}
-            onClick={props.onToggleDemoMode}
-            disabled={props.isRefreshing}
-          >
-            {props.isDemoMode ? "Kết nối" : "Dữ liệu mẫu"}
-          </button>
+          {props.isDemoMode && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm source-action"
+              aria-label="Kết nối Controller"
+              title="Kết nối trực tiếp đến Controller"
+              onClick={props.onToggleDemoMode}
+              disabled={props.isRefreshing}
+            >
+              Kết nối Controller
+            </button>
+          )}
         </div>
       )}
     </header>

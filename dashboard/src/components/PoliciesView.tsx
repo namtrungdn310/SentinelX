@@ -3,13 +3,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Edit3,
   Flame,
-  Info,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   Sliders,
+  Sparkles,
   Trash2,
   Zap,
 } from "lucide-react";
@@ -23,6 +26,7 @@ import {
 } from "../api";
 import { MOCK_POLICIES, MOCK_WHITELIST } from "../mockData";
 import { AddWhitelistModal } from "./AddWhitelistModal";
+import { EditPolicyModal } from "./EditPolicyModal";
 
 interface Props {
   selectedProjectId: string | null;
@@ -68,6 +72,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
   });
   const [isPoliciesLoading, setIsPoliciesLoading] = useState(false);
   const [togglingPolicyId, setTogglingPolicyId] = useState<string | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<DefensePolicy | null>(null);
 
   // Common UI State
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +129,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
 
   // Handle Delete Whitelist
   const handleDeleteWhitelist = async (item: IPWhitelist) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa dải IP an toàn ${item.cidr}?`)) {
+    if (!window.confirm(`Bạn có chắc muốn xóa IP an toàn ${item.cidr}?`)) {
       return;
     }
     setDeletingWhitelistId(item.id);
@@ -134,7 +139,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         setWhitelist((prev) => prev.filter((w) => w.id !== item.id));
         setFeedback({
           type: "success",
-          text: `Đã xóa dải IP ${item.cidr} khỏi danh sách an toàn.`,
+          text: `Đã xóa IP ${item.cidr} khỏi danh sách an toàn.`,
         });
         return;
       }
@@ -142,12 +147,12 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
       setWhitelist((prev) => prev.filter((w) => w.id !== item.id));
       setFeedback({
         type: "success",
-        text: `Đã xóa dải IP ${item.cidr} thành công.`,
+        text: `Đã xóa IP ${item.cidr} thành công.`,
       });
     } catch (err: unknown) {
       setFeedback({
         type: "error",
-        text: err instanceof Error ? err.message : "Không thể xóa dải IP",
+        text: err instanceof Error ? err.message : "Không thể xóa IP",
       });
     } finally {
       setDeletingWhitelistId(null);
@@ -158,7 +163,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
     setWhitelist((prev) => [newItem, ...prev]);
     setFeedback({
       type: "success",
-      text: `Đã thêm dải IP ${newItem.cidr} vào danh sách an toàn!`,
+      text: `Đã thêm IP ${newItem.cidr} vào danh sách an toàn!`,
     });
   };
 
@@ -182,36 +187,6 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
       setFeedback({
         type: "success",
         text: `Đã cập nhật trạng thái chính sách "${policy.name}".`,
-      });
-    } catch (err: unknown) {
-      setFeedback({
-        type: "error",
-        text: err instanceof Error ? err.message : "Lỗi cập nhật chính sách",
-      });
-    } finally {
-      setTogglingPolicyId(null);
-    }
-  };
-
-  const handleToggleAutoExecute = async (policy: DefensePolicy) => {
-    setTogglingPolicyId(policy.id);
-    const nextVal = !policy.is_auto_execute;
-    try {
-      if (isDemoMode) {
-        setPolicies((prev) =>
-          prev.map((p) => (p.id === policy.id ? { ...p, is_auto_execute: nextVal } : p))
-        );
-        setFeedback({
-          type: "success",
-          text: `Chế độ tự động cho "${policy.name}" đã được ${nextVal ? "BẬT" : "TẮT (cần duyệt)"}.`,
-        });
-        return;
-      }
-      const updated = await updatePolicy(policy.id, { is_auto_execute: nextVal });
-      setPolicies((prev) => prev.map((p) => (p.id === policy.id ? updated : p)));
-      setFeedback({
-        type: "success",
-        text: `Đã cập nhật cấu hình tự động thực thi.`,
       });
     } catch (err: unknown) {
       setFeedback({
@@ -251,6 +226,14 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
     }
   };
 
+  const handlePolicyUpdated = (updated: DefensePolicy) => {
+    setPolicies((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setFeedback({
+      type: "success",
+      text: `Đã cập nhật chính sách "${updated.name}" thành công!`,
+    });
+  };
+
   const getProjectName = (projId: string) => {
     const proj = projects.find((p) => p.id === projId);
     return proj ? proj.name : projId;
@@ -288,43 +271,42 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
       )}
 
       {error && (
-        <div className="panel error-panel" role="alert">
-          <AlertTriangle size={18} />
+        <div className="connection-error" role="alert">
           <span>{error}</span>
         </div>
       )}
 
-      {/* Sub-tab Navigation */}
-      <div className="subtabs-bar">
+      {/* Sub-tab Navigation (Consistent Segmented Control) */}
+      <div className="policies-segmented-bar" role="tablist" aria-label="Phân nhóm cấu hình">
         <button
           type="button"
-          className={`subtab-button ${activeTab === "whitelist" ? "active" : ""}`}
+          className={`segmented-tab ${activeTab === "whitelist" ? "active" : ""}`}
           onClick={() => setActiveTab("whitelist")}
-          aria-selected={activeTab === "whitelist"}
           role="tab"
+          aria-selected={activeTab === "whitelist"}
         >
-          <ShieldCheck size={16} />
-          <span>Danh sách IP An Toàn (Whitelist)</span>
-          <span className="count-badge">{whitelist.length}</span>
+          <ShieldCheck size={15} />
+          <span>Danh sách an toàn</span>
+          <span className="count-pill">{whitelist.length}</span>
         </button>
 
         <button
           type="button"
-          className={`subtab-button ${activeTab === "policies" ? "active" : ""}`}
+          className={`segmented-tab ${activeTab === "policies" ? "active" : ""}`}
           onClick={() => setActiveTab("policies")}
-          aria-selected={activeTab === "policies"}
           role="tab"
+          aria-selected={activeTab === "policies"}
         >
-          <Sliders size={16} />
-          <span>Chính sách Phòng thủ (Defense Policies)</span>
-          <span className="count-badge">{policies.length}</span>
+          <Sliders size={15} />
+          <span>Chính sách bảo vệ tự động</span>
+          <span className="count-pill">{policies.length}</span>
         </button>
       </div>
 
       {/* TAB 1: IP Whitelist */}
       {activeTab === "whitelist" && (
-        <section className="panel whitelist-section" aria-label="Danh sách IP an toàn">
-          <div className="tab-toolbar">
+        <section className="panel whitelist-panel" aria-label="Danh sách IP an toàn">
+          <div className="table-toolbar">
             <div className="search-box">
               <Search size={16} aria-hidden="true" />
               <input
@@ -359,34 +341,27 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
             </div>
           </div>
 
-          <div className="info-banner">
-            <Info size={16} />
-            <span>
-              <strong>Nguyên tắc An Toàn Cốt Lõi:</strong> Các IP thuộc danh sách Whitelist sẽ không bao giờ bị khóa bởi tường lửa nftables hoặc chịu các biện pháp cắt giảm lưu lượng. Hãy thêm dải IP Gateway, DNS nội bộ và IP kết nối quản trị để tránh mất quyền truy cập.
-            </span>
-          </div>
-
           {filteredWhitelist.length === 0 ? (
             <div className="empty-state-card">
-              <ShieldCheck size={36} style={{ color: "var(--brand-indigo)" }} />
-              <h3>Chưa có dải IP an toàn nào</h3>
-              <p>Thêm các dải mạng nội bộ hoặc IP tin cậy để bảo vệ hệ thống khỏi việc tự chặn nhầm.</p>
+              <ShieldCheck size={36} style={{ color: "var(--status-ok)" }} />
+              <h3>Chưa có IP an toàn nào</h3>
+              <p>Thêm các mạng nội bộ hoặc IP tin cậy để bảo vệ hệ thống khỏi việc tự chặn nhầm.</p>
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={() => setIsWhitelistModalOpen(true)}
               >
-                <Plus size={15} /> Thêm dải IP an toàn đầu tiên
+                <Plus size={15} /> Thêm IP an toàn đầu tiên
               </button>
             </div>
           ) : (
             <div className="table-scroll">
-              <table className="host-table">
+              <table className="host-table" aria-label="Bảng IP an toàn">
                 <thead>
                   <tr>
-                    <th scope="col">Dải IP / CIDR</th>
-                    <th scope="col">Mô tả mục đích</th>
-                    <th scope="col">Dự án</th>
+                    <th scope="col">IP / CIDR</th>
+                    <th scope="col">Mô tả</th>
+                    <th scope="col">Dự án áp dụng</th>
                     <th scope="col">Thời điểm thêm</th>
                     <th scope="col" style={{ textAlign: "right" }}>Thao tác</th>
                   </tr>
@@ -401,7 +376,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                         </div>
                       </td>
                       <td>
-                        <span>{item.description || "Không có mô tả"}</span>
+                        <span>{item.description || "—"}</span>
                       </td>
                       <td>
                         <span className="project-badge">{getProjectName(item.project_id)}</span>
@@ -413,7 +388,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                         <button
                           type="button"
                           className="icon-button danger-icon-button"
-                          aria-label={`Xóa dải IP ${item.cidr}`}
+                          aria-label={`Xóa IP ${item.cidr}`}
                           title="Xóa khỏi danh sách an toàn"
                           onClick={() => void handleDeleteWhitelist(item)}
                           disabled={deletingWhitelistId === item.id}
@@ -432,11 +407,13 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
 
       {/* TAB 2: Defense Policies */}
       {activeTab === "policies" && (
-        <section className="policies-section" aria-label="Danh mục chính sách phòng thủ">
-          <div className="tab-toolbar">
-            <div>
-              <h2 style={{ fontSize: 16, margin: 0, fontWeight: 600 }}>Quy tắc tự động ứng phó</h2>
-              <small style={{ color: "var(--text-muted)" }}>Cấu hình hành vi phòng thủ hạt nhân khi phát hiện tấn công</small>
+        <section className="policies-container-section" aria-label="Danh mục chính sách bảo vệ">
+          <div className="table-toolbar">
+            <div className="policy-toolbar-title">
+              <h3 style={{ fontSize: 15, margin: 0, fontWeight: 600 }}>Quy tắc tự động ứng phó</h3>
+              <small style={{ color: "var(--text-muted)" }}>
+                Hệ thống tự động kích hoạt ngăn chặn khi Detector phát hiện bất thường
+              </small>
             </div>
             <div className="toolbar-actions">
               <button
@@ -452,16 +429,8 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
             </div>
           </div>
 
-          <div className="info-banner" style={{ marginBottom: 16 }}>
-            <Zap size={16} />
-            <span>
-              <strong>Cơ chế Pipeline Phòng thủ SentinelX:</strong> Khi Detector phát hiện bất thường, Policy Engine sẽ khớp với chính sách tương ứng để kích hoạt lệnh chặn IP bằng Linux nftables hoặc khởi động lại dịch vụ sau chu kỳ Cooldown.
-            </span>
-          </div>
-
-          <div className="policies-grid">
+          <div className="policies-grid-2x2">
             {policies.map((policy) => {
-              const isNftables = policy.action_type === "BLOCK_IP_NFTABLES";
               const isToggling = togglingPolicyId === policy.id;
 
               return (
@@ -475,83 +444,120 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                         <span className="detector-event-tag font-mono">
                           {policy.event_type}
                         </span>
-                        {isNftables && (
+                        {policy.action_type === "ADAPTIVE" ? (
+                          <span className="adaptive-badge">
+                            <Zap size={12} /> Tự động tối ưu
+                          </span>
+                        ) : policy.action_type === "BLOCK_IP_NFTABLES" ? (
                           <span className="nftables-badge">
-                            <Flame size={12} /> Kernel nftables
+                            <Flame size={12} /> Khóa IP tường lửa
+                          </span>
+                        ) : policy.action_type === "RATE_LIMIT" ? (
+                          <span className="rate-limit-badge">
+                            <Sliders size={12} /> Giới hạn tốc độ
+                          </span>
+                        ) : policy.action_type === "CLEAR_OS_CACHE" ? (
+                          <span className="cache-badge">
+                            <Sparkles size={12} /> Giải phóng bộ nhớ đệm
+                          </span>
+                        ) : policy.action_type === "ALERT_ONLY" ? (
+                          <span className="alert-badge">
+                            <ShieldAlert size={12} /> Chỉ cảnh báo
+                          </span>
+                        ) : (
+                          <span className="service-badge">
+                            <RotateCcw size={12} /> Khởi động lại dịch vụ
                           </span>
                         )}
                       </div>
                       <h3>{policy.name}</h3>
                     </div>
-                    <button
-                      type="button"
-                      className="icon-button danger-icon-button"
-                      aria-label={`Xóa chính sách ${policy.name}`}
-                      title="Xóa chính sách"
-                      onClick={() => void handleDeletePolicy(policy)}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Chỉnh sửa chính sách ${policy.name}`}
+                        title="Chỉnh sửa chính sách"
+                        onClick={() => setEditingPolicy(policy)}
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button danger-icon-button"
+                        aria-label={`Xóa chính sách ${policy.name}`}
+                        title="Xóa chính sách"
+                        onClick={() => void handleDeletePolicy(policy)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="policy-meta-grid">
                     <div className="policy-meta-item">
-                      <span className="meta-label">Hành động thực thi</span>
+                      <span className="meta-label">Hành động</span>
                       <strong className="meta-value font-mono">
-                        {policy.action_type === "BLOCK_IP_NFTABLES"
-                          ? "Khóa IP (DROP)"
-                          : policy.action_type}
+                        {policy.action_type === "ADAPTIVE"
+                          ? "Tự động tối ưu"
+                          : policy.action_type === "BLOCK_IP_NFTABLES"
+                          ? "Khóa IP tường lửa"
+                          : policy.action_type === "RATE_LIMIT"
+                          ? "Giới hạn tốc độ"
+                          : policy.action_type === "CLEAR_OS_CACHE"
+                          ? "Giải phóng bộ nhớ đệm"
+                          : policy.action_type === "ALERT_ONLY"
+                          ? "Chỉ cảnh báo"
+                          : "Khởi động lại dịch vụ"}
                       </strong>
                     </div>
 
                     <div className="policy-meta-item">
-                      <span className="meta-label">Thời hạn khóa</span>
+                      <span className="meta-label">
+                        {policy.action_type === "ADAPTIVE"
+                          ? "Tác động"
+                          : policy.action_type === "ALERT_ONLY"
+                          ? "Tác động"
+                          : policy.action_type === "RESTART_SERVICE" || policy.action_type === "CLEAR_OS_CACHE"
+                          ? "Tác động"
+                          : policy.action_type === "RATE_LIMIT"
+                          ? "Thời gian áp dụng"
+                          : "Thời gian khóa"}
+                      </span>
                       <strong className="meta-value">
-                        {policy.block_duration_seconds === 0
+                        {policy.action_type === "ADAPTIVE"
+                          ? "Phân cấp tối ưu"
+                          : policy.action_type === "ALERT_ONLY"
+                          ? "Chỉ ghi nhận"
+                          : policy.action_type === "RESTART_SERVICE" || policy.action_type === "CLEAR_OS_CACHE"
+                          ? "Tức thời"
+                          : policy.block_duration_seconds === 0
                           ? "Vĩnh viễn"
-                          : `${Math.floor(policy.block_duration_seconds / 60)} phút (${policy.block_duration_seconds}s)`}
+                          : `${Math.floor(policy.block_duration_seconds / 60)} phút`}
                       </strong>
                     </div>
 
                     <div className="policy-meta-item">
-                      <span className="meta-label">Chu kỳ Cooldown</span>
+                      <span className="meta-label">Thời gian nghỉ</span>
                       <strong className="meta-value">
                         <Clock size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-                        {policy.cooldown_seconds} giây
+                        {policy.cooldown_seconds >= 60
+                          ? `${Math.floor(policy.cooldown_seconds / 60)} phút`
+                          : `${policy.cooldown_seconds} giây`}
                       </strong>
                     </div>
                   </div>
 
                   <div className="policy-controls">
-                    {/* Toggle: Auto Execute */}
                     <div className="policy-toggle-row">
                       <div className="toggle-info">
-                        <strong>Tự động thực thi (Auto Execute)</strong>
+                        <strong>{policy.is_active ? "Đang bật" : "Đang tắt"}</strong>
                         <small>
-                          {policy.is_auto_execute
-                            ? "Tự động áp dụng lệnh phòng thủ qua nftables ngay khi phát hiện"
-                            : "Yêu cầu Quản trị viên duyệt thủ công trên giao diện Sự Cố"}
-                        </small>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={policy.is_auto_execute}
-                        className={`toggle-switch ${policy.is_auto_execute ? "toggle-on" : "toggle-off"}`}
-                        onClick={() => void handleToggleAutoExecute(policy)}
-                        disabled={isToggling || !policy.is_active}
-                        aria-label={`Bật tắt tự động thực thi cho ${policy.name}`}
-                      >
-                        <span className="toggle-handle" />
-                      </button>
-                    </div>
-
-                    {/* Toggle: Active */}
-                    <div className="policy-toggle-row">
-                      <div className="toggle-info">
-                        <strong>Trạng thái chính sách</strong>
-                        <small>
-                          {policy.is_active ? "Chính sách đang bật" : "Chính sách tạm thời bị vô hiệu hóa"}
+                          {!policy.is_active
+                            ? "Tạm thời vô hiệu hóa quy tắc này"
+                            : policy.action_type === "ALERT_ONLY"
+                            ? "Chỉ ghi nhận cảnh báo, không can thiệp máy chủ"
+                            : "Tự động kích hoạt bảo vệ khi phát hiện sự cố"}
                         </small>
                       </div>
                       <button
@@ -561,7 +567,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                         className={`toggle-switch ${policy.is_active ? "toggle-on" : "toggle-off"}`}
                         onClick={() => void handleToggleActive(policy)}
                         disabled={isToggling}
-                        aria-label={`Kích hoạt chính sách ${policy.name}`}
+                        aria-label={`Bật tắt chính sách ${policy.name}`}
                       >
                         <span className="toggle-handle" />
                       </button>
@@ -580,6 +586,15 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         onClose={() => setIsWhitelistModalOpen(false)}
         projectId={effectiveProjectId}
         onWhitelistCreated={handleWhitelistCreated}
+        isDemoMode={isDemoMode}
+      />
+
+      {/* Edit Policy Modal */}
+      <EditPolicyModal
+        isOpen={Boolean(editingPolicy)}
+        onClose={() => setEditingPolicy(null)}
+        policy={editingPolicy}
+        onPolicyUpdated={handlePolicyUpdated}
         isDemoMode={isDemoMode}
       />
     </div>

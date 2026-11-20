@@ -146,6 +146,14 @@ class AuthService {
 
   public getCurrentUser(): User | null {
     try {
+      if (typeof localStorage === "undefined") {
+        return {
+          id: DEFAULT_DEMO_USERS[0].id,
+          username: DEFAULT_DEMO_USERS[0].username,
+          email: DEFAULT_DEMO_USERS[0].email,
+          created_at: DEFAULT_DEMO_USERS[0].created_at,
+        };
+      }
       const data = localStorage.getItem(STORAGE_CURRENT_USER_KEY);
       if (!data) return null;
       return JSON.parse(data) as User;

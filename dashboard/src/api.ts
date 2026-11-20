@@ -270,6 +270,7 @@ export async function updatePolicy(
   policyId: string,
   update: {
     name?: string;
+    action_type?: string;
     is_active?: boolean;
     is_auto_execute?: boolean;
     cooldown_seconds?: number;

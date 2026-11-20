@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { ChevronRight, Pause, Play, Search, Terminal } from "lucide-react";
+import { useState, useRef } from "react";
+import { ChevronRight, Search, Terminal } from "lucide-react";
 import type { Node, RealtimeMessage } from "../types";
 import { formatRealtimeMessage, eventLabel, filterEvents, type EventCategory } from "../events";
 
 const categories: { value: EventCategory; label: string }[] = [
   { value: "all", label: "Tất cả" },
-  { value: "security", label: "An ninh & Tường lửa" },
-  { value: "status", label: "Trạng thái máy chủ" },
+  { value: "alert", label: "Cảnh báo" },
+  { value: "security", label: "An ninh" },
+  { value: "status", label: "Trạng thái kết nối" },
   { value: "telemetry", label: "Telemetry" },
 ];
 
@@ -27,25 +28,22 @@ export function LiveEventStream({
   preview = false,
   onOpenAll,
 }: Props) {
-  const [pausedEvents, setPausedEvents] = useState<RealtimeMessage[] | null>(
-    null,
-  );
   const [filter, setFilter] = useState("");
   const [category, setCategory] = useState<EventCategory>("all");
-  const buffer = pausedEvents ?? events;
-  const visible = filterEvents(buffer, nodes, category, filter);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const handleControlsWheel = (e: React.WheelEvent) => {
+    if (!preview && listRef.current) {
+      listRef.current.scrollTop += e.deltaY;
+    }
+  };
+
+  const visible = filterEvents(events, nodes, category, filter);
   const limit = preview ? 5 : 40;
-  const streamState = pausedEvents
-    ? "Đã tạm dừng"
-    : isDemoMode
-      ? "Đang cập nhật · mô phỏng"
-      : isConnected
-        ? "Đang cập nhật"
-    : "Đang chờ kết nối";
-  const stateTone = pausedEvents ? "warn" : isConnected || isDemoMode ? "ok" : "crit";
+  const stateTone = isConnected || isDemoMode ? "ok" : "crit";
   return (
     <section className={`panel event-panel ${preview ? "event-preview" : "event-full"}`} aria-label="Nhật ký sự kiện">
-      <div className="event-controls">
+      <div className="event-controls" onWheel={handleControlsWheel}>
       <div className="panel-heading">
         <h2>
           <Terminal size={15} aria-hidden="true" />{" "}
@@ -58,30 +56,15 @@ export function LiveEventStream({
           </button>
         ) : (
           <div className="event-heading-actions">
-            <span className="event-stream-state" role="status" aria-atomic="true">
-              <span className={`health-dot ${stateTone}`} aria-hidden="true" />
-              {streamState}
-            </span>
             <label className="event-search">
               <Search size={14} aria-hidden="true" />
               <span className="sr-only">Lọc sự kiện</span>
               <input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
-                placeholder="Lọc sự kiện hoặc hostname…"
+                placeholder="Lọc sự kiện hoặc tên máy chủ…"
               />
             </label>
-            <button
-              className="btn btn-outline btn-sm"
-              aria-label={
-                pausedEvents ? "Tiếp tục nhật ký" : "Tạm dừng nhật ký"
-              }
-              aria-pressed={Boolean(pausedEvents)}
-              onClick={() => setPausedEvents(pausedEvents ? null : [...events])}
-            >
-              {pausedEvents ? <Play size={13} aria-hidden="true" /> : <Pause size={13} aria-hidden="true" />}
-              {pausedEvents ? "Tiếp tục" : "Tạm dừng"}
-            </button>
           </div>
         )}
       </div>
@@ -101,7 +84,7 @@ export function LiveEventStream({
             ))}
           </div>
           <span className="event-filter-summary">
-            {visible.length} / {buffer.length} sự kiện trong bộ đệm
+            {visible.length} / {events.length} sự kiện trong bộ đệm
           </span>
         </div>
       )}
@@ -113,9 +96,10 @@ export function LiveEventStream({
       </div>
       </div>
       <div
+        ref={listRef}
         className="event-list"
         role="log"
-        aria-live={pausedEvents ? "off" : "polite"}
+        aria-live="polite"
         aria-relevant="additions"
       >
         {!visible.length ? (
@@ -186,13 +170,11 @@ export function LiveEventStream({
           className={`health-dot ${stateTone}`}
           aria-hidden="true"
         />
-        {pausedEvents
-          ? "Đang tạm dừng · giữ nguyên dữ liệu hiển thị"
-          : isDemoMode
-            ? "Bộ đệm phiên · mô phỏng"
-            : isConnected
-              ? "Lịch sử gần đây và sự kiện trực tiếp · đã kết nối"
-              : "Đang chờ kết nối Controller"}
+        {isDemoMode
+          ? "Bộ đệm phiên · mô phỏng"
+          : isConnected
+            ? "Lịch sử gần đây và sự kiện trực tiếp · đã kết nối"
+            : "Đang chờ kết nối Controller"}
         <span>
           {Math.min(limit, visible.length)} / {visible.length}{" "}
           sự kiện

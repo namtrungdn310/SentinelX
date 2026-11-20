@@ -26,9 +26,14 @@ export function AddNodeModal({
   );
   const [hostname, setHostname] = useState("");
   const [ipAddress, setIpAddress] = useState("");
-  const [controllerUrl, setControllerUrl] = useState(
-    import.meta.env.VITE_AGENT_CONTROLLER_URL || window.location.origin,
-  );
+  const [controllerUrl, setControllerUrl] = useState(() => {
+    if (import.meta.env.VITE_AGENT_CONTROLLER_URL) {
+      return import.meta.env.VITE_AGENT_CONTROLLER_URL;
+    }
+    const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
+    return `${protocol}//${hostname}:8000`;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdNode, setCreatedNode] = useState<Node | null>(null);
@@ -131,85 +136,87 @@ export function AddNodeModal({
       )}
       {!createdNode ? (
         <form onSubmit={submit}>
-          {!selectedProjectId && (
-            <div className="form-group">
-              <label htmlFor={`${id}-project`}>
-                Dự án quản lý <span aria-hidden="true">*</span>
-              </label>
-              <select
-                id={`${id}-project`}
-                className="form-input"
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-                required
-                disabled={loading}
-              >
-                <option value="" disabled>
-                  Chọn một dự án
-                </option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
+          <div className="modal-body">
+            {!selectedProjectId && (
+              <div className="form-group">
+                <label htmlFor={`${id}-project`}>
+                  Dự án quản lý <span aria-hidden="true">*</span>
+                </label>
+                <select
+                  id={`${id}-project`}
+                  className="form-input"
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                  required
+                  disabled={loading}
+                >
+                  <option value="" disabled>
+                    Chọn một dự án
                   </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="form-group">
-            <label htmlFor={`${id}-hostname`}>
-              Hostname <span aria-hidden="true">*</span>
-            </label>
-            <input
-              data-autofocus
-              id={`${id}-hostname`}
-              className="form-input"
-              placeholder="backend-01"
-              value={hostname}
-              onChange={(event) => setHostname(event.target.value)}
-              required
-              pattern={".*\\S.*"}
-              maxLength={253}
-              disabled={loading}
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor={`${id}-ip`}>
-              Địa chỉ IP <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id={`${id}-ip`}
-              className="form-input font-mono"
-              placeholder="192.168.1.15"
-              value={ipAddress}
-              onChange={(event) => setIpAddress(event.target.value)}
-              required
-              pattern={".*\\S.*"}
-              disabled={loading}
-            />
-          </div>
-          {!isDemoMode && (
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="form-group">
-              <label htmlFor={`${id}-url`}>Controller URL</label>
+              <label htmlFor={`${id}-hostname`}>
+                Tên máy chủ <span aria-hidden="true">*</span>
+              </label>
               <input
-                id={`${id}-url`}
-                className="form-input font-mono"
-                type="url"
-                value={controllerUrl}
-                onChange={(event) => setControllerUrl(event.target.value)}
+                data-autofocus
+                id={`${id}-hostname`}
+                className="form-input"
+                placeholder="backend-01"
+                value={hostname}
+                onChange={(event) => setHostname(event.target.value)}
                 required
+                pattern={".*\\S.*"}
+                maxLength={253}
                 disabled={loading}
               />
-              <small className="field-hint">
-                URL mà Agent trên máy Linux sẽ dùng để gửi dữ liệu.
-              </small>
             </div>
-          )}
-          {!projects.length && (
-            <p className="form-error">
-              Workspace chưa có dự án. Tạo dự án trên Controller trước khi thêm
-              máy chủ.
-            </p>
-          )}
+            <div className="form-group">
+              <label htmlFor={`${id}-ip`}>
+                Địa chỉ IP <span aria-hidden="true">*</span>
+              </label>
+              <input
+                id={`${id}-ip`}
+                className="form-input font-mono"
+                placeholder="192.168.1.15"
+                value={ipAddress}
+                onChange={(event) => setIpAddress(event.target.value)}
+                required
+                pattern={".*\\S.*"}
+                disabled={loading}
+              />
+            </div>
+            {!isDemoMode && (
+              <div className="form-group">
+                <label htmlFor={`${id}-url`}>Controller URL</label>
+                <input
+                  id={`${id}-url`}
+                  className="form-input font-mono"
+                  type="url"
+                  value={controllerUrl}
+                  onChange={(event) => setControllerUrl(event.target.value)}
+                  required
+                  disabled={loading}
+                />
+                <small className="field-hint">
+                  Địa chỉ IP hoặc URL của Controller mà Agent trên Linux sẽ gửi dữ liệu về (mặc định cổng 8000).
+                </small>
+              </div>
+            )}
+            {!projects.length && (
+              <p className="form-error">
+                Hệ thống chưa có dự án. Tạo dự án trên Controller trước khi thêm
+                máy chủ.
+              </p>
+            )}
+          </div>
           <div className="modal-actions">
             <button
               type="button"
@@ -234,41 +241,43 @@ export function AddNodeModal({
           </div>
         </form>
       ) : (
-        <div className="modal-body">
-          <div className="success-note">
-            <Check size={20} />
-            <div>
-              <strong>{createdNode.hostname}</strong>
-              <p>
-                {isDemoMode
-                  ? "Máy chủ mẫu đã được thêm vào workspace."
-                  : "Đã đăng ký máy chủ với Controller."}
-              </p>
-            </div>
-          </div>
-          {command && (
-            <>
-              <p className="text-body">
-                Chạy lệnh sau trên máy Linux đích. Token có hiệu lực 24 giờ.
-              </p>
-              <div className="code-box">
-                <pre>{command}</pre>
+        <>
+          <div className="modal-body">
+            <div className="success-note">
+              <Check size={20} />
+              <div>
+                <strong>{createdNode.hostname}</strong>
+                <p>
+                  {isDemoMode
+                    ? "Máy chủ mẫu đã được thêm vào hệ thống."
+                    : "Đã đăng ký máy chủ với Controller."}
+                </p>
               </div>
-              <button className="btn btn-outline" onClick={copy}>
-                {copied ? <Check size={15} /> : <Copy size={15} />}
-                {copied ? "Đã sao chép" : "Sao chép lệnh cài Agent"}
+            </div>
+            {command && (
+              <>
+                <p className="text-body">
+                  Chạy các lệnh sau trên terminal của máy chủ Linux (Máy B / Máy C). Token có hiệu lực 24 giờ:
+                </p>
+                <div className="code-box">
+                  <pre>{command}</pre>
+                </div>
+                <button className="btn btn-outline" onClick={copy}>
+                  {copied ? <Check size={15} /> : <Copy size={15} />}
+                  {copied ? "Đã sao chép" : "Sao chép lệnh chạy Agent"}
+                </button>
+              </>
+            )}
+            {!token && !isDemoMode && (
+              <button
+                className="btn btn-outline"
+                onClick={() => void issueToken(createdNode.id)}
+                disabled={loading}
+              >
+                {loading ? "Đang cấp token…" : "Thử cấp token"}
               </button>
-            </>
-          )}
-          {!token && !isDemoMode && (
-            <button
-              className="btn btn-outline"
-              onClick={() => void issueToken(createdNode.id)}
-              disabled={loading}
-            >
-              {loading ? "Đang cấp token…" : "Thử cấp token"}
-            </button>
-          )}
+            )}
+          </div>
           <div className="modal-actions">
             <button
               className="btn btn-primary"
@@ -278,7 +287,7 @@ export function AddNodeModal({
               Hoàn tất <Check size={15} />
             </button>
           </div>
-        </div>
+        </>
       )}
     </Modal>
   );

@@ -25,7 +25,7 @@ export function HostMap({
         <h2>
           <Server size={15} /> Trạng thái cụm
         </h2>
-        <span className="count-badge">{nodes.length} hosts</span>
+        <span className="count-badge">{nodes.length} máy chủ</span>
       </div>
       <div
         className="health-distribution"
