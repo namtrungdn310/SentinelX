@@ -263,10 +263,7 @@ export function SettingsView({
       <div className="panel preset-selection-panel">
         <div className="preset-panel-header">
           <div>
-            <h3 className="preset-panel-title">Thay đổi cấu hình (3 phương án chuẩn hóa)</h3>
-            <p className="preset-panel-desc">
-              Chọn một trong các phương án đã được hệ thống chuẩn hóa dưới đây để áp dụng cho máy chủ:
-            </p>
+            <h3 className="preset-panel-title">Thay đổi cấu hình</h3>
           </div>
 
           {availableNodes.length > 1 && (
@@ -277,7 +274,7 @@ export function SettingsView({
                 onChange={(e) => setApplyToAllInProject(e.target.checked)}
               />
               <span>
-                Áp dụng đồng bộ cho toàn bộ <strong>{availableNodes.length} máy chủ</strong> trong {currentProject?.name || "dự án"}
+                Áp dụng cho <strong>{availableNodes.length} máy chủ</strong> trong {currentProject?.name || "dự án"}
               </span>
             </label>
           )}
@@ -297,13 +294,12 @@ export function SettingsView({
                     <ShieldCheck size={20} />
                   </div>
                   <div className="preset-box-tags">
-                    <span className="rec-badge">Khuyên dùng</span>
+                    <span className="rec-badge">Mặc định</span>
                     {isActive && <span className="active-badge">✓ Đang dùng</span>}
                   </div>
                 </div>
 
-                <h4 className="preset-box-name">{preset.name}</h4>
-                <p className="preset-box-desc">{preset.tagline}</p>
+                <h4 className="preset-box-name">Balanced</h4>
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
@@ -327,7 +323,7 @@ export function SettingsView({
                       <Check size={13} /> Đang áp dụng
                     </>
                   ) : (
-                    "Áp dụng phương án này"
+                    "Áp dụng"
                   )}
                 </button>
               </div>
@@ -347,13 +343,11 @@ export function SettingsView({
                     <Zap size={20} />
                   </div>
                   <div className="preset-box-tags">
-                    <span className="high-badge">Độ nhạy cao</span>
                     {isActive && <span className="active-badge">✓ Đang dùng</span>}
                   </div>
                 </div>
 
-                <h4 className="preset-box-name">{preset.name}</h4>
-                <p className="preset-box-desc">{preset.tagline}</p>
+                <h4 className="preset-box-name">High Sensitivity</h4>
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
@@ -377,7 +371,7 @@ export function SettingsView({
                       <Check size={13} /> Đang áp dụng
                     </>
                   ) : (
-                    "Áp dụng phương án này"
+                    "Áp dụng"
                   )}
                 </button>
               </div>
@@ -397,13 +391,11 @@ export function SettingsView({
                     <Leaf size={20} />
                   </div>
                   <div className="preset-box-tags">
-                    <span className="saving-badge">Tiết kiệm I/O</span>
                     {isActive && <span className="active-badge">✓ Đang dùng</span>}
                   </div>
                 </div>
 
-                <h4 className="preset-box-name">{preset.name}</h4>
-                <p className="preset-box-desc">{preset.tagline}</p>
+                <h4 className="preset-box-name">Resource-Saving</h4>
 
                 <div className="preset-bullets font-mono">
                   <div>• Đo tài nguyên: <strong>{preset.telemetry_interval_seconds}s</strong></div>
@@ -427,7 +419,7 @@ export function SettingsView({
                       <Check size={13} /> Đang áp dụng
                     </>
                   ) : (
-                    "Áp dụng phương án này"
+                    "Áp dụng"
                   )}
                 </button>
               </div>
