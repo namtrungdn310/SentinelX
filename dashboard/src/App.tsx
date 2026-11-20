@@ -3,8 +3,10 @@ import {
   Activity,
   ChevronRight,
   Box,
+  Clock,
   LayoutDashboard,
   Server,
+  Settings2,
   ShieldAlert,
   Sliders,
   Flame,
@@ -33,6 +35,7 @@ import { AddNodeModal } from "./components/AddNodeModal";
 import { IncidentsView } from "./components/IncidentsView";
 import { DefenseView } from "./components/DefenseView";
 import { PoliciesView } from "./components/PoliciesView";
+import { SettingsView } from "./components/SettingsView";
 import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { ProjectsView } from "./components/ProjectsView";
@@ -40,7 +43,8 @@ import { AddProjectModal } from "./components/AddProjectModal";
 import { AuthView } from "./components/AuthView";
 import { authService, type User } from "./auth";
 import { useInfrastructure } from "./useInfrastructure";
-import type { Node } from "./types";
+import type { Node, PresetProfileType } from "./types";
+import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "./mockData";
 
 const STORAGE_KEY_SELECTED_PROJECT = "sentinelx_selected_project_id";
 
@@ -52,7 +56,7 @@ const getSavedProjectId = (): string | null => {
   }
 };
 
-const views = ["projects", "overview", "hosts", "metrics", "events", "incidents", "defense", "policies"];
+const views = ["projects", "overview", "hosts", "metrics", "events", "incidents", "defense", "policies", "settings"];
 const currentView = () => {
   const hash = window.location.hash.slice(1);
   if (views.includes(hash)) {
@@ -226,7 +230,22 @@ export function App() {
     incidents: "Sự cố an ninh",
     defense: "Tường lửa nftables",
     policies: "Chính sách bảo vệ",
+    settings: "Thiết lập cấu hình",
   };
+  const activeProjectProfile = useMemo(() => {
+    if (!selectedProjectId) return "balanced";
+    try {
+      const saved = localStorage.getItem(`sentinelx_settings_${selectedProjectId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.active_profile) return parsed.active_profile;
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_PROJECT_SETTINGS[selectedProjectId]?.active_profile || "balanced";
+  }, [selectedProjectId]);
+  const activePreset = TELEMETRY_PRESETS[activeProjectProfile as PresetProfileType] || TELEMETRY_PRESETS.balanced;
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
     setDetailNodeId(node.id);
@@ -365,6 +384,26 @@ export function App() {
                   {count !== undefined && count > 0 && (
                     <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
                   )}
+                  {effectiveView === id && <span className="nav-active-dot" />}
+                </a>
+              ))}
+            </nav>
+            <span className="nav-label" style={{ marginTop: 16 }}>HỆ THỐNG &amp; CẤU HÌNH</span>
+            <nav aria-label="Điều hướng hệ thống và cấu hình">
+              {[
+                { id: "settings", label: "Thiết lập cấu hình", Icon: Settings2 },
+              ].map(({ id, label, Icon }) => (
+                <a
+                  key={id}
+                  className={`nav-item ${effectiveView === id ? "active" : ""}`}
+                  href={`#${id}`}
+                  onClick={() => {
+                    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+                  }}
+                  aria-current={effectiveView === id ? "page" : undefined}
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
                   {effectiveView === id && <span className="nav-active-dot" />}
                 </a>
               ))}
@@ -562,19 +601,29 @@ export function App() {
                   <h2>
                     Lịch sử CPU &amp; RAM <span className="panel-unit">%</span>
                   </h2>
-                  <select
-                    aria-label="Số mẫu telemetry"
-                    value={sampleLimit}
-                    onChange={(event) =>
-                      setSampleLimit(Number(event.target.value))
-                    }
-                  >
-                    {[30, 60, 120].map((count) => (
-                      <option key={count} value={count}>
-                        {count} mẫu gần nhất
-                      </option>
-                    ))}
-                  </select>
+                  <div className="telemetry-controls-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <a
+                      href="#settings"
+                      className="cadence-profile-pill font-mono"
+                      title="Nhấp để xem và thay đổi cấu hình chu kỳ đo"
+                    >
+                      <Clock size={12} />
+                      <span>Chu kỳ đo: {activePreset.telemetry_interval_seconds}s ({activePreset.name.split(" ")[0]})</span>
+                    </a>
+                    <select
+                      aria-label="Số mẫu telemetry"
+                      value={sampleLimit}
+                      onChange={(event) =>
+                        setSampleLimit(Number(event.target.value))
+                      }
+                    >
+                      {[30, 60, 120].map((count) => (
+                        <option key={count} value={count}>
+                          {count} mẫu gần nhất
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <TelemetryChart
                   key={nodeId}
@@ -658,6 +707,14 @@ export function App() {
             <PoliciesView
               selectedProjectId={selectedProjectId}
               projects={projects}
+              isDemoMode={isDemoMode}
+            />
+          )}
+          {effectiveView === "settings" && (
+            <SettingsView
+              selectedProjectId={selectedProjectId}
+              projects={projects}
+              nodes={nodes}
               isDemoMode={isDemoMode}
             />
           )}

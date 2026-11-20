@@ -12,9 +12,12 @@ import type {
   IncidentStatus,
   MetricQueryResponse,
   Node,
+  PresetProfileType,
   Project,
+  ProjectSettings,
   RealtimeMessage,
 } from "./types";
+import { MOCK_PROJECT_SETTINGS } from "./mockData";
 
 const API_BASE = "/api/v1";
 
@@ -324,4 +327,79 @@ export async function deleteWhitelist(whitelistId: string): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Lỗi xóa IP an toàn: ${res.statusText}`);
+}
+
+// ----------------------------------------------------
+// Project Settings & Guardrailed Presets API
+// ----------------------------------------------------
+
+export async function fetchProjectSettings(projectId: string): Promise<ProjectSettings> {
+  const localKey = `sentinelx_settings_${projectId}`;
+  try {
+    const saved = localStorage.getItem(localKey);
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // storage fallback
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      try {
+        localStorage.setItem(localKey, JSON.stringify(data));
+      } catch {
+        // storage fallback
+      }
+      return data;
+    }
+  } catch {
+    // fallback to mock
+  }
+
+  return (
+    MOCK_PROJECT_SETTINGS[projectId] || {
+      project_id: projectId,
+      active_profile: "balanced",
+      updated_at: new Date().toISOString(),
+      updated_by: "system",
+    }
+  );
+}
+
+export async function updateProjectSettings(
+  projectId: string,
+  profile: PresetProfileType,
+  updatedBy = "admin@sentinelx.com",
+): Promise<ProjectSettings> {
+  const localKey = `sentinelx_settings_${projectId}`;
+  const updated: ProjectSettings = {
+    project_id: projectId,
+    active_profile: profile,
+    updated_at: new Date().toISOString(),
+    updated_by: updatedBy,
+  };
+
+  try {
+    localStorage.setItem(localKey, JSON.stringify(updated));
+  } catch {
+    // storage fallback
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback to local updated
+  }
+
+  return updated;
 }

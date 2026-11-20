@@ -141,3 +141,34 @@ export interface IPWhitelist {
   description: string | null;
   created_at: string;
 }
+
+export type PresetProfileType = "balanced" | "high_sensitivity" | "resource_saving";
+
+export interface TelemetryDetectionPreset {
+  id: PresetProfileType;
+  name: string;
+  tagline: string;
+  description: string;
+  recommendedFor: string;
+  badgeTone: "ok" | "warn" | "medium";
+  telemetry_interval_seconds: number;
+  consecutive_samples: number;
+  cpu_overload_window_seconds: number;
+  memory_overload_window_seconds: number;
+  disk_overload_window_seconds: number;
+  network_window_seconds: number;
+  network_step_seconds: number;
+  port_scan_threshold_ports: number;
+  syn_flood_min_syn: number;
+  syn_ack_ratio: number;
+  agent_cpu_impact: string;
+  network_overhead: string;
+}
+
+export interface ProjectSettings {
+  project_id: string;
+  active_profile: PresetProfileType;
+  updated_at: string;
+  updated_by: string;
+}
+
