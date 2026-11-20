@@ -18,7 +18,6 @@ import type {
 } from "../types";
 import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "../mockData";
 import { updateProjectSettings } from "../api";
-import { nodeHealth, nodeHealthLabel } from "../presentation";
 
 interface Props {
   selectedProjectId: string | null;
@@ -189,12 +188,6 @@ export function SettingsView({
             </option>
           ))}
         </select>
-        {selectedNode && (
-          <span className={`status-badge ${nodeHealth(selectedNode)}`}>
-            <i />
-            {nodeHealthLabel(selectedNode)}
-          </span>
-        )}
 
         {/* Right Corner Update Timestamp */}
         <div className="config-meta font-mono" style={{ marginLeft: "auto" }}>
