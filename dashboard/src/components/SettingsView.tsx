@@ -231,7 +231,6 @@ export function SettingsView({
                 <strong className="spec-tile-val font-mono">
                   {activePreset.telemetry_interval_seconds.toFixed(1)}s / lần
                 </strong>
-                <small>Agent gọi psutil đo CPU, RAM, Disk</small>
               </div>
 
               <div className="spec-tile">
@@ -240,9 +239,8 @@ export function SettingsView({
                   <span>Kiểm chứng quá tải</span>
                 </div>
                 <strong className="spec-tile-val font-mono">
-                  {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ)
+                  {activePreset.cpu_overload_window_seconds.toFixed(0)}s (3 chu kỳ liên tiếp)
                 </strong>
-                <small>Loại trừ tăng tải tức thời cho CPU &amp; RAM</small>
               </div>
             </div>
           </div>
