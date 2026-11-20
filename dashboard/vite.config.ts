@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5174,
       host: true,
+      watch: {
+        usePolling: true,
+      },
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
       },
