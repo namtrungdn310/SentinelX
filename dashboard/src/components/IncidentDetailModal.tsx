@@ -280,6 +280,29 @@ export function IncidentDetailModal({
                                   </span>
                                 </div>
                               )
+                            ) : (ev.detector_name === "port_scan_detector" ||
+                              ev.details?.attack_type === "PORT_SCAN" ||
+                              incident.title.toLowerCase().includes("quét cổng")) ? (
+                              (ev.details?.scanned_port_count !== undefined ||
+                                Array.isArray(ev.details?.targeted_ports) ||
+                                Array.isArray(ev.details?.destination_ports)) && (
+                                <div className="event-metric-tag">
+                                  <span>
+                                    Số cổng quét:{" "}
+                                    <strong className="font-mono">
+                                      {String(
+                                        ev.details?.scanned_port_count ??
+                                          (Array.isArray(ev.details?.targeted_ports)
+                                            ? ev.details.targeted_ports.length
+                                            : Array.isArray(ev.details?.destination_ports)
+                                              ? ev.details.destination_ports.length
+                                              : 0)
+                                      )}{" "}
+                                      cổng
+                                    </strong>
+                                  </span>
+                                </div>
+                              )
                             ) : (
                               <>
                                 {ev.details?.packet_rate_pps !== undefined && (
@@ -290,11 +313,6 @@ export function IncidentDetailModal({
                                 {(ev.details?.byte_rate_mbps !== undefined || ev.details?.bytes_per_second !== undefined) && (
                                   <div className="event-metric-tag">
                                     <span>Băng thông: <strong className="font-mono">{ev.details.byte_rate_mbps !== undefined ? `${ev.details.byte_rate_mbps} MB/s` : `${formatBytes(Number(ev.details.bytes_per_second))}/s`}</strong></span>
-                                  </div>
-                                )}
-                                {ev.details?.scanned_port_count !== undefined && (
-                                  <div className="event-metric-tag">
-                                    <span>Số cổng quét: <strong className="font-mono">{String(ev.details.scanned_port_count)}</strong></span>
                                   </div>
                                 )}
                               </>

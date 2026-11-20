@@ -186,7 +186,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "IP 198.51.100.42 quét dồn dập 48 cổng đích trong cửa sổ 5s với tốc độ 420 pps. Đang chờ đối soát chính sách bảo vệ.",
+      "IP 198.51.100.42 rà quét 48 cổng dịch vụ trong cửa sổ 5s. Đang chờ đối soát chính sách bảo vệ.",
     event_count: 3,
     attacker_ip: "198.51.100.42",
     targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],
@@ -424,8 +424,6 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         confidence_score: 0.88,
         details: {
           scanned_port_count: 48,
-          packet_rate_pps: 420,
-          byte_rate_mbps: 2.8,
           targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],
         },
         detected_at: new Date(Date.now() - 6 * 60000).toISOString(),
@@ -440,8 +438,6 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         confidence_score: 0.92,
         details: {
           scanned_port_count: 56,
-          packet_rate_pps: 480,
-          byte_rate_mbps: 3.2,
           targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],
         },
         detected_at: new Date(Date.now() - 4 * 60000).toISOString(),
