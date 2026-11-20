@@ -23,7 +23,6 @@ export function ManualBlockModal({
   const [nodeId, setNodeId] = useState(nodes[0]?.id || "");
   const [targetIp, setTargetIp] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(30);
-  const [actionType, setActionType] = useState("BLOCK_IP_NFTABLES");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +49,7 @@ export function ManualBlockModal({
           incident_id: null,
           policy_id: null,
           node_id: nodeId,
-          action_type: actionType,
+          action_type: "BLOCK_IP_NFTABLES",
           target_ip: targetIp.trim(),
           command_payload: { duration_seconds: durationSeconds, manual: true },
           status: "APPLIED",
@@ -65,7 +64,7 @@ export function ManualBlockModal({
 
       const res = await createManualDefenseAction({
         node_id: nodeId,
-        action_type: actionType,
+        action_type: "BLOCK_IP_NFTABLES",
         target_ip: targetIp.trim(),
         command_payload: {
           duration_seconds: durationSeconds,
@@ -142,36 +141,21 @@ export function ManualBlockModal({
             </select>
           </div>
 
-          <div className="form-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div className="form-group">
-              <label htmlFor={`${id}-action`}>Hành động</label>
-              <select
-                id={`${id}-action`}
-                value={actionType}
-                onChange={(e) => setActionType(e.target.value)}
-                disabled={loading}
-              >
-                <option value="BLOCK_IP_NFTABLES">Khóa địa chỉ IP bằng tường lửa</option>
-                <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor={`${id}-duration`}>Thời gian khóa</label>
-              <select
-                id={`${id}-duration`}
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                disabled={loading}
-              >
-                <option value={5}>5 phút</option>
-                <option value={15}>15 phút</option>
-                <option value={30}>30 phút</option>
-                <option value={60}>1 giờ</option>
-                <option value={1440}>24 giờ</option>
-                <option value={0}>Vĩnh viễn đến khi gỡ thủ công</option>
-              </select>
-            </div>
+          <div className="form-group">
+            <label htmlFor={`${id}-duration`}>Thời gian khóa tường lửa</label>
+            <select
+              id={`${id}-duration`}
+              value={durationMinutes}
+              onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              disabled={loading}
+            >
+              <option value={5}>5 phút</option>
+              <option value={15}>15 phút</option>
+              <option value={30}>30 phút</option>
+              <option value={60}>1 giờ</option>
+              <option value={1440}>24 giờ</option>
+              <option value={0}>Vĩnh viễn đến khi gỡ thủ công</option>
+            </select>
           </div>
         </div>
 
