@@ -16,7 +16,10 @@ pytestmark = pytest.mark.skipif(not URL, reason="Requires isolated PostgreSQL mi
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("previous", [None, "0004_m2_network_windows", "0004_m3_detection_events"])
+@pytest.mark.parametrize(
+    "previous",
+    [None, "0004_m2_network_windows", "0004_m3_detection_events", "0009_m8_recovery_actions"],
+)
 async def test_upgrade_from_empty_or_existing_head_preserves_data(previous: str | None) -> None:
     database = "sentinelx_migration_qa_" + uuid4().hex
     admin = create_async_engine(URL, isolation_level="AUTOCOMMIT")
@@ -86,7 +89,7 @@ async def test_upgrade_from_empty_or_existing_head_preserves_data(previous: str 
         async with target.connect() as connection:
             assert (
                 await connection.execute(text("SELECT version_num FROM alembic_version"))
-            ).scalars().all() == ["0006_detection_state"]
+            ).scalars().all() == ["0010_core_reliability"]
             for table in ("telemetry_network_windows", "detection_events", "detection_node_state"):
                 assert (
                     await connection.execute(text("SELECT to_regclass(:table)"), {"table": table})
@@ -103,7 +106,7 @@ async def test_upgrade_from_empty_or_existing_head_preserves_data(previous: str 
                 assert (
                     await connection.execute(text(f"SELECT count(*) FROM {table}"))
                 ).scalar_one() == 1
-        await migrate("downgrade", "0005_merge_m2_m3")
+        await migrate("downgrade", "0009_m8_recovery_actions")
         await migrate("upgrade", "head")
     finally:
         await target.dispose()

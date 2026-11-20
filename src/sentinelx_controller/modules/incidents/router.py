@@ -16,7 +16,6 @@ from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
-from sentinelx_controller.modules.detection.repository import DetectionRepository
 from sentinelx_controller.modules.detection.router import get_detection_service
 from sentinelx_controller.modules.detection.service import DetectionService
 from sentinelx_controller.modules.incidents.repository import IncidentRepository
@@ -33,11 +32,9 @@ def get_incident_service(
 ) -> IncidentService:
     """Dependency injection for IncidentService."""
     repo = IncidentRepository(session)
-    detection_repo = DetectionRepository(session)
     publisher = CommittedPublisher(background_tasks, realtime_hub)
     return IncidentService(
         repository=repo,
-        detection_repo=detection_repo,
         detection_service=detection_service,
         realtime_hub=realtime_hub,
         publisher=publisher,

@@ -1,9 +1,9 @@
 """API router for defense module endpoints."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Query, status
 
 from sentinelx_common.contracts.defense import (
     CommandAckRequest,
@@ -12,43 +12,21 @@ from sentinelx_common.contracts.defense import (
     DefenseActionResponse,
     ManualDefenseActionCreateRequest,
 )
-from sentinelx_controller.infrastructure.database.session import get_db_session
-from sentinelx_controller.infrastructure.realtime import get_realtime_hub
-from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
-from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
-from sentinelx_controller.modules.defense.repository import DefenseRepository
+from sentinelx_controller.modules.defense.dependencies import get_defense_core
 from sentinelx_controller.modules.defense.service import DefenseService
-from sentinelx_controller.modules.incidents.repository import IncidentRepository
-from sentinelx_controller.modules.recovery.repository import RecoveryRepository
+from sentinelx_controller.modules.recovery.router import get_recovery_service
 from sentinelx_controller.modules.recovery.service import RecoveryService
 
 router = APIRouter(prefix="/defense", tags=["defense"])
 
 
 def get_defense_service(
-    background_tasks: BackgroundTasks,
-    session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
-    realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
+    core: Annotated[DefenseService, Depends(get_defense_core)],
+    recovery: Annotated[RecoveryService, Depends(get_recovery_service)],
 ) -> DefenseService:
     """Dependency providing DefenseService."""
-    defense_repo = DefenseRepository(session)
-    incident_repo = IncidentRepository(session)
-    recovery_repo = RecoveryRepository(session)
-    publisher = CommittedPublisher(background_tasks, realtime_hub)
-    recovery_service = RecoveryService(
-        recovery_repo=recovery_repo,
-        defense_repo=defense_repo,
-        incident_repo=incident_repo,
-        realtime_hub=realtime_hub,
-        publisher=publisher,
-    )
-    return DefenseService(
-        defense_repo=defense_repo,
-        realtime_hub=realtime_hub,
-        publisher=publisher,
-        incident_repo=incident_repo,
-        recovery_ack_handler=recovery_service.handle_unblock_ack,
-    )
+    core.attach_recovery_handler(recovery.handle_unblock_ack)
+    return core
 
 
 @router.get(
@@ -110,3 +88,11 @@ async def acknowledge_defense_action(
     service: Annotated[DefenseService, Depends(get_defense_service)],
 ) -> CommandAckResponse:
     return await service.record_ack(action_id, request)
+
+
+@router.post("/actions/{action_id}/cancel", response_model=DefenseActionResponse)
+async def cancel_pending_action(
+    action_id: UUID,
+    service: Annotated[DefenseService, Depends(get_defense_service)],
+) -> DefenseActionResponse:
+    return await service.cancel_pending(action_id)

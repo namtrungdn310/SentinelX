@@ -10,6 +10,14 @@ from sentinelx_common.contracts.base import SentinelXBaseModel
 from sentinelx_common.contracts.detection import DetectionEventContract
 
 
+class PolicyDecisionResponse(SentinelXBaseModel):
+    id: str
+    node_id: str
+    event_id: str
+    created_at: datetime
+    snapshot: dict[str, Any]
+
+
 class PolicyActionType(StrEnum):
     """Danh mục hành động phòng thủ mở rộng trong SentinelX."""
 
@@ -26,6 +34,9 @@ class PolicyActionType(StrEnum):
 
     # Can thiệp Điều phối Lưu lượng (Traffic Plane)
     EJECT_NODE = "EJECT_NODE"
+
+    # Tự động phân cấp thông minh (Adaptive Self-Healing)
+    ADAPTIVE = "ADAPTIVE"
 
     # Chế độ An toàn (Safe Mode)
     ALERT_ONLY = "ALERT_ONLY"
@@ -60,6 +71,7 @@ class DefensePolicyCreateRequest(SentinelXBaseModel):
         description="Thời hạn duy trì chặn (giây)",
     )
     enabled: bool = Field(default=True, description="Trạng thái kích hoạt của policy")
+    priority: int = Field(default=100, ge=0, le=10000)
 
 
 class DefensePolicyUpdateRequest(SentinelXBaseModel):
@@ -72,6 +84,7 @@ class DefensePolicyUpdateRequest(SentinelXBaseModel):
     cooldown_seconds: int | None = Field(default=None, ge=0)
     block_duration_seconds: int | None = Field(default=None, ge=0)
     enabled: bool | None = None
+    priority: int | None = Field(default=None, ge=0, le=10000)
 
 
 class DefensePolicyResponse(SentinelXBaseModel):
@@ -87,6 +100,7 @@ class DefensePolicyResponse(SentinelXBaseModel):
     cooldown_seconds: int
     block_duration_seconds: int
     enabled: bool
+    priority: int = 100
 
 
 class DefensePolicyListResponse(SentinelXBaseModel):

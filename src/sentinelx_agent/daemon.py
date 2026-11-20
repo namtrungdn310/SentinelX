@@ -151,6 +151,10 @@ class AgentDaemon:
                 asyncio.create_task(self._heartbeat_loop()),
                 asyncio.create_task(self._telemetry_loop()),
             ]
+            self._command_processor.set_identity(self._identity)
+            tasks.append(
+                asyncio.create_task(self._command_processor.run(self._client, self._stop_event))
+            )
             if self.settings.network_capture_enabled:
                 from sentinelx_agent.network.runtime import run_network
 
@@ -187,6 +191,9 @@ class AgentDaemon:
                 agent_id=self._identity.agent_id,
                 sequence=sequence,
                 sent_at=datetime.now(UTC),
+                command_protocol_version=2,
+                executor_mode=self.settings.defense_executor_type,
+                supported_actions=self._command_processor.supported_actions,
             )
 
             try:
@@ -202,7 +209,7 @@ class AgentDaemon:
                 )
                 if resp.commands:
                     for cmd in resp.commands:
-                        await self._command_processor.process_command(cmd, self._client)
+                        self._command_processor.enqueue(cmd)
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=next_interval)
                 except TimeoutError:

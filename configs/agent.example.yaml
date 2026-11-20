@@ -4,6 +4,14 @@ controller:
   timeout_seconds: 5
 
 agent:
+  # M7 is opt-in: install nftables and enable the managed defense permissions profile.
+  defense_executor_type: simulated  # simulated | noop | nftables
+  nftables_table_name: sentinelx
+  nftables_hook: input  # forward only when protecting forwarded traffic
+  protected_cidrs: []  # Add administration/VPN/health-check networks before real defense.
+  max_block_seconds: 86400
+  command_queue_size: 64
+  # command_journal_path: /var/lib/sentinelx-agent/commands.sqlite3
   # M2 is opt-in; install libpcap and grant the managed CAP_NET_RAW profile first.
   network_capture_enabled: false
   network_interface: ""

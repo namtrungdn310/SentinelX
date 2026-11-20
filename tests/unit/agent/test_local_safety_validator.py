@@ -69,7 +69,46 @@ def test_validator_accepts_valid_external_target(validator: LocalSafetyValidator
 
 
 def test_validator_accepts_host_level_action_without_ip(validator: LocalSafetyValidator) -> None:
-    cmd = make_command(action_type=PolicyActionType.CLEAR_OS_CACHE.value, target_ip=None)
+    cmd = make_command(action_type=PolicyActionType.ALERT_ONLY.value, target_ip=None)
+    is_valid, reason = validator.validate(cmd, controller_url="http://192.168.1.100:8000")
+    assert is_valid
+    assert reason is None
+
+
+def test_validator_accepts_valid_restart_service(validator: LocalSafetyValidator) -> None:
+    cmd = AgentCommandContract(
+        id=str(uuid.uuid4()),
+        action_type=PolicyActionType.RESTART_SERVICE.value,
+        target_ip=None,
+        command_payload={"service_name": "order-worker"},
+        created_at=datetime.now(UTC),
+    )
+    is_valid, reason = validator.validate(cmd, controller_url="http://192.168.1.100:8000")
+    assert is_valid
+    assert reason is None
+
+
+def test_validator_rejects_protected_service_restart(validator: LocalSafetyValidator) -> None:
+    cmd = AgentCommandContract(
+        id=str(uuid.uuid4()),
+        action_type=PolicyActionType.RESTART_SERVICE.value,
+        target_ip=None,
+        command_payload={"service_name": "sshd"},
+        created_at=datetime.now(UTC),
+    )
+    is_valid, reason = validator.validate(cmd, controller_url="http://192.168.1.100:8000")
+    assert not is_valid
+    assert "protected system service" in str(reason).lower()
+
+
+def test_validator_accepts_clear_os_cache(validator: LocalSafetyValidator) -> None:
+    cmd = AgentCommandContract(
+        id=str(uuid.uuid4()),
+        action_type=PolicyActionType.CLEAR_OS_CACHE.value,
+        target_ip=None,
+        command_payload={},
+        created_at=datetime.now(UTC),
+    )
     is_valid, reason = validator.validate(cmd, controller_url="http://192.168.1.100:8000")
     assert is_valid
     assert reason is None

@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import Field
 
@@ -47,6 +48,8 @@ class NodeRegisterRequest(SentinelXBaseModel):
 
 class NodeResponse(SentinelXBaseModel):
     """Response data with node details."""
+
+    agent_capabilities: dict[str, Any] = Field(default_factory=dict)
 
     node_id: str = Field(
         ...,

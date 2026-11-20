@@ -53,6 +53,42 @@ class MetricSample(SentinelXBaseModel):
         description="Bytes received since previous check; null if unavailable or rebasing",
     )
 
+    top_process_name: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Name of top resource-consuming process if captured",
+    )
+
+    top_process_pid: int | None = Field(
+        default=None,
+        ge=0,
+        description="PID of top resource-consuming process if captured",
+    )
+
+    top_process_cpu_percent: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Total CPU percentage consumed by the top process group",
+    )
+
+    top_process_memory_percent: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Total Memory (RAM) percentage consumed by the top process group",
+    )
+
+    top_process_count: int | None = Field(
+        default=None,
+        ge=1,
+        description="Number of worker processes in the top process group",
+    )
+
+    top_process_cgroup: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Cgroup service identifier if detected",
+    )
+
 
 class MetricBatchRequest(SentinelXBaseModel):
     """Batch of metric samples sent from Agent to Controller."""

@@ -1,8 +1,9 @@
 """API router for recovery and unblock endpoints."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.recovery import (
@@ -14,8 +15,10 @@ from sentinelx_controller.infrastructure.database.session import get_db_session
 from sentinelx_controller.infrastructure.realtime import get_realtime_hub
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
-from sentinelx_controller.modules.defense.repository import DefenseRepository
-from sentinelx_controller.modules.incidents.repository import IncidentRepository
+from sentinelx_controller.modules.defense.dependencies import get_defense_core
+from sentinelx_controller.modules.defense.service import DefenseService
+from sentinelx_controller.modules.incidents.router import get_incident_service
+from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.recovery.repository import RecoveryRepository
 from sentinelx_controller.modules.recovery.service import RecoveryService
 
@@ -23,20 +26,22 @@ router = APIRouter(prefix="/recovery", tags=["recovery"])
 
 
 def get_recovery_service(
+    request: Request,
     background_tasks: BackgroundTasks,
     session: Annotated[AsyncSession, Depends(get_db_session, scope="function")],
     realtime_hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
+    defense: Annotated[DefenseService, Depends(get_defense_core)],
+    incidents: Annotated[IncidentService, Depends(get_incident_service)],
 ) -> RecoveryService:
     """Dependency providing RecoveryService."""
     recovery_repo = RecoveryRepository(session)
-    defense_repo = DefenseRepository(session)
-    incident_repo = IncidentRepository(session)
     return RecoveryService(
         recovery_repo=recovery_repo,
-        defense_repo=defense_repo,
-        incident_repo=incident_repo,
+        defense_service=defense,
+        incident_service=incidents,
         realtime_hub=realtime_hub,
         publisher=CommittedPublisher(background_tasks, realtime_hub),
+        safety=request.app.state.settings.safety,
     )
 
 
@@ -95,9 +100,6 @@ async def revert_defense_action(
 )
 async def scan_expired_defense_actions(
     service: Annotated[RecoveryService, Depends(get_recovery_service)],
-    node_id: str | None = Query(default=None, description="Optional node UUID filter"),
+    node_id: Annotated[UUID | None, Query(description="Optional node UUID filter")] = None,
 ) -> list[RecoveryActionResponse]:
-    import uuid
-
-    n_uuid = uuid.UUID(node_id) if node_id else None
-    return await service.scan_and_revert_expired_actions(node_id=n_uuid)
+    return await service.scan_and_revert_expired_actions(node_id=node_id)

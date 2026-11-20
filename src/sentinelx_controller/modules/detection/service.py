@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, status
 
@@ -48,6 +48,47 @@ class DetectionService:
         self._engine = engine
         self._realtime_hub = realtime_hub
         self._publisher = publisher
+
+    async def link_to_incident(self, event_ids: list[uuid.UUID], incident_id: uuid.UUID) -> None:
+        await self._repo.link_events_to_incident(event_ids, incident_id)
+
+    async def incident_counts(self, ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        return await self._repo.incident_counts(ids)
+
+    async def observed_quiet(
+        self,
+        incident_id: uuid.UUID,
+        quiet_after: datetime,
+        *,
+        network: bool,
+    ) -> bool:
+        now = datetime.now(UTC)
+        states = await self._repo.incident_states(incident_id)
+        if not states:
+            return False
+        for state in states:
+            observed = state.get("network_observed_at" if network else "resource_observed_at")
+            anomaly = state.get("last_anomaly_at")
+            if not isinstance(observed, str) or not isinstance(anomaly, str):
+                return False
+            timestamp = datetime.fromisoformat(observed)
+            if timestamp < now - timedelta(seconds=30) or timestamp > now + timedelta(seconds=30):
+                return False
+            if timestamp <= quiet_after or datetime.fromisoformat(anomaly) > quiet_after:
+                return False
+            if network and not state.get("network_observation_complete", False):
+                return False
+            if not network:
+                samples = state.get("samples", [])
+                if not isinstance(samples, list) or len(samples) < 3:
+                    return False
+                for sample in samples[-3:]:
+                    value = MetricSample.model_validate(sample)
+                    if value.cpu_percent >= 80 or value.memory_percent >= 85:
+                        return False
+                    if value.disk_percent is None or value.disk_percent >= 85:
+                        return False
+        return True
 
     async def evaluate_metrics(
         self,

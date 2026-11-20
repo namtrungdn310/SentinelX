@@ -1,12 +1,14 @@
 """Repository for DefenseAction database operations."""
 
+import secrets
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sentinelx_common.contracts.defense import DefenseActionStatus
+from sentinelx_controller.infrastructure.database.locking import lock_node_transaction
 from sentinelx_controller.modules.defense.models import DefenseActionModel
 
 
@@ -27,6 +29,24 @@ class DefenseRepository:
         stmt = select(DefenseActionModel).where(DefenseActionModel.id == action_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def lock_node(self, node_id: uuid.UUID) -> None:
+        """Serialize commands for a node across Controller processes on PostgreSQL."""
+        await lock_node_transaction(self._session, node_id)
+
+    async def lock_action(self, action_id: uuid.UUID) -> DefenseActionModel | None:
+        existing = await self.get_by_id(action_id)
+        if existing is None:
+            return None
+        await self.lock_node(existing.node_id)
+        return (
+            await self._session.execute(
+                select(DefenseActionModel)
+                .where(DefenseActionModel.id == action_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
 
     async def list_actions(
         self,
@@ -56,9 +76,7 @@ class DefenseRepository:
         total = total_result.scalar_one()
 
         items_stmt = (
-            base_query.order_by(DefenseActionModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
+            base_query.order_by(DefenseActionModel.created_at.desc()).limit(limit).offset(offset)
         )
         items_result = await self._session.execute(items_stmt)
         items = list(items_result.scalars().all())
@@ -69,27 +87,58 @@ class DefenseRepository:
         self,
         node_id: uuid.UUID,
         limit: int = 20,
+        lease_seconds: int = 30,
+        max_attempts: int = 5,
+        supported_actions: list[str] | None = None,
     ) -> list[DefenseActionModel]:
-        """Fetch PENDING commands for a node and transition status to SENT."""
+        """Claim pending/expired leases, bounded by command expiry and retry budget."""
+        await self.lock_node(node_id)
+        now = datetime.now(UTC)
         stmt = (
             select(DefenseActionModel)
             .where(
                 DefenseActionModel.node_id == node_id,
-                DefenseActionModel.status == DefenseActionStatus.PENDING.value,
+                DefenseActionModel.status.in_(["PENDING", "SENT"]),
+                or_(
+                    DefenseActionModel.leased_until.is_(None),
+                    DefenseActionModel.leased_until <= now,
+                ),
             )
             .order_by(DefenseActionModel.created_at.asc())
             .limit(limit)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
         )
         result = await self._session.execute(stmt)
         actions = list(result.scalars().all())
 
+        claimed: list[DefenseActionModel] = []
         for action in actions:
+            if supported_actions is not None and action.action_type not in supported_actions:
+                action.status = "FAILED"
+                action.error_message = "Agent does not advertise support for this action"
+                continue
+            expiry = (
+                action.expires_at.replace(tzinfo=UTC)
+                if action.expires_at.tzinfo is None
+                else action.expires_at
+            )
+            if expiry <= now or action.attempts >= max_attempts:
+                action.status = DefenseActionStatus.EXPIRED.value
+                action.error_message = (
+                    "Command expired or delivery attempts exhausted; reconcile host state"
+                )
+                continue
             action.status = DefenseActionStatus.SENT.value
+            action.delivery_token = action.delivery_token or secrets.token_urlsafe(32)
+            action.leased_until = now + timedelta(seconds=lease_seconds)
+            action.attempts += 1
+            claimed.append(action)
 
         if actions:
             await self._session.flush()
 
-        return actions
+        return claimed
 
     async def record_ack(
         self,

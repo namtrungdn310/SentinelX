@@ -208,3 +208,46 @@ valid window differs from capture being unavailable/stale. See
   24h maximum sample age and 30s future skew. Samples outside the age/skew limits
   remain telemetry but do not affect detection; gaps reset consecutive counters.
   See [M2/M3 integration](M2_M3_INTEGRATION.md) for migration and configuration.
+## CORE reliability — command protocol 2 (13/11/2026)
+
+Heartbeat có thêm `command_protocol_version` (1 hoặc 2, default 1),
+`supported_actions` và `executor_mode`. Chỉ Agent khai báo protocol 2 nhận command;
+Node response có `agent_capabilities` từ heartbeat gần nhất. API telemetry cũ vẫn hoạt động.
+
+Command có thêm `node_id`, `expires_at`, `delivery_token`. Retry giữ nguyên ID,
+payload và token. Agent ACK `POST /api/v1/defense/actions/{action_id}/ack` phải gửi:
+
+```json
+{
+  "action_id": "UUID của command",
+  "node_id": "UUID của node nhận lệnh",
+  "agent_id": "UUID identity đã enroll",
+  "delivery_token": "token trong command",
+  "status": "APPLIED",
+  "executed_at": "2026-11-13T10:00:00Z",
+  "execution_metadata": {"executor": "nftables"}
+}
+```
+
+Đây là schema minh họa, không phải receipt bằng chứng kernel. Trạng thái Agent được
+ACK: APPLIED, FAILED, SIMULATED, SKIPPED. PENDING/SENT/EXPIRED/CANCELLED/REVERTED
+là trạng thái Controller quản lý. APPLIED chỉ dành kết quả nftables thật;
+simulation/noop không được khai báo APPLIED. Replay receipt phải giữ nguyên nội dung.
+Defense response thêm `expires_at`, `applied_at`, `effective_until`, `attempts`,
+`execution_metadata`. Canonical block parameter: `duration_seconds` trong 1–86.400;
+alias `block_duration_seconds` được nhận nếu không mâu thuẫn canonical field.
+
+Endpoint bổ sung:
+
+- `POST /api/v1/defense/actions/{id}/cancel`: hủy PENDING chưa giao, idempotent;
+  SENT hoặc APPLIED trả 409. Gỡ APPLIED qua endpoint recovery hiện hữu.
+- `GET /api/v1/policy-decisions?node_id=UUID&limit=50&offset=0`: audit snapshots,
+  limit tối đa 200. Dry-run không ghi audit hoặc cooldown.
+
+Supported CORE action: BLOCK_IP_NFTABLES, UNBLOCK_IP_NFTABLES, ALERT_ONLY;
+auto-policy không được tạo UNBLOCK. Policy thêm `priority` (nhỏ được xét trước).
+NetworkFeature thêm `direction`: inbound/outbound/unknown, default unknown;
+auto-block yêu cầu bằng chứng inbound đủ điều kiện.
+
+Migration/nâng cấp phối hợp Controller–Agent, xử lý dữ liệu cũ và cách tái lập:
+[CORE hardening handover](CORE_HARDENING_HANDOVER.md).

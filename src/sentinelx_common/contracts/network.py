@@ -17,6 +17,7 @@ class NetworkFeature(SentinelXBaseModel):
     source_ip: IPvAnyAddress
     destination_ip: IPvAnyAddress
     protocol: Literal["tcp", "udp", "icmp", "other"]
+    direction: Literal["inbound", "outbound", "unknown"] = "unknown"
     packet_count: int = Field(ge=1)
     byte_count: int = Field(ge=0, description="Observed IP bytes, not application payload bytes")
     syn_count: int = Field(default=0, ge=0)

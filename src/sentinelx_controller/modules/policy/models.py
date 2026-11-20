@@ -47,9 +47,7 @@ class DefensePolicyModel(Base):
     """Database model for automatic defense policies."""
 
     __tablename__ = "defense_policies"
-    __table_args__ = (
-        Index("idx_defense_policies_project_event", "project_id", "event_type"),
-    )
+    __table_args__ = (Index("idx_defense_policies_project_event", "project_id", "event_type"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -98,3 +96,36 @@ class DefensePolicyModel(Base):
         nullable=False,
         default=True,
     )
+    priority: Mapped[int] = mapped_column(Integer, default=100)
+
+
+class PolicyExecutionStateModel(Base):
+    """Transaction-owned cooldown, scoped to node/policy/target."""
+
+    __tablename__ = "policy_execution_state"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    last_authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class PolicyDecisionModel(Base):
+    """Immutable snapshot explaining each real policy decision."""
+
+    __tablename__ = "policy_decisions"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        index=True,
+    )
+    event_id: Mapped[str] = mapped_column(String(36))
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)

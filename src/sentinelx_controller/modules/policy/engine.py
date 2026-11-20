@@ -1,36 +1,24 @@
-"""Policy evaluation engine with safety guardrails and cooldown tracking."""
+"""Pure policy evaluation; durable cooldown ownership belongs to the repository."""
 
 import ipaddress
-import logging
 from datetime import UTC, datetime
 
+from sentinelx_common.contracts.command_parameters import SUPPORTED_ACTIONS
 from sentinelx_common.contracts.detection import DetectionEventContract
 from sentinelx_common.contracts.policy import (
     PolicyActionType,
     PolicyEvaluationResult,
     PolicyEvaluationStatus,
 )
+from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.modules.policy.models import DefensePolicyModel, IPWhitelistModel
-
-logger = logging.getLogger(__name__)
 
 
 class PolicyEngine:
-    """Core engine evaluating detection events against policies and safety rules."""
-
-    def __init__(self) -> None:
-        # Lưu thời điểm thực thi hành động: key -> datetime
-        # Key: f"{project_id}_{action_type}_{target}"
-        self._cooldown_tracker: dict[str, datetime] = {}
-        # Các dải IP mạng loopback bảo vệ tuyệt đối không bao giờ được phép chặn
-        self._loopback_networks = [
-            ipaddress.ip_network("127.0.0.0/8"),
-            ipaddress.ip_network("::1/128"),
-        ]
+    """Evaluate a snapshot without mutating shared process state."""
 
     def clear_state(self) -> None:
-        """Reset internal cooldown tracking state (useful for tests)."""
-        self._cooldown_tracker.clear()
+        """Compatibility hook: the evaluator owns no mutable cooldown state."""
 
     def evaluate(
         self,
@@ -38,151 +26,165 @@ class PolicyEngine:
         policies: list[DefensePolicyModel],
         whitelists: list[IPWhitelistModel],
         controller_ip: str | None = None,
+        *,
+        last_authorized_at: datetime | None = None,
+        protected_cidrs: list[str] | None = None,
+        now: datetime | None = None,
     ) -> PolicyEvaluationResult:
-        """Thẩm định một detection event và đưa ra quyết định hành động."""
-        now = datetime.now(UTC)
-
-        # ─── BƯỚC 1: Kiểm tra IP Whitelist (Nếu có IP kẻ tấn công) ───
+        current = now or datetime.now(UTC)
         if event.attacker_ip:
             try:
-                ip_obj = ipaddress.ip_address(event.attacker_ip)
+                target_ip = ipaddress.ip_address(event.attacker_ip)
             except ValueError:
                 return PolicyEvaluationResult(
                     authorized=False,
                     status=PolicyEvaluationStatus.DENIED_WHITELIST,
-                    reason=f"Địa chỉ IP không hợp lệ: {event.attacker_ip}",
+                    reason="Invalid target address",
                 )
-
-            # 1.1. Bảo vệ Loopback
-            if any(ip_obj in net for net in self._loopback_networks):
-                logger.warning("BLOCK DENIED: IP %s thuộc dải loopback", event.attacker_ip)
-                return PolicyEvaluationResult(
-                    authorized=False,
-                    status=PolicyEvaluationStatus.DENIED_WHITELIST,
-                    target=event.attacker_ip,
-                    reason="CẤM CHẶN: Địa chỉ thuộc dải loopback nội bộ hệ thống",
-                )
-
-            # 1.2. Bảo vệ Controller IP
-            if controller_ip and event.attacker_ip == controller_ip:
-                logger.warning("BLOCK DENIED: IP %s là địa chỉ Controller", event.attacker_ip)
-                return PolicyEvaluationResult(
-                    authorized=False,
-                    status=PolicyEvaluationStatus.DENIED_WHITELIST,
-                    target=event.attacker_ip,
-                    reason="CẤM CHẶN: Địa chỉ trùng với địa chỉ máy chủ Controller",
-                )
-
-            # 1.3. Bảo vệ IP nằm trong danh sách Whitelist của dự án
-            for item in whitelists:
+            protected = [entry.ip_or_cidr for entry in whitelists] + (protected_cidrs or [])
+            if controller_ip:
+                protected.append(controller_ip)
+            forbidden = (
+                target_ip.is_loopback
+                or target_ip.is_unspecified
+                or target_ip.is_multicast
+                or target_ip.is_link_local
+            )
+            rejection = "Protected loopback/non-unicast address"
+            for cidr in protected:
                 try:
-                    wl_net = ipaddress.ip_network(item.ip_or_cidr, strict=False)
-                    if ip_obj in wl_net:
-                        logger.warning(
-                            "BLOCK DENIED: IP %s nằm trong whitelist %s (%s)",
-                            event.attacker_ip,
-                            item.ip_or_cidr,
-                            item.description,
-                        )
-                        desc = item.description or "whitelist"
-                        return PolicyEvaluationResult(
-                            authorized=False,
-                            status=PolicyEvaluationStatus.DENIED_WHITELIST,
-                            target=event.attacker_ip,
-                            reason=f"IP nằm trong danh sách an toàn: {item.ip_or_cidr} ({desc})",
-                        )
+                    if target_ip in ipaddress.ip_network(cidr, strict=False):
+                        forbidden = True
+                        rejection = f"Protected Controller/whitelist network: {cidr}"
                 except ValueError:
-                    logger.error("Dải whitelist không hợp lệ trong database: %s", item.ip_or_cidr)
-
-        # ─── BƯỚC 2: Khớp Quy tắc (Rule Matching) ───
-        matched_policy: DefensePolicyModel | None = None
-        for p in policies:
-            if p.event_type == event.detector_name:
-                if not p.enabled:
-                    return PolicyEvaluationResult(
-                        authorized=False,
-                        status=PolicyEvaluationStatus.DENIED_DISABLED,
-                        policy_id=str(p.id),
-                        reason=f"Chính sách '{p.name}' đang bị vô hiệu hóa (disabled)",
-                    )
-                matched_policy = p
-                break
-
-        if matched_policy is None:
+                    # Invalid protection configuration must never silently permit a block.
+                    forbidden = True
+                    rejection = "Invalid infrastructure protection configuration"
+            if forbidden:
+                return PolicyEvaluationResult(
+                    authorized=False,
+                    status=PolicyEvaluationStatus.DENIED_WHITELIST,
+                    target=str(target_ip),
+                    reason=rejection,
+                )
+        matching = [p for p in policies if p.event_type == event.detector_name]
+        policy = next((p for p in matching if p.enabled), None)
+        if policy is None:
+            return PolicyEvaluationResult(
+                authorized=False,
+                status=(
+                    PolicyEvaluationStatus.DENIED_DISABLED
+                    if matching
+                    else PolicyEvaluationStatus.NO_POLICY_MATCH
+                ),
+                reason="No enabled matching policy",
+            )
+        if (
+            policy.action_type not in SUPPORTED_ACTIONS
+            or policy.action_type == "UNBLOCK_IP_NFTABLES"
+        ):
             return PolicyEvaluationResult(
                 authorized=False,
                 status=PolicyEvaluationStatus.NO_POLICY_MATCH,
-                reason=(
-                    f"Không tìm thấy chính sách nào được cấu hình cho sự kiện "
-                    f"'{event.detector_name}'"
-                ),
+                policy_id=str(policy.id),
+                reason="Action has no supported automatic CORE executor",
             )
-
-        # Xác định mục tiêu can thiệp (Target)
-        action_type = PolicyActionType(matched_policy.action_type)
-        target = (
-            event.attacker_ip
-            or matched_policy.target_params.get("service_name")
-            or matched_policy.target_params.get("process_name")
-            or str(event.node_id)
-        )
-
-        block_duration = matched_policy.block_duration_seconds or 0
-        cooldown = matched_policy.cooldown_seconds or 0
-
-        # ─── BƯỚC 3 & 4: Kiểm tra Chống trùng lặp & Cooldown ───
-        cooldown_key = f"{matched_policy.project_id}_{action_type.value}_{target}"
-        if cooldown_key in self._cooldown_tracker:
-            last_run = self._cooldown_tracker[cooldown_key]
-            elapsed = (now - last_run).total_seconds()
-
-            # Đối với hành động duy trì trạng thái như BLOCK_IP / RATE_LIMIT:
-            if action_type in (
-                PolicyActionType.BLOCK_IP_NFTABLES,
-                PolicyActionType.RATE_LIMIT,
+        if policy.action_type == "BLOCK_IP_NFTABLES" and not event.attacker_ip:
+            return PolicyEvaluationResult(
+                authorized=False,
+                status=PolicyEvaluationStatus.NO_POLICY_MATCH,
+                policy_id=str(policy.id),
+                reason="Firewall action requires an observed attacker IP",
+            )
+        if policy.action_type == "BLOCK_IP_NFTABLES":
+            context = event.details.extra_context
+            if (
+                context.get("direction") != "inbound"
+                or context.get("eligible_for_automatic_defense") is False
             ):
-                if elapsed < block_duration:
-                    return PolicyEvaluationResult(
-                        authorized=False,
-                        status=PolicyEvaluationStatus.DENIED_DUPLICATE,
-                        action_type=action_type,
-                        target=target,
-                        duration_seconds=block_duration,
-                        policy_id=str(matched_policy.id),
-                        reason=(
-                            f"Mục tiêu '{target}' đang có hiệu lực thi hành hành động "
-                            f"{action_type.value}"
-                        ),
-                    )
-
-            # Đối với hành động tức thời hoặc thời gian hạ nhiệt chung:
-            if elapsed < cooldown:
-                remaining = int(cooldown - elapsed)
+                return PolicyEvaluationResult(
+                    authorized=False,
+                    status=PolicyEvaluationStatus.NO_POLICY_MATCH,
+                    policy_id=str(policy.id),
+                    reason="Automatic blocking requires eligible inbound evidence",
+                )
+        action = PolicyActionType(policy.action_type)
+        if action == PolicyActionType.ADAPTIVE:
+            if event.detector_name == "memory_exhaustion_detector":
+                if event.details.extra_context.get("process_name"):
+                    action = PolicyActionType.RESTART_SERVICE
+                    target = str(event.details.extra_context["process_name"])
+                else:
+                    action = PolicyActionType.CLEAR_OS_CACHE
+                    target = "os-cache"
+            elif event.detector_name == "cpu_threshold_detector":
+                if event.details.extra_context.get("process_name"):
+                    action = PolicyActionType.RESTART_SERVICE
+                    target = str(event.details.extra_context["process_name"])
+                else:
+                    action = PolicyActionType.ALERT_ONLY
+                    target = str(event.node_id)
+            elif event.detector_name in (
+                "syn_flood_detector",
+                "port_scan_detector",
+                "traffic_spike_detector",
+            ):
+                if event.attacker_ip:
+                    action = PolicyActionType.BLOCK_IP_NFTABLES
+                    target = event.attacker_ip
+                else:
+                    action = PolicyActionType.ALERT_ONLY
+                    target = str(event.node_id)
+            else:
+                action = PolicyActionType.ALERT_ONLY
+                target = str(event.node_id)
+        elif action == PolicyActionType.RESTART_SERVICE:
+            target = (
+                str(event.details.extra_context.get("process_name") or "")
+                or str(policy.target_params.get("service_name") or "")
+                or str(policy.target_params.get("target") or "")
+                or "default-worker"
+            )
+        elif action == PolicyActionType.CLEAR_OS_CACHE:
+            target = "os-cache"
+        else:
+            target = event.attacker_ip or str(event.node_id)
+        duration = policy.block_duration_seconds or 0
+        if action == PolicyActionType.BLOCK_IP_NFTABLES and not 1 <= duration <= 86400:
+            return PolicyEvaluationResult(
+                authorized=False,
+                status=PolicyEvaluationStatus.NO_POLICY_MATCH,
+                policy_id=str(policy.id),
+                reason="Unsafe block duration",
+            )
+        if last_authorized_at is not None:
+            elapsed = (current - ensure_utc(last_authorized_at)).total_seconds()
+            if action == PolicyActionType.BLOCK_IP_NFTABLES and elapsed < duration:
+                return PolicyEvaluationResult(
+                    authorized=False,
+                    status=PolicyEvaluationStatus.DENIED_DUPLICATE,
+                    policy_id=str(policy.id),
+                    action_type=action,
+                    target=target,
+                    duration_seconds=duration,
+                    reason="An equivalent block was recently authorized",
+                )
+            if elapsed < (policy.cooldown_seconds or 0):
                 return PolicyEvaluationResult(
                     authorized=False,
                     status=PolicyEvaluationStatus.DENIED_COOLDOWN,
-                    action_type=action_type,
+                    policy_id=str(policy.id),
+                    action_type=action,
                     target=target,
-                    policy_id=str(matched_policy.id),
-                    reason=f"Chính sách đang trong thời gian hạ nhiệt, vui lòng chờ {remaining}s",
+                    reason="Policy cooldown is active",
                 )
-
-        # Ghi nhận mốc thời gian kích hoạt
-        self._cooldown_tracker[cooldown_key] = now
-
-        # ─── BƯỚC 5: Phê duyệt Hành động ───
-        is_auto = (
-            bool(matched_policy.is_auto_execute)
-            if matched_policy.is_auto_execute is not None
-            else True
-        )
         return PolicyEvaluationResult(
             authorized=True,
             status=PolicyEvaluationStatus.ACTION_AUTHORIZED,
-            action_type=action_type,
+            policy_id=str(policy.id),
+            action_type=action,
             target=target,
-            duration_seconds=block_duration,
-            policy_id=str(matched_policy.id),
-            is_auto_execute=is_auto,
-            reason=f"Phê duyệt {action_type.value} theo chính sách '{matched_policy.name}'",
+            duration_seconds=duration,
+            is_auto_execute=bool(policy.is_auto_execute),
+            reason=f"Authorized by policy '{policy.name}'",
         )

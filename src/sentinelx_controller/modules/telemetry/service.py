@@ -75,6 +75,8 @@ class TelemetryService:
             )
 
         now = datetime.now(UTC)
+        if self._defense_service is not None:
+            await self._defense_service.lock_node(node_uuid)
         count = await self._telemetry_repo.save_batch(
             node_id=node_uuid,
             received_at=now,
@@ -124,23 +126,20 @@ class TelemetryService:
                                 and res.action_type
                                 and self._defense_service is not None
                             ):
-                                policy_uuid = (
-                                    uuid.UUID(res.policy_id) if res.policy_id else None
-                                )
+                                policy_uuid = uuid.UUID(res.policy_id) if res.policy_id else None
                                 await self._defense_service.create_action_from_policy(
                                     node_id=node_uuid,
                                     action_type=res.action_type.value,
                                     target_ip=(
                                         res.target
-                                        if res.action_type
-                                        == PolicyActionType.BLOCK_IP_NFTABLES
+                                        if res.action_type == PolicyActionType.BLOCK_IP_NFTABLES
                                         else None
                                     ),
                                     command_payload={
                                         "target": res.target,
                                         "duration_seconds": res.duration_seconds,
                                     },
-                                    incident_id=inc.id,
+                                    incident_id=uuid.UUID(inc.id),
                                     policy_id=policy_uuid,
                                 )
 

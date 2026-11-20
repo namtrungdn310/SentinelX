@@ -25,3 +25,17 @@ detection:
   max_gap_seconds: 60
   max_sample_age_seconds: 86400
   future_skew_seconds: 30
+safety:
+  protected_cidrs: []
+  command_ttl_seconds: 300
+  command_lease_seconds: 30
+  command_max_attempts: 5
+  recovery_max_attempts: 3
+  recovery_backoff_seconds: 30
+  recovery_quiet_seconds: 120
+
+retention:
+  metric_days: 7
+  network_days: 3
+  policy_audit_days: 90
+  batch_size: 1000

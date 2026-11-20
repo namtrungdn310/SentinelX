@@ -17,10 +17,12 @@ class PacketObservation:
     byte_count: int
     destination_port: int | None = None
     tcp_flags: int = 0
+    direction: str = "unknown"
 
 
 @dataclass
 class Counters:
+    direction: str = "unknown"
     packets: int = 0
     bytes: int = 0
     syn: int = 0
@@ -105,7 +107,7 @@ class SlidingWindowAggregator:
                     if len(state.groups) >= self.max_groups:
                         state.omitted += 1
                         continue
-                    counter = state.groups[key] = Counters()
+                    counter = state.groups[key] = Counters(direction=packet.direction)
                 counter.packets += 1
                 counter.bytes += packet.byte_count
                 if packet.protocol == "tcp":
@@ -134,6 +136,7 @@ class SlidingWindowAggregator:
                             "source_ip": src,
                             "destination_ip": dst,
                             "protocol": protocol,
+                            "direction": c.direction,
                             "packet_count": c.packets,
                             "byte_count": c.bytes,
                             "syn_count": c.syn,

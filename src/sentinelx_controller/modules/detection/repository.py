@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -111,6 +112,7 @@ class DetectionRepository:
         if not event_ids:
             return
         from sqlalchemy import update
+
         stmt = (
             update(DetectionEventModel)
             .where(DetectionEventModel.id.in_(event_ids))
@@ -124,6 +126,42 @@ class DetectionRepository:
         stmt = select(DetectionEventModel).where(DetectionEventModel.id == event_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def incident_counts(self, incident_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        rows = (
+            await self._session.execute(
+                select(DetectionEventModel.incident_id, func.count())
+                .where(DetectionEventModel.incident_id.in_(incident_ids))
+                .group_by(DetectionEventModel.incident_id),
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows if row[0] is not None}
+
+    async def incident_states(self, incident_id: uuid.UUID) -> list[dict[str, object]]:
+        nodes = (
+            select(DetectionEventModel.node_id)
+            .where(
+                DetectionEventModel.incident_id == incident_id,
+            )
+            .distinct()
+        )
+        expected = int(
+            (
+                await self._session.execute(select(func.count()).select_from(nodes.subquery()))
+            ).scalar_one()
+        )
+        rows: Sequence[dict[str, Any]] = (
+            (
+                await self._session.execute(
+                    select(DetectionNodeStateModel.state).where(
+                        DetectionNodeStateModel.node_id.in_(nodes)
+                    ),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return list(rows) if len(rows) == expected else []
 
     async def count_events(
         self,

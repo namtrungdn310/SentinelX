@@ -617,3 +617,14 @@ Tenant A Servers                               Tenant B Servers
 1. **Giai đoạn 1 (Foundation & Core - PBL4)**: Hoàn thành Modular Monolith, Multi-Host network, Agent daemon thực, Load balancer và Tự động kích hoạt nftables. Xác thực quản trị viên Admin ở F10.
 2. **Giai đoạn 2 (SaaS Extension - M9)**: Bổ sung đăng ký tài khoản tự phục vụ (Self-service Sign-up), mời thành viên vào Workspace, thanh toán và phân quyền RBAC (Owner, Admin, Operator, Viewer).
 
+## CORE reliability update (13/11/2026)
+
+Defense command protocol 2 dùng leased delivery trên PostgreSQL và durable local
+SQLite receipt journal trong Agent. Command worker độc lập heartbeat/telemetry;
+simulation/noop không được tính như thay đổi firewall thật. Policy cooldown/audit,
+detection state, incident và defense command nằm cùng transaction ingest. Recovery
+dùng owned unblock, retry budget, execution deadline và fresh quiet observations.
+
+SQLite không phải storage mới của Controller; PostgreSQL vẫn là core storage.
+Không thêm broker hoặc module SaaS M9. Cấu hình mới, migration 0010, diagram luồng
+bằng lời và kết quả nghiệm thu: [CORE hardening handover](CORE_HARDENING_HANDOVER.md).

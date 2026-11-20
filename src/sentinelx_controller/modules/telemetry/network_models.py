@@ -13,7 +13,10 @@ from sentinelx_controller.infrastructure.database.base import Base
 
 class NetworkWindowModel(Base):
     __tablename__ = "telemetry_network_windows"
-    __table_args__ = (Index("idx_network_node_time", "node_id", "window_end"),)
+    __table_args__ = (
+        Index("idx_network_node_time", "node_id", "window_end"),
+        Index("idx_network_retention", "received_at"),
+    )
 
     node_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),

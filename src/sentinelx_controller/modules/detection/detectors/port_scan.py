@@ -29,17 +29,20 @@ class PortScanDetector(BaseNetworkDetector):
     ) -> list[DetectionEventContract]:
         events: list[DetectionEventContract] = []
         for feature in window.features:
+            if feature.protocol not in {"tcp", "udp"} or feature.direction == "outbound":
+                continue
             ports_count = len(feature.destination_ports)
-            if ports_count >= self.port_threshold or feature.ports_truncated:
+            normalized_ports = (
+                ports_count * 10 / (window.window_end - window.window_start).total_seconds()
+            )
+            if normalized_ports >= self.port_threshold or feature.ports_truncated:
                 severity = (
                     DetectionSeverity.HIGH
                     if ports_count >= 30 or feature.ports_truncated
                     else DetectionSeverity.MEDIUM
                 )
                 confidence = (
-                    0.95
-                    if feature.ports_truncated
-                    else min(0.92, 0.80 + (ports_count * 0.005))
+                    0.95 if feature.ports_truncated else min(0.92, 0.80 + (ports_count * 0.005))
                 )
 
                 event = DetectionEventContract(
@@ -63,6 +66,9 @@ class PortScanDetector(BaseNetworkDetector):
                             "window_id": str(window.window_id),
                             "ports_scanned_count": ports_count,
                             "ports_truncated": feature.ports_truncated,
+                            "direction": feature.direction,
+                            "eligible_for_automatic_defense": normalized_ports
+                            >= self.port_threshold,
                         },
                     ),
                     detected_at=window.window_end,

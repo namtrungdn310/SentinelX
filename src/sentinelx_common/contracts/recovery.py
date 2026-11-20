@@ -38,6 +38,9 @@ class RecoveryActionResponse(SentinelXBaseModel):
     reason: RecoveryReason = Field(..., description="Reason for recovery")
     status: RecoveryStatus = Field(..., description="Status of recovery action")
     executed_at: datetime = Field(..., description="Execution timestamp in UTC")
+    attempts: int = 1
+    next_retry_at: datetime | None = None
+    error_message: str | None = None
 
 
 class RecoveryActionListResponse(SentinelXBaseModel):

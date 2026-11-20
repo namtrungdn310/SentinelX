@@ -75,7 +75,14 @@ class CpuThresholdDetector(BaseDetector):
                 window_duration_seconds=duration_seconds,
                 consecutive_samples=self._consecutive_samples,
                 extra_context={
-                    "window_cpu_values": [round(s.cpu_percent, 2) for s in recent_samples]
+                    "window_cpu_values": [round(s.cpu_percent, 2) for s in recent_samples],
+                    "process_name": latest_sample.top_process_name,
+                    "pid": latest_sample.top_process_pid,
+                    "process_percent": latest_sample.top_process_cpu_percent,
+                    "process_cpu_percent": latest_sample.top_process_cpu_percent,
+                    "process_memory_percent": latest_sample.top_process_memory_percent,
+                    "process_count": latest_sample.top_process_count,
+                    "cgroup": latest_sample.top_process_cgroup,
                 },
             ),
             detected_at=latest_sample.observed_at or datetime.now(UTC),

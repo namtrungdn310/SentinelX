@@ -2,9 +2,9 @@
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from sentinelx_common.contracts.agents import EnrollmentStatus
@@ -19,6 +19,7 @@ class NodeModel(Base, TimestampMixin):
     """Database table storing managed Linux nodes."""
 
     __tablename__ = "nodes"
+    agent_capabilities: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     __table_args__ = (
         UniqueConstraint("project_id", "ip_address", name="uq_node_project_ip"),
         Index("idx_nodes_status", "status"),
@@ -120,4 +121,3 @@ class AgentEnrollmentModel(Base, TimestampMixin):
         "NodeModel",
         back_populates="enrollments",
     )
-

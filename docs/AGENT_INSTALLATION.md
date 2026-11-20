@@ -216,3 +216,40 @@ Theo dõi các dấu hiệu thiếu dữ liệu: `omitted_packets` (vượt số
 `ports_truncated` (vượt 64 cổng), `skipped_windows` (scheduler chậm), cùng log bộ
 đệm đầy. Các trường này **không** đo số packet bị kernel/libpcap drop. Cửa sổ chồng
 lấp, không cộng trực tiếp số gói/byte của các cửa sổ liên tiếp.
+# CORE M1–M8: nâng cấp Agent và bật nftables
+
+Agent release mới dùng command protocol 2 và receipt journal `commands.sqlite3`
+cạnh identity (hoặc `command_journal_path`). Giữ cả hai file qua update/restart;
+không sao chép journal của node này sang node khác.
+
+Sau khi nâng cấp Controller/database tới `0010_core_reliability`, cập nhật bundle
+Agent rồi kiểm tra heartbeat capabilities. Chi tiết chuyển phiên bản và legacy
+commands: [CORE hardening handover](CORE_HARDENING_HANDOVER.md).
+
+Executor mặc định vẫn `simulated`. Để bật firewall thật trên Linux/systemd:
+
+```bash
+sudo apt-get install nftables
+sudo python3 manage.py defense-permissions --enable
+```
+
+Sửa `/etc/sentinelx-agent/agent.yaml`, trong `agent:`:
+
+```yaml
+defense_executor_type: nftables
+nftables_table_name: sentinelx
+nftables_hook: input
+protected_cidrs: []  # Điền mạng quản trị/VPN/health checks của môi trường thực tế.
+max_block_seconds: 1800
+```
+
+Sau đó `sudo python3 manage.py restart`. Profile `60-sentinelx-defense.conf`
+chỉ thêm NET_ADMIN và AF_NETLINK; kết hợp được profile capture NET_RAW của M2,
+không đổi service sang root. Dùng `--name` đúng service nếu cài nhiều instance.
+Tắt bằng `defense-permissions --disable` sau khi đã đối soát/gỡ các block đang active;
+đổi executor về simulated và restart rõ ràng. Manager không tự flush firewall.
+
+Không có privilege/cấu hình đúng thì lệnh phải FAILED; SIMULATED/SKIPPED không
+được tính APPLIED. `APPLIED` ghi nhận kết quả thực thi tại thời điểm ACK. Khi
+restart, worker thử khôi phục block owned còn TTL từ journal mà không gia hạn;
+lỗi reconciliation phải được xử lý theo log/audit. Không xóa journal để ép retry.

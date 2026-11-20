@@ -1,8 +1,10 @@
 """Real Linux/OS hardware resource collector for SentinelX Agent."""
 
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import psutil
 
@@ -33,6 +35,101 @@ class RealResourceCollector:
         """Detect default mount point across Linux, macOS, and Windows environments."""
         anchor = Path.home().anchor
         return anchor if anchor else "/"
+
+    @staticmethod
+    def _read_cgroup_service(pid: int) -> str | None:
+        """Priority 1: Read Linux Cgroup to identify systemd service."""
+        try:
+            with open(f"/proc/{pid}/cgroup", encoding="utf-8") as f:
+                for line in f:
+                    if ".service" in line:
+                        match = re.search(r"([a-zA-Z0-9_\-\.]+)\.service", line)
+                        if match:
+                            return f"{match.group(1)}.service"
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _normalize_name_fallback(name: str, cmdline: list[str] | None = None) -> str:
+        """Priority 2: Fallback regex normalization and command-line parser."""
+        clean = (name or "").strip().lower()
+        if clean in ("python", "python3", "node", "java", "ruby") and cmdline:
+            for idx, arg in enumerate(cmdline):
+                if arg == "-m" and idx + 1 < len(cmdline):
+                    clean = cmdline[idx + 1].split(".")[-1].lower()
+                    break
+                elif arg.endswith((".py", ".js", ".jar")) and not arg.startswith("-"):
+                    parts = arg.replace("\\", "/").split("/")
+                    clean = parts[-1].split(".")[0].lower()
+                    break
+        clean = re.sub(r"\[\d+\]|\(\d+\)|#\d+|@[\w\.-]+", "", clean)
+        clean = re.sub(r"[-_.\s]*\d+$", "", clean).strip()
+        return clean[:64] if clean else (name[:64] if name else "unknown")
+
+    @classmethod
+    def _find_top_process(
+        cls,
+    ) -> tuple[str | None, int | None, float | None, float | None, int | None, str | None]:
+        """Hybrid Process Grouping: Priority 1 (Linux Cgroup) -> Priority 2 (Regex / PPID)."""
+        try:
+            groups: dict[str, dict[str, Any]] = {}
+            for proc in psutil.process_iter(
+                ["pid", "name", "cpu_percent", "memory_percent", "cmdline"]
+            ):
+                try:
+                    info = proc.info
+                    name = str(info.get("name") or "")
+                    if name.lower() in ("system idle process", "system", "idle", "registry"):
+                        continue
+                    pid = int(info["pid"]) if info.get("pid") is not None else 0
+                    cpu = float(info.get("cpu_percent") or 0.0)
+                    mem = float(info.get("memory_percent") or 0.0)
+                    cmdline = info.get("cmdline") or []
+
+                    # 1. Priority 1: Linux Cgroup inspection
+                    cgroup_svc = cls._read_cgroup_service(pid)
+                    if cgroup_svc:
+                        group_key = f"cgroup:{cgroup_svc}"
+                        display_name = cgroup_svc.replace(".service", "")
+                    else:
+                        # 2. Priority 2: Fallback Regex Normalization
+                        display_name = cls._normalize_name_fallback(name, cmdline)
+                        group_key = f"proc:{display_name}"
+
+                    if group_key not in groups:
+                        groups[group_key] = {
+                            "name": display_name,
+                            "cgroup": cgroup_svc,
+                            "cpu_percent": 0.0,
+                            "memory_percent": 0.0,
+                            "pids": [],
+                        }
+                    groups[group_key]["cpu_percent"] += cpu
+                    groups[group_key]["memory_percent"] += mem
+                    groups[group_key]["pids"].append(pid)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+
+            if not groups:
+                return None, None, None, None, None, None
+
+            top_group = max(
+                groups.values(),
+                key=lambda g: max(g["cpu_percent"], g["memory_percent"]),
+            )
+            primary_pid = min(top_group["pids"]) if top_group["pids"] else None
+            return (
+                top_group["name"][:64],
+                primary_pid,
+                round(top_group["cpu_percent"], 2),
+                round(top_group["memory_percent"], 2),
+                len(top_group["pids"]),
+                top_group["cgroup"][:128] if top_group["cgroup"] else None,
+            )
+        except Exception as err:
+            logger.debug("Failed to inspect process groups: %s", err)
+            return None, None, None, None, None, None
 
     def collect(self) -> MetricSample:
         """Sample machine resource utilization synchronously.
@@ -66,6 +163,15 @@ class RealResourceCollector:
         # Rebase after a gap rather than assigning several intervals to one sample.
         self._prev_network = current_network
 
+        top_name: str | None = None
+        top_pid: int | None = None
+        top_cpu: float | None = None
+        top_mem: float | None = None
+        top_count: int | None = None
+        top_cgroup: str | None = None
+        if cpu_pct >= 75.0 or mem_pct >= 75.0:
+            top_name, top_pid, top_cpu, top_mem, top_count, top_cgroup = self._find_top_process()
+
         return MetricSample(
             observed_at=datetime.now(UTC),
             cpu_percent=round(cpu_pct, 2),
@@ -73,4 +179,10 @@ class RealResourceCollector:
             disk_percent=round(disk_pct, 2) if disk_pct is not None else None,
             network_rx_bytes=rx_delta,
             network_tx_bytes=tx_delta,
+            top_process_name=top_name,
+            top_process_pid=top_pid,
+            top_process_cpu_percent=top_cpu,
+            top_process_memory_percent=top_mem,
+            top_process_count=top_count,
+            top_process_cgroup=top_cgroup,
         )

@@ -1,11 +1,19 @@
 """Database repository for defense policies and IP whitelist."""
 
+import hashlib
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sentinelx_controller.modules.policy.models import DefensePolicyModel, IPWhitelistModel
+from sentinelx_controller.modules.policy.models import (
+    DefensePolicyModel,
+    IPWhitelistModel,
+    PolicyDecisionModel,
+    PolicyExecutionStateModel,
+)
 
 
 class PolicyRepository:
@@ -14,7 +22,47 @@ class PolicyRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def cooldown(
+        self,
+        node_id: uuid.UUID,
+        policy_id: str,
+        target: str,
+        *,
+        lock: bool,
+    ) -> PolicyExecutionStateModel | None:
+        key = hashlib.sha256(f"{node_id}:{policy_id}:{target}".encode()).hexdigest()
+        if lock:
+            insert = (
+                sqlite_insert if self._session.get_bind().dialect.name == "sqlite" else pg_insert
+            )
+            await self._session.execute(
+                insert(PolicyExecutionStateModel)
+                .values(key=key, node_id=node_id)
+                .on_conflict_do_nothing(index_elements=["key"]),
+            )
+        query = select(PolicyExecutionStateModel).where(PolicyExecutionStateModel.key == key)
+        if lock:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        return (await self._session.execute(query)).scalar_one_or_none()
+
+    async def audit(self, decision: PolicyDecisionModel) -> None:
+        self._session.add(decision)
+        await self._session.flush()
+
     # ─── DEFENSE POLICIES ───
+
+    async def decisions(
+        self, node_id: uuid.UUID | None, limit: int, offset: int
+    ) -> list[PolicyDecisionModel]:
+        statement = select(PolicyDecisionModel)
+        if node_id is not None:
+            statement = statement.where(PolicyDecisionModel.node_id == node_id)
+        result = await self._session.execute(
+            statement.order_by(PolicyDecisionModel.created_at.desc(), PolicyDecisionModel.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
 
     async def create_policy(self, policy: DefensePolicyModel) -> DefensePolicyModel:
         """Tạo chính sách phòng thủ mới."""
@@ -40,7 +88,7 @@ class PolicyRepository:
         if enabled_only:
             stmt = stmt.where(DefensePolicyModel.enabled.is_(True))
 
-        stmt = stmt.order_by(DefensePolicyModel.name)
+        stmt = stmt.order_by(DefensePolicyModel.priority, DefensePolicyModel.id)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

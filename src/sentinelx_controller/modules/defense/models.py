@@ -1,10 +1,10 @@
 """SQLAlchemy model for DefenseAction in SentinelX."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from sentinelx_controller.infrastructure.database.base import Base
@@ -70,3 +70,14 @@ class DefenseActionModel(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC) + timedelta(minutes=5),
+    )
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_token: Mapped[str | None] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

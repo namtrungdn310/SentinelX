@@ -60,7 +60,7 @@ async def test_defense_policy_crud_flow(
         pol_payload = {
             "name": "Auto Restart Nginx on High CPU",
             "event_type": "cpu_threshold_detector",
-            "action_type": "RESTART_SERVICE",
+            "action_type": "ALERT_ONLY",
             "target_params": {"service_name": "nginx"},
             "cooldown_seconds": 300,
             "block_duration_seconds": 1800,
@@ -73,7 +73,7 @@ async def test_defense_policy_crud_flow(
         assert create_res.status_code == 201
         policy_id = create_res.json()["id"]
         assert create_res.json()["name"] == "Auto Restart Nginx on High CPU"
-        assert create_res.json()["action_type"] == "RESTART_SERVICE"
+        assert create_res.json()["action_type"] == "ALERT_ONLY"
 
         # 2. List policies
         list_res = await client.get("/api/v1/defense-policies", params={"project_id": project_id})
