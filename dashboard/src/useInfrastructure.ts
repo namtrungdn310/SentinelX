@@ -66,15 +66,29 @@ export function useInfrastructure() {
       (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
     ).length;
   });
-  const [securityToast, setSecurityToast] = useState<SecurityToastPayload | null>(null);
+  const [securityToasts, setSecurityToasts] = useState<SecurityToastPayload[]>([]);
 
   const requestId = useRef(0);
   const historyRequestId = useRef(0);
   const modeRef = useRef(true);
   const demoTickRef = useRef(0);
 
-  const dismissSecurityToast = useCallback(() => {
-    setSecurityToast(null);
+  const pushSecurityToast = useCallback((toast: SecurityToastPayload) => {
+    setSecurityToasts((previous) => {
+      const filtered =
+        toast.type === "settings"
+          ? previous.filter((item) => item.type !== "settings")
+          : previous;
+      return [...filtered, toast].slice(-3);
+    });
+  }, []);
+
+  const dismissSecurityToast = useCallback((toastId?: string) => {
+    if (!toastId) {
+      setSecurityToasts([]);
+      return;
+    }
+    setSecurityToasts((previous) => previous.filter((item) => item.id !== toastId));
   }, []);
 
   const handleMessage = useCallback((message: RealtimeMessage) => {
@@ -85,7 +99,7 @@ export function useInfrastructure() {
     if (!modeRef.current) {
       if (message.event === "incident_alert") {
         setActiveIncidentsCount((c) => c + 1);
-        setSecurityToast({
+        pushSecurityToast({
           id: `toast-inc-${Date.now()}`,
           type: "incident",
           title: "Phát hiện sự cố an ninh mới",
@@ -100,7 +114,7 @@ export function useInfrastructure() {
         }
       } else if (message.event === "defense_action_created") {
         setActiveBlocksCount((c) => c + 1);
-        setSecurityToast({
+        pushSecurityToast({
           id: `toast-def-${Date.now()}`,
           type: "defense",
           title: "Tường lửa đã kích hoạt",
@@ -163,7 +177,7 @@ export function useInfrastructure() {
             : previous.histories,
       };
     });
-  }, []);
+  }, [pushSecurityToast]);
 
   const { isConnected, latencyMs } = useWebSocket({
     onMessage: handleMessage,
@@ -389,7 +403,7 @@ export function useInfrastructure() {
           newNotable = [secEvent, ...newNotable].slice(0, 20);
 
           if (isAttack) {
-            setSecurityToast({
+            pushSecurityToast({
               id: `toast-demo-${Date.now()}`,
               type: "incident",
               title: "Phát hiện sự cố an ninh mới",
@@ -399,7 +413,7 @@ export function useInfrastructure() {
               targetView: "incidents",
             });
           } else {
-            setSecurityToast({
+            pushSecurityToast({
               id: `toast-demo-${Date.now()}`,
               type: "defense",
               title: "Tường lửa đã kích hoạt",
@@ -420,7 +434,7 @@ export function useInfrastructure() {
       });
     }, 2400);
     return () => window.clearInterval(interval);
-  }, [snapshot.isDemoMode]);
+  }, [snapshot.isDemoMode, pushSecurityToast]);
 
   const loadHistory = useCallback(async (nodeId: string, limit: number) => {
     if (modeRef.current) return;
@@ -508,7 +522,8 @@ export function useInfrastructure() {
     latencyMs,
     activeIncidentsCount,
     activeBlocksCount,
-    securityToast,
+    securityToasts,
+    pushSecurityToast,
     dismissSecurityToast,
     loadData: () => loadData(),
     loadHistory,

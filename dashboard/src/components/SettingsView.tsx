@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import {
   Activity,
   Check,
-  CheckCircle2,
   Clock,
   Cpu,
   Globe,
@@ -16,6 +15,7 @@ import type {
   Node,
   PresetProfileType,
 } from "../types";
+import type { SecurityToastPayload } from "./SecurityToast";
 import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "../mockData";
 import { updateProjectSettings } from "../api";
 
@@ -25,6 +25,7 @@ interface Props {
   nodes: Node[];
   isDemoMode: boolean;
   onProfileApplied?: (newProfile: PresetProfileType) => void;
+  onNotify?: (toast: SecurityToastPayload) => void;
 }
 
 function resolveNodeConfig(
@@ -73,6 +74,7 @@ export function SettingsView({
   projects,
   nodes,
   onProfileApplied,
+  onNotify,
 }: Props) {
   const effectiveProjectId = selectedProjectId || projects[0]?.id || "";
   const currentProject = projects.find((p) => p.id === effectiveProjectId);
@@ -140,7 +142,6 @@ export function SettingsView({
   }
 
   const [applyingProfile, setApplyingProfile] = useState<PresetProfileType | null>(null);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const activePreset = useMemo(() => {
     return TELEMETRY_PRESETS[activeProfile] || TELEMETRY_PRESETS.balanced;
@@ -201,15 +202,14 @@ export function SettingsView({
       onProfileApplied?.(profileId);
 
       const targetPreset = TELEMETRY_PRESETS[profileId];
-      setSuccessToast(
-        applyToAllInProject
-          ? `Đã áp dụng cấu hình [${targetPreset.name}] cho toàn bộ ${availableNodes.length} máy chủ trong dự án!`
-          : `Đã áp dụng cấu hình [${targetPreset.name}] cho máy chủ ${selectedNode.hostname}!`
-      );
-
-      window.setTimeout(() => {
-        setSuccessToast(null);
-      }, 4000);
+      onNotify?.({
+        id: `toast-settings-${Date.now()}-${profileId}`,
+        type: "settings",
+        title: "Cập nhật cấu hình thành công",
+        message: applyToAllInProject
+          ? `Đã áp dụng cấu hình [${targetPreset.name}] cho toàn bộ ${availableNodes.length} máy chủ trong ${currentProject?.name || "dự án"}.`
+          : `Đã áp dụng cấu hình [${targetPreset.name}] cho máy chủ ${selectedNode.hostname}.`,
+      });
     } catch {
       // fallback
     } finally {
@@ -246,14 +246,6 @@ export function SettingsView({
           </span>
         </div>
       </div>
-
-      {/* Success Notification */}
-      {successToast && (
-        <div className="settings-simple-toast" role="alert">
-          <CheckCircle2 size={16} />
-          <span>{successToast}</span>
-        </div>
-      )}
 
       {/* 2. Window Monitoring - Split Resource vs Network */}
       {selectedNode && (

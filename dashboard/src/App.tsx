@@ -83,7 +83,8 @@ export function App() {
     createProject,
     activeIncidentsCount,
     activeBlocksCount,
-    securityToast,
+    securityToasts,
+    pushSecurityToast,
     dismissSecurityToast,
   } = useInfrastructure();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
@@ -673,6 +674,7 @@ export function App() {
               projects={projects}
               nodes={nodes}
               isDemoMode={isDemoMode}
+              onNotify={pushSecurityToast}
             />
           )}
             </>
@@ -710,7 +712,7 @@ export function App() {
       )}
       {selectedProject && (
         <SecurityToast
-          toast={securityToast}
+          toasts={securityToasts}
           onClose={dismissSecurityToast}
           onNavigate={navigate}
         />

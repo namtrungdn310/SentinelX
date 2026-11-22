@@ -66,7 +66,9 @@ try {
     const { nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
     const { filterEvents, eventLabel, eventMatchesCategory, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
-    const { MOCK_NODES } = await server.ssrLoadModule("/src/mockData.ts");
+    const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
+    const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
+    const { MOCK_NODES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
     const node = MOCK_NODES[0];
     const noop = () => {};
 
@@ -309,6 +311,61 @@ try {
         assert.ok(render(undefined).includes("Không có dữ liệu ổ đĩa"));
         assert.ok(!render(0).includes("Không có dữ liệu ổ đĩa"));
         assert.ok(render(0).includes("0.0%"));
+    });
+    check("SettingsView auto-checks apply-to-all for uniform cluster and omits inline toast box", () => {
+        const html = renderToStaticMarkup(createElement(SettingsView, {
+            selectedProjectId: MOCK_PROJECTS[0].id,
+            projects: MOCK_PROJECTS,
+            nodes: MOCK_NODES,
+            isDemoMode: true,
+        }));
+        assert.ok(html.includes("Thay đổi cấu hình"));
+        assert.ok(html.includes('class="apply-all-checkbox is-checked"'));
+        assert.ok(html.includes('checked=""'));
+        assert.ok(!html.includes("settings-simple-toast"));
+    });
+    check("SecurityToast renders bottom stack for incidents, defense actions, and settings updates", () => {
+        assert.equal(
+            renderToStaticMarkup(createElement(SecurityToast, { toasts: [], onClose: noop, onNavigate: noop })),
+            "",
+        );
+        const html = renderToStaticMarkup(createElement(SecurityToast, {
+            toasts: [
+                {
+                    id: "inc-1",
+                    type: "incident",
+                    title: "Phát hiện sự cố an ninh mới",
+                    message: "SYN Flood vượt ngưỡng cảnh báo (750 pps)",
+                    attackerIp: "198.51.100.19",
+                    severity: "CRITICAL",
+                    targetView: "incidents",
+                },
+                {
+                    id: "def-1",
+                    type: "defense",
+                    title: "Tường lửa đã kích hoạt",
+                    message: "Đã khóa địa chỉ IP nguồn tấn công",
+                    targetView: "defense",
+                },
+                {
+                    id: "cfg-1",
+                    type: "settings",
+                    title: "Cập nhật cấu hình thành công",
+                    message: "Đã áp dụng cấu hình [Tiết kiệm tài nguyên (Resource-Saving)] cho máy chủ api-gateway-node.",
+                },
+            ],
+            onClose: noop,
+            onNavigate: noop,
+        }));
+        assert.ok(html.includes("security-toast-stack"));
+        assert.ok(html.includes("toast-incident"));
+        assert.ok(html.includes("toast-defense"));
+        assert.ok(html.includes("toast-settings"));
+        assert.ok(html.includes('role="alert"'));
+        assert.ok(html.includes('role="status"'));
+        assert.ok(html.includes("Cập nhật cấu hình thành công"));
+        assert.ok(html.includes("Đã áp dụng cấu hình [Tiết kiệm tài nguyên (Resource-Saving)] cho máy chủ api-gateway-node."));
+        assert.equal((html.match(/toast-link-btn/g) || []).length, 2);
     });
     const originalFetch = globalThis.fetch;
     try {

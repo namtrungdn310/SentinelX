@@ -3589,13 +3589,22 @@ body:has(.event-full) .event-full {
     border: 1px solid #e8b8be;
 }
 
-.security-toast {
+.security-toast-stack {
     position: fixed;
     bottom: 24px;
     right: 24px;
     z-index: 999;
     width: 360px;
     max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.security-toast {
+    width: 100%;
+    pointer-events: auto;
     display: flex;
     align-items: flex-start;
     gap: 12px;
@@ -3613,6 +3622,29 @@ body:has(.event-full) .event-full {
 
 .security-toast.toast-defense {
     border-left: 4px solid #147d73;
+}
+
+.security-toast.toast-settings,
+.security-toast.toast-recovery {
+    border-left: 4px solid var(--status-ok);
+}
+
+.toast-title-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.toast-icon-ok {
+    color: var(--status-ok);
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .security-toast {
+        animation: none;
+    }
 }
 
 @keyframes toastSlideIn {
@@ -4395,20 +4427,6 @@ body:has(.event-full) .event-full {
     flex-direction: column;
     gap: 18px;
     padding-bottom: 30px;
-}
-
-.settings-simple-toast {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 18px;
-    background: rgba(24, 128, 56, 0.08);
-    border: 1px solid rgba(24, 128, 56, 0.25);
-    color: var(--status-ok, #188038);
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    animation: fadeIn 0.15s ease-in;
 }
 
 .config-meta {
