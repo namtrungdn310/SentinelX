@@ -1060,12 +1060,20 @@
 .host-table tr:last-child td {
     border-bottom: 0;
 }
+.host-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
 .host-table tbody tr.selected,
 .host-table tbody tr.selected:hover {
     background: var(--bg-selected);
 }
 .host-table tbody tr:hover {
     background: var(--bg-panel-hover);
+}
+.host-table tbody tr:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
 }
 .table-sort {
     display: flex;
@@ -1081,7 +1089,8 @@
 .table-sort:hover {
     color: var(--brand-indigo);
 }
-.host-select {
+.host-select,
+.host-identity {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1092,7 +1101,8 @@
     text-align: left;
     max-width: 100%;
 }
-.host-select > span:not(.server-icon) {
+.host-select > span:not(.server-icon),
+.host-identity > span:not(.server-icon) {
     min-width: 0;
     flex: 1;
 }
@@ -1106,7 +1116,8 @@
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
 }
-.host-select strong {
+.host-select strong,
+.host-identity strong {
     display: block;
     font: 500 15px var(--font-sans);
     color: var(--text-primary);
@@ -1114,7 +1125,8 @@
     white-space: normal;
     font-size: 15px;
 }
-.host-select small {
+.host-select small,
+.host-identity small {
     display: block;
     margin-top: 5px;
     font: 13px var(--font-mono);
@@ -1124,7 +1136,8 @@
     text-overflow: ellipsis;
     font-size: 13px;
 }
-.host-select small span {
+.host-select small span,
+.host-identity small span {
     font-family: var(--font-sans);
 }
 .table-metric {
@@ -1901,7 +1914,8 @@ body:has(.event-full) .event-full {
     .telemetry-controls select {
         min-height: 36px;
     }
-    .host-select {
+    .host-select,
+    .host-identity {
         min-height: 44px;
     }
     .segmented button {
@@ -2299,10 +2313,9 @@ body:has(.event-full) .event-full {
 .fleet-panel .host-table { table-layout: fixed; min-width: 940px; }
 .fleet-panel .host-table th:first-child { width: 34%; }
 .fleet-panel .host-table th:nth-child(2) { width: 16%; }
-.fleet-panel .host-table th:nth-child(3) { width: 14%; }
-.fleet-panel .host-table th:nth-child(4) { width: 15%; }
-.fleet-panel .host-table th:nth-child(5) { width: 16%; }
-.fleet-panel .host-table th:last-child { width: 48px; }
+.fleet-panel .host-table th:nth-child(3) { width: 16%; }
+.fleet-panel .host-table th:nth-child(4) { width: 17%; }
+.fleet-panel .host-table th:nth-child(5) { width: 17%; }
 .tile-spec {
     font-size: 11px;
     color: var(--text-muted);
@@ -2322,9 +2335,8 @@ body:has(.event-full) .event-full {
     margin-left: 5px;
     font-weight: 400;
 }
-.fleet-panel .host-table td:last-child { padding: 8px; }
 .host-table tbody tr.selected td:first-child { box-shadow: inset 3px 0 var(--focus-ring); }
-.host-select:hover strong, .project-drilldown:hover { color: var(--brand-indigo); }
+.project-drilldown:hover { color: var(--brand-indigo); }
 .event-preview .event-item { padding-top: 12px; padding-bottom: 12px; }
 .event-item:has(.event-type.warn) { box-shadow: inset 3px 0 var(--status-warn); }
 @media (min-width: 1600px) {

@@ -29,7 +29,7 @@ interface Props {
   onStateChange?: (state: HostTableState) => void;
   nodes: Node[];
   selectedNodeId: string | null;
-  onSelectNode: (node: Node) => void;
+  onSelectNode?: (node: Node) => void;
   isLoading: boolean;
   onOpenDetail?: (node: Node) => void;
 }
@@ -37,7 +37,7 @@ export function NodeMatrix({
   projects,
   nodes,
   selectedNodeId,
-  onSelectNode,
+  onSelectNode: _onSelectNode,
   isLoading,
   onOpenDetail,
   state,
@@ -146,9 +146,6 @@ export function NodeMatrix({
                     Ổ đĩa {sort?.key === "latestDisk" ? (sort.ascending ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : <ArrowDownUp size={13} />}
                   </button>
                 </th>
-                <th>
-                  <span className="sr-only">Chi tiết</span>
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -157,14 +154,20 @@ export function NodeMatrix({
                 return (
                   <tr
                     key={node.id}
-                    className={selectedNodeId === node.id ? "selected" : ""}
+                    className={`host-row ${selectedNodeId === node.id ? "selected" : ""}`}
+                    onClick={() => onOpenDetail?.(node)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Chi tiết máy chủ ${node.hostname}`}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onOpenDetail?.(node);
+                      }
+                    }}
                   >
                     <td>
-                      <button
-                        className="host-select"
-                        onClick={() => onSelectNode(node)}
-                        aria-pressed={selectedNodeId === node.id}
-                      >
+                      <div className="host-identity">
                         <span className="server-icon">
                           <Server size={16} />
                         </span>
@@ -183,7 +186,7 @@ export function NodeMatrix({
                               : ""}
                           </small>
                         </span>
-                      </button>
+                      </div>
                     </td>
                     <td>
                       <span className={`status-badge ${nodeHealth(node)}`}>
@@ -212,15 +215,6 @@ export function NodeMatrix({
                         type="disk"
                       />
                     </td>
-                    <td>
-                      <button
-                        className="icon-button detail-button"
-                        aria-label={`Chi tiết ${node.hostname}`}
-                        onClick={() => onOpenDetail?.(node)}
-                      >
-                        <ChevronRight size={17} />
-                      </button>
-                    </td>
                   </tr>
                 );
               })}
@@ -238,7 +232,7 @@ export function NodeMatrix({
               >
                 <button
                   className="tile-select"
-                  onClick={() => onSelectNode(node)}
+                  onClick={() => onOpenDetail?.(node)}
                   aria-pressed={selectedNodeId === node.id}
                 >
                   <Server size={19} />
@@ -283,9 +277,7 @@ export function NodeMatrix({
       )}
       <div className="panel-foot">
         <span>Hiển thị {nodes.length} máy chủ</span>
-        <span>
-          Chọn máy chủ để xem telemetry <ChevronRight size={12} />
-        </span>
+        <span>Nhấp vào hàng để xem chi tiết máy chủ</span>
       </div>
     </section>
   );
