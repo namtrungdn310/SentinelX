@@ -71,7 +71,7 @@ export function formatRealtimeMessage(event: RealtimeMessage): string {
   if (event.event === "incident_alert") {
     const summary = event.data.summary || event.data.title;
     if (summary) {
-      const cleanSummary = String(summary).trim();
+      const cleanSummary = String(summary).trim().replace(/\s*\n+\s*/g, " · ");
       if (event.data.attacker_ip && !cleanSummary.includes(String(event.data.attacker_ip))) {
         return `${cleanSummary} · IP: ${event.data.attacker_ip}`;
       }

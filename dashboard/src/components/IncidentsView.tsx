@@ -161,6 +161,12 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             <i /> {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
           </span>
         );
+      case "FALSE_POSITIVE":
+        return (
+          <span className="status-badge unknown">
+            <i /> Báo động giả
+          </span>
+        );
       default:
         return (
           <span className="status-badge unknown">
@@ -213,7 +219,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           <div className="kpi-value" style={{ color: "var(--status-warn)" }}>
             {countMitigating}
           </div>
-          <span className="kpi-footnote">Lệnh nftables / Safe Mode đang có hiệu lực</span>
+          <span className="kpi-footnote">Lệnh nftables / phục hồi dịch vụ đang có hiệu lực</span>
         </div>
 
         <div className="panel kpi-card">

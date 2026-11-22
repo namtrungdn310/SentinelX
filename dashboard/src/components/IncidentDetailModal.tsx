@@ -126,7 +126,9 @@ export function IncidentDetailModal({
           ? handling.mode === "auto"
             ? "Đang chờ Agent tải lệnh"
             : "Đang diễn ra"
-          : incident.status;
+          : incident.status === "FALSE_POSITIVE"
+            ? "Báo động giả"
+            : incident.status;
 
   const severityTone =
     incident.severity === "CRITICAL"

@@ -175,7 +175,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 5 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "RAM: 89.5% (3.58 / 4.0 GB, >= 85.0%) · java (PID 8291): 68.2%",
+      "RAM: 89.5% (3.58 / 4.0 GB, >= 85.0%) · 3 mẫu · java (PID 8291): 68.2%",
     event_count: 2,
     targeted_service: "Dịch vụ Java Application Gateway",
   },
