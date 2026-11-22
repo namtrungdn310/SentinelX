@@ -585,7 +585,7 @@ textarea:focus-visible,
     display: grid;
     grid-template-columns: repeat(3, minmax(150px, 1fr));
     align-items: center;
-    margin: 16px 0;
+    margin: 0;
     overflow-x: auto;
 }
 .detail-resource-grid > div {
@@ -598,7 +598,7 @@ textarea:focus-visible,
     align-items: baseline;
     column-gap: 6px;
     row-gap: 4px;
-    padding: 8px 10px;
+    padding: 6px 10px;
     white-space: nowrap;
 }
 .detail-resource-grid > div:not(:last-child) {
@@ -609,22 +609,24 @@ textarea:focus-visible,
     color: var(--text-muted);
     font-size: 12px;
     text-align: center;
-    line-height: 1.3;
+    line-height: 1.2;
+    margin: 0;
 }
 .detail-resource-grid strong {
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.2;
+    margin: 0;
 }
 .detail-resource-grid small {
     color: var(--text-muted);
-    font: 11px var(--font-mono);
-    line-height: 1.3;
+    font: 11px/1.2 var(--font-mono);
+    margin: 0;
 }
 .token-section {
     border-top: 1px solid var(--border-subtle);
-    margin: 16px 0 20px;
+    margin: 0 0 20px;
     padding-top: 16px;
     display: grid;
     gap: 12px;
