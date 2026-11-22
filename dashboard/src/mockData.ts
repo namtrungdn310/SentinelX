@@ -189,7 +189,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "IP: 198.51.100.42 · 48 cổng / 5s (>= 15) · Chờ Agent tải lệnh",
+      "IP: 198.51.100.42 · 48 cổng / 10s (>= 15)",
     event_count: 3,
     attacker_ip: "198.51.100.42",
     targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],

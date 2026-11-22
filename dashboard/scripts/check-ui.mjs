@@ -457,6 +457,9 @@ try {
         }));
         assert.ok(diskResolvedModal.includes("Ổ đĩa /tmp: 91.2% (&gt;= 85.0%)"));
         assert.ok(!diskResolvedModal.includes("Thủ công: Đã giải quyết"));
+
+        const scan = MOCK_INCIDENTS.find((i) => i.id === "inc-scan-402");
+        assert.equal(scan.summary, "IP: 198.51.100.42 · 48 cổng / 10s (>= 15)");
     });
     const originalFetch = globalThis.fetch;
     try {
