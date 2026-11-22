@@ -1233,6 +1233,10 @@
     border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--bg-canvas);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.host-tile:hover {
+    background: var(--bg-panel-hover);
 }
 .host-tile.selected {
     border-color: var(--focus-ring);
@@ -1245,9 +1249,10 @@
     gap: 9px;
     width: 100%;
     text-align: left;
-    padding: 12px;
+    padding: 14px 16px;
     border: 0;
     background: transparent;
+    cursor: pointer;
 }
 .tile-select > svg {
     color: var(--text-muted);
@@ -1296,20 +1301,6 @@
     display: inline;
     margin-left: 0;
     white-space: nowrap;
-}
-.tile-detail {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    border: 0;
-    border-top: 1px solid var(--border-subtle);
-    padding: 8px 12px;
-    background: transparent;
-    color: var(--brand-indigo);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    font-weight: 500;
 }
 .attention-panel {
     align-self: start;

@@ -3,7 +3,6 @@ import {
   ArrowDownUp,
   ArrowDown,
   ArrowUp,
-  ChevronRight,
   LayoutGrid,
   List,
   Server,
@@ -264,12 +263,6 @@ export function NodeMatrix({
                     </span>
                   </span>
                 </button>
-                <button
-                  className="tile-detail"
-                  onClick={() => onOpenDetail?.(node)}
-                >
-                  Chi tiết máy chủ <ChevronRight size={14} />
-                </button>
               </article>
             );
           })}
@@ -277,7 +270,6 @@ export function NodeMatrix({
       )}
       <div className="panel-foot">
         <span>Hiển thị {nodes.length} máy chủ</span>
-        <span>Nhấp vào hàng để xem chi tiết máy chủ</span>
       </div>
     </section>
   );
