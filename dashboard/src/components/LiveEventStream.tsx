@@ -6,9 +6,9 @@ import { formatRealtimeMessage, eventLabel, filterEvents, type EventCategory } f
 const categories: { value: EventCategory; label: string }[] = [
   { value: "all", label: "Tất cả" },
   { value: "alert", label: "Cảnh báo" },
-  { value: "security", label: "An ninh" },
+  { value: "security", label: "Thao tác" },
   { value: "status", label: "Trạng thái kết nối" },
-  { value: "telemetry", label: "Telemetry" },
+  { value: "telemetry", label: "Mẫu dữ liệu" },
 ];
 
 interface Props {
@@ -171,9 +171,9 @@ export function LiveEventStream({
           aria-hidden="true"
         />
         {isDemoMode
-          ? "Bộ đệm phiên · mô phỏng"
+          ? "Bộ đệm phiên · Mô phỏng"
           : isConnected
-            ? "Lịch sử gần đây và sự kiện trực tiếp · đã kết nối"
+            ? "Lịch sử gần đây và sự kiện trực tiếp · Đã kết nối"
             : "Đang chờ kết nối Controller"}
         <span>
           {Math.min(limit, visible.length)} / {visible.length}{" "}

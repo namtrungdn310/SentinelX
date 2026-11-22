@@ -237,9 +237,9 @@ try {
         const html = renderToStaticMarkup(createElement(LiveEventStream, { events: eventFixture, nodes: [node], isConnected: true, isDemoMode: true }));
         assert.ok(html.includes('aria-pressed="true">Tất cả'));
         assert.ok(html.includes(">Cảnh báo<"));
-        assert.ok(html.includes(">An ninh<"));
+        assert.ok(html.includes(">Thao tác<"));
         assert.ok(html.includes(">Trạng thái kết nối<"));
-        assert.ok(html.includes(">Telemetry<"));
+        assert.ok(html.includes(">Mẫu dữ liệu<"));
         assert.ok(html.includes("Sự kiện khác"));
         assert.ok(html.includes("future_event"));
         assert.ok(html.includes('class="event-controls"'));
