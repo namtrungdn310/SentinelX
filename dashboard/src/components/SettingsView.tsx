@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Activity,
   Check,
@@ -99,7 +99,12 @@ export function SettingsView({
   }, [availableNodes, effectiveNodeId]);
 
   // Read active profile for this specific node (with fallback to project setting)
-  const [activeProfile, setActiveProfile] = useState<PresetProfileType>("balanced");
+  const [activeProfile, setActiveProfile] = useState<PresetProfileType>(() => {
+    return selectedNode ? resolveNodeConfig(selectedNode, effectiveProjectId).profile : "balanced";
+  });
+  const [lastUpdated, setLastUpdated] = useState<string>(() => {
+    return selectedNode ? resolveNodeConfig(selectedNode, effectiveProjectId).updatedAt : new Date().toISOString();
+  });
   const [applyToAllInProject, setApplyToAllInProject] = useState(() => {
     if (availableNodes.length <= 1) return false;
     const firstProfile = resolveNodeConfig(availableNodes[0], effectiveProjectId).profile;
@@ -107,29 +112,35 @@ export function SettingsView({
       (n) => resolveNodeConfig(n, effectiveProjectId).profile === firstProfile
     );
   });
-  const [applyingProfile, setApplyingProfile] = useState<PresetProfileType | null>(null);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>(() => new Date().toISOString());
 
-  // Load configuration for the selected node
-  useEffect(() => {
-    if (!selectedNode) return;
-    const timer = window.setTimeout(() => {
+  // Synchronously adjust state when selected node or project changes (React pattern: adjusting state during render)
+  const [prevNodeId, setPrevNodeId] = useState(effectiveNodeId);
+  const [prevProjectId, setPrevProjectId] = useState(effectiveProjectId);
+
+  if (prevNodeId !== effectiveNodeId || prevProjectId !== effectiveProjectId) {
+    setPrevNodeId(effectiveNodeId);
+    setPrevProjectId(effectiveProjectId);
+    if (selectedNode) {
       const { profile, updatedAt } = resolveNodeConfig(selectedNode, effectiveProjectId);
       setActiveProfile(profile);
       setLastUpdated(updatedAt);
-
+    }
+    // Only re-evaluate applyToAllInProject default when switching to a different project
+    if (prevProjectId !== effectiveProjectId) {
       if (availableNodes.length > 1) {
+        const firstProfile = resolveNodeConfig(availableNodes[0], effectiveProjectId).profile;
         const allSame = availableNodes.every(
-          (n) => resolveNodeConfig(n, effectiveProjectId).profile === profile
+          (n) => resolveNodeConfig(n, effectiveProjectId).profile === firstProfile
         );
         setApplyToAllInProject(allSame);
       } else {
         setApplyToAllInProject(false);
       }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [selectedNode, effectiveProjectId, availableNodes]);
+    }
+  }
+
+  const [applyingProfile, setApplyingProfile] = useState<PresetProfileType | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const activePreset = useMemo(() => {
     return TELEMETRY_PRESETS[activeProfile] || TELEMETRY_PRESETS.balanced;
@@ -305,7 +316,7 @@ export function SettingsView({
           </div>
 
           {availableNodes.length > 1 && (
-            <label className="apply-all-checkbox">
+            <label className={`apply-all-checkbox ${applyToAllInProject ? "is-checked" : ""}`}>
               <input
                 type="checkbox"
                 checked={applyToAllInProject}

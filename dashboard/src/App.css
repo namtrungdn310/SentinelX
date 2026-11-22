@@ -4543,6 +4543,11 @@ body:has(.event-full) .event-full {
     color: var(--text-primary);
 }
 
+.apply-all-checkbox.is-checked {
+    background: var(--brand-indigo-subtle, #eef2fa);
+    border-color: var(--brand-indigo, #3459c7);
+}
+
 .apply-all-checkbox input[type="checkbox"] {
     cursor: pointer;
     accent-color: var(--brand-indigo);
