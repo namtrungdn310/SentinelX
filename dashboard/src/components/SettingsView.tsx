@@ -27,6 +27,47 @@ interface Props {
   onProfileApplied?: (newProfile: PresetProfileType) => void;
 }
 
+function resolveNodeConfig(
+  node: Node,
+  projectId: string
+): { profile: PresetProfileType; updatedAt: string } {
+  try {
+    // 1. Try node-specific setting
+    const nodeSaved = localStorage.getItem(`sentinelx_node_settings_${node.id}`);
+    if (nodeSaved) {
+      const parsed = JSON.parse(nodeSaved);
+      if (parsed.active_profile) {
+        return {
+          profile: parsed.active_profile as PresetProfileType,
+          updatedAt: parsed.updated_at || new Date().toISOString(),
+        };
+      }
+    }
+    // 2. Try project setting
+    const projSaved = localStorage.getItem(`sentinelx_settings_${node.project_id || projectId}`);
+    if (projSaved) {
+      const parsed = JSON.parse(projSaved);
+      if (parsed.active_profile) {
+        return {
+          profile: parsed.active_profile as PresetProfileType,
+          updatedAt: parsed.updated_at || new Date().toISOString(),
+        };
+      }
+    }
+    // 3. Fallback to mock project setting or default balanced
+    const mockProj = MOCK_PROJECT_SETTINGS[node.project_id || projectId];
+    return {
+      profile: (mockProj?.active_profile || "balanced") as PresetProfileType,
+      updatedAt: mockProj?.updated_at || new Date().toISOString(),
+    };
+  } catch {
+    return {
+      profile: "balanced",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
 export function SettingsView({
   selectedProjectId,
   projects,
@@ -59,7 +100,13 @@ export function SettingsView({
 
   // Read active profile for this specific node (with fallback to project setting)
   const [activeProfile, setActiveProfile] = useState<PresetProfileType>("balanced");
-  const [applyToAllInProject, setApplyToAllInProject] = useState(false);
+  const [applyToAllInProject, setApplyToAllInProject] = useState(() => {
+    if (availableNodes.length <= 1) return false;
+    const firstProfile = resolveNodeConfig(availableNodes[0], effectiveProjectId).profile;
+    return availableNodes.every(
+      (n) => resolveNodeConfig(n, effectiveProjectId).profile === firstProfile
+    );
+  });
   const [applyingProfile, setApplyingProfile] = useState<PresetProfileType | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>(() => new Date().toISOString());
@@ -68,38 +115,21 @@ export function SettingsView({
   useEffect(() => {
     if (!selectedNode) return;
     const timer = window.setTimeout(() => {
-      try {
-        // 1. Try node-specific setting
-        const nodeSaved = localStorage.getItem(`sentinelx_node_settings_${selectedNode.id}`);
-        if (nodeSaved) {
-          const parsed = JSON.parse(nodeSaved);
-          if (parsed.active_profile) {
-            setActiveProfile(parsed.active_profile);
-            if (parsed.updated_at) setLastUpdated(parsed.updated_at);
-            return;
-          }
-        }
-        // 2. Try project setting
-        const projSaved = localStorage.getItem(`sentinelx_settings_${selectedNode.project_id}`);
-        if (projSaved) {
-          const parsed = JSON.parse(projSaved);
-          if (parsed.active_profile) {
-            setActiveProfile(parsed.active_profile);
-            if (parsed.updated_at) setLastUpdated(parsed.updated_at);
-            return;
-          }
-        }
-        // 3. Fallback to mock project setting or default balanced
-        const mockProj = MOCK_PROJECT_SETTINGS[selectedNode.project_id];
-        const defaultProf = mockProj?.active_profile || "balanced";
-        setActiveProfile(defaultProf);
-        setLastUpdated(mockProj?.updated_at || new Date().toISOString());
-      } catch {
-        setActiveProfile("balanced");
+      const { profile, updatedAt } = resolveNodeConfig(selectedNode, effectiveProjectId);
+      setActiveProfile(profile);
+      setLastUpdated(updatedAt);
+
+      if (availableNodes.length > 1) {
+        const allSame = availableNodes.every(
+          (n) => resolveNodeConfig(n, effectiveProjectId).profile === profile
+        );
+        setApplyToAllInProject(allSame);
+      } else {
+        setApplyToAllInProject(false);
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [selectedNode]);
+  }, [selectedNode, effectiveProjectId, availableNodes]);
 
   const activePreset = useMemo(() => {
     return TELEMETRY_PRESETS[activeProfile] || TELEMETRY_PRESETS.balanced;
@@ -145,6 +175,14 @@ export function SettingsView({
           })
         );
         void updateProjectSettings(selectedNode.project_id, profileId);
+        setApplyToAllInProject(true);
+      } else {
+        // Updated only selectedNode: recheck if all nodes now share the same profile
+        const allSame = availableNodes.length > 1 && availableNodes.every((n) => {
+          if (n.id === selectedNode.id) return true;
+          return resolveNodeConfig(n, effectiveProjectId).profile === profileId;
+        });
+        setApplyToAllInProject(allSame);
       }
 
       setActiveProfile(profileId);
