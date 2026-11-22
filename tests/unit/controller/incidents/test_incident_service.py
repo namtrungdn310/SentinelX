@@ -9,11 +9,12 @@ import pytest
 from sentinelx_common.contracts.detection import (
     DetectionEventContract,
     DetectionSeverity,
+    NetworkAnomalyDetail,
     ResourceAnomalyDetail,
 )
 from sentinelx_common.contracts.incidents import IncidentStatus, IncidentUpdateRequest
 from sentinelx_controller.modules.incidents.models import IncidentModel
-from sentinelx_controller.modules.incidents.service import IncidentService
+from sentinelx_controller.modules.incidents.service import IncidentService, _format_event_summary
 
 
 def make_event(
@@ -119,3 +120,54 @@ async def test_update_incident_lifecycle() -> None:
     assert resp.resolved_at is not None
     assert resp.summary == "Manually resolved by administrator"
     assert active_model.status == "RESOLVED"
+
+
+@pytest.mark.asyncio
+async def test_incident_technical_summary_and_mitigation_note() -> None:
+    cpu_ev = make_event(severity=DetectionSeverity.HIGH)
+    assert _format_event_summary(cpu_ev) == "CPU: 85.0% (>= 80.0%) · 3 mẫu/15s"
+
+    syn_ev = DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name="syn_flood_detector",
+        severity=DetectionSeverity.CRITICAL,
+        attacker_ip="203.0.113.195",
+        confidence_score=0.95,
+        details=NetworkAnomalyDetail(
+            attack_type="SYN_FLOOD",
+            source_ip="203.0.113.195",
+            destination_ip="10.0.1.15",
+            protocol="tcp",
+            packet_count=524,
+            byte_count=31440,
+            syn_count=520,
+            ack_count=4,
+            targeted_ports=[80, 443],
+            metric_ratio=130.0,
+        ),
+        detected_at=datetime.now(UTC),
+    )
+    assert (
+        _format_event_summary(syn_ev)
+        == "SYN: 520 · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 · IP: 203.0.113.195 · Port: 80, 443"
+    )
+
+    repo = AsyncMock()
+    model = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        title="Tấn công SYN Flood",
+        status=IncidentStatus.DETECTED.value,
+        severity=DetectionSeverity.CRITICAL.value,
+        started_at=datetime.now(UTC),
+        summary=_format_event_summary(syn_ev),
+    )
+    repo.get_by_id.return_value = model
+
+    service = IncidentService(repository=repo)
+    await service.mark_mitigating(model.id, action_note="nftables: DROP 203.0.113.195 (30m)")
+    assert model.status == IncidentStatus.MITIGATING.value
+    assert model.summary == (
+        "SYN: 520 · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 · IP: 203.0.113.195"
+        " · Port: 80, 443 · nftables: DROP 203.0.113.195 (30m)"
+    )

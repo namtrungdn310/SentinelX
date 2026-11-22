@@ -477,7 +477,15 @@ class DefenseService:
             and request.status == DefenseActionStatus.APPLIED
             and action.action_type != "UNBLOCK_IP_NFTABLES"
         ):
-            await self._incidents.mark_mitigating(action.incident_id)
+            action_note: str | None = None
+            if action.action_type == "BLOCK_IP_NFTABLES" and action.target_ip:
+                ttl_min = int(action.command_payload.get("duration_seconds", 0)) // 60
+                action_note = (
+                    f"nftables: DROP {action.target_ip} ({ttl_min}m)"
+                    if ttl_min > 0
+                    else f"nftables: DROP {action.target_ip}"
+                )
+            await self._incidents.mark_mitigating(action.incident_id, action_note=action_note)
 
         # Trigger recovery completion hook if unblock action was acknowledged
         if self._recovery_ack_handler is not None and action.action_type == "UNBLOCK_IP_NFTABLES":

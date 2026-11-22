@@ -384,7 +384,7 @@ export function useInfrastructure() {
                   attacker_ip: "198.51.100.19",
                   node_id: eventNode.id,
                   summary:
-                    "Phát hiện 750 gói tin TCP SYN với tỷ lệ bất đối xứng SYN/ACK vượt ngưỡng cảnh báo (>= 3.0) tấn công cổng web 443.",
+                    "SYN: 750 · Port: 443 · Tỷ lệ SYN/ACK >= 3.0 · IP: 198.51.100.19",
                 },
               }
             : {
@@ -407,7 +407,7 @@ export function useInfrastructure() {
               id: `toast-demo-${Date.now()}`,
               type: "incident",
               title: "Phát hiện sự cố an ninh mới",
-              message: "SYN Flood vượt ngưỡng cảnh báo (750 pps)",
+              message: "SYN: 750 · Port: 443 · Tỷ lệ SYN/ACK >= 3.0",
               attackerIp: "198.51.100.19",
               severity: "CRITICAL",
               targetView: "incidents",

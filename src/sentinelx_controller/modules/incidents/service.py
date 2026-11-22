@@ -11,6 +11,7 @@ from sentinelx_common.contracts.detection import (
     DetectionEventContract,
     DetectionEventResponse,
     DetectionSeverity,
+    ResourceAnomalyDetail,
 )
 from sentinelx_common.contracts.incidents import (
     IncidentDetailResponse,
@@ -42,6 +43,90 @@ DETECTOR_TITLES: dict[str, str] = {
     "memory_exhaustion_detector": "Cạn kiệt RAM",
     "disk_saturation_detector": "Tràn dung lượng ổ đĩa",
 }
+
+_METRIC_LABELS: dict[str, str] = {
+    "cpu_percent": "CPU",
+    "memory_percent": "RAM",
+    "disk_percent": "Ổ đĩa",
+}
+
+
+def _format_port_list(ports: list[int]) -> str:
+    if not ports:
+        return ""
+    shown = ", ".join(str(p) for p in ports[:3])
+    return f"{shown} (+{len(ports) - 3})" if len(ports) > 3 else shown
+
+
+def _format_rate(bytes_per_sec: float) -> str:
+    if bytes_per_sec >= 1_000_000:
+        return f"{bytes_per_sec / 1_000_000:.1f} MB/s"
+    if bytes_per_sec >= 1_000:
+        return f"{bytes_per_sec / 1_000:.1f} KB/s"
+    return f"{bytes_per_sec:.0f} B/s"
+
+
+def _format_event_summary(event: DetectionEventContract) -> str:
+    """Tạo chuỗi tóm tắt ngắn gọn, tập trung thông số kỹ thuật từ sự kiện phát hiện."""
+    details = event.details
+    extra = details.extra_context or {}
+
+    if isinstance(details, ResourceAnomalyDetail):
+        label = _METRIC_LABELS.get(details.metric_name, details.metric_name)
+        mount = extra.get("mount_point")
+        head = f"{label} {mount}" if mount else label
+        parts = [f"{head}: {details.current_value:.1f}% (>= {details.threshold_value:.1f}%)"]
+        if details.consecutive_samples > 1:
+            sample_txt = f"{details.consecutive_samples} mẫu"
+            if details.window_duration_seconds > 0:
+                sample_txt += f"/{details.window_duration_seconds}s"
+            parts.append(sample_txt)
+        proc_name = extra.get("process_name")
+        if proc_name:
+            pid = extra.get("pid")
+            proc_pct = extra.get("process_percent")
+            proc_label = f"{proc_name} (PID {pid})" if pid is not None else str(proc_name)
+            if isinstance(proc_pct, int | float):
+                proc_label += f": {proc_pct:.1f}%"
+            parts.append(proc_label)
+        return " · ".join(parts)
+
+    # NetworkAnomalyDetail
+    attack = details.attack_type.upper()
+    ip = details.source_ip
+    ports_str = _format_port_list(details.targeted_ports)
+    if attack == "SYN_FLOOD":
+        parts = [f"SYN: {details.syn_count}", f"ACK: {details.ack_count}"]
+        if details.metric_ratio is not None:
+            parts.append(f"Tỷ lệ SYN/ACK: {details.metric_ratio:.1f}")
+        parts.append(f"IP: {ip}")
+        if ports_str:
+            parts.append(f"Port: {ports_str}")
+        return " · ".join(parts)
+
+    if attack == "PORT_SCAN":
+        port_cnt = extra.get("ports_scanned_count") or len(details.targeted_ports)
+        trunc = "+" if extra.get("ports_truncated") else ""
+        return " · ".join(
+            [
+                f"IP: {ip}",
+                f"{port_cnt}{trunc} cổng ({details.protocol.upper()})",
+                f"{details.packet_count} pkt",
+            ]
+        )
+
+    parts = [details.protocol.upper(), f"IP: {ip}"]
+    pps = extra.get("packets_per_second")
+    bps = extra.get("bytes_per_second")
+    if isinstance(pps, int | float):
+        parts.append(f"{pps:,.0f} pps".replace(",", "."))
+    else:
+        parts.append(f"{details.packet_count} pkt")
+    if isinstance(bps, int | float):
+        parts.append(_format_rate(float(bps)))
+    if ports_str:
+        parts.append(f"Port: {ports_str}")
+    return " · ".join(parts)
 
 
 class IncidentService:
@@ -113,15 +198,14 @@ class IncidentService:
                     first_event.detector_name,
                     f"Sự cố {first_event.detector_name}",
                 )
+            peak_event = max(events, key=lambda e: SEVERITY_WEIGHT[e.severity.value])
             active_incident = IncidentModel(
                 project_id=project_id,
                 title=title,
                 status=IncidentStatus.DETECTED.value,
-                severity=max(
-                    events, key=lambda e: SEVERITY_WEIGHT[e.severity.value]
-                ).severity.value,
+                severity=peak_event.severity.value,
                 started_at=first_event.detected_at,
-                summary=f"Khởi phát bởi {first_event.detector_name}",
+                summary=_format_event_summary(peak_event),
                 node_id=node_id,
                 correlation_key=correlation_key,
                 last_event_at=max(e.detected_at for e in events),
@@ -136,10 +220,13 @@ class IncidentService:
                     if v == highest_event_weight:
                         active_incident.severity = k
                         break
-            time_str = now.strftime("%H:%M:%S UTC")
-            active_incident.summary = (
-                f"Đã ghi nhận thêm {len(events)} sự kiện bất thường lúc {time_str}"
-            )
+            latest_event = max(events, key=lambda e: e.detected_at)
+            new_summary = _format_event_summary(latest_event)
+            if active_incident.summary and " · nftables:" in active_incident.summary:
+                defense_suffix = active_incident.summary.split(" · nftables:", 1)[1]
+                active_incident.summary = f"{new_summary} · nftables:{defense_suffix}"
+            else:
+                active_incident.summary = new_summary
             await self._repo.save(active_incident)
         active_incident.last_event_at = max(e.detected_at for e in events)
 
@@ -202,10 +289,18 @@ class IncidentService:
             )
         ]
 
-    async def mark_mitigating(self, incident_id: uuid.UUID) -> None:
+    async def mark_mitigating(
+        self,
+        incident_id: uuid.UUID,
+        action_note: str | None = None,
+    ) -> None:
         incident = await self._repo.get_by_id(incident_id)
         if incident is not None and incident.status == "DETECTED":
             incident.status = "MITIGATING"
+            if action_note and (not incident.summary or action_note not in incident.summary):
+                incident.summary = (
+                    f"{incident.summary} · {action_note}" if incident.summary else action_note
+                )
             await self._repo.save(incident)
 
     async def resolve_if_quiet(self, incident_id: uuid.UUID, quiet_after: datetime) -> bool:

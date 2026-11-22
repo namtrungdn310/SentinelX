@@ -86,7 +86,7 @@ export function IncidentDetailModal({
       }
       const updated = await updateIncident(incident.id, {
         status: "RESOLVED",
-        summary: detail.summary ? `${detail.summary} (Đã xử lý thủ công qua Dashboard)` : "Đã xử lý qua Dashboard",
+        summary: detail.summary ? `${detail.summary} · Thủ công: Đã giải quyết` : "Thủ công: Đã giải quyết",
       });
       setDetail((prev) => (prev ? { ...prev, ...updated } : null));
       onIncidentUpdated?.(updated);

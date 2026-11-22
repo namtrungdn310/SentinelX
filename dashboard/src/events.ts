@@ -73,14 +73,12 @@ export function formatRealtimeMessage(event: RealtimeMessage): string {
     if (summary) {
       const cleanSummary = String(summary).trim();
       if (event.data.attacker_ip && !cleanSummary.includes(String(event.data.attacker_ip))) {
-        return cleanSummary.endsWith(".")
-          ? `${cleanSummary} Từ IP ${event.data.attacker_ip}.`
-          : `${cleanSummary} từ IP ${event.data.attacker_ip}.`;
+        return `${cleanSummary} · IP: ${event.data.attacker_ip}`;
       }
-      return cleanSummary.endsWith(".") ? cleanSummary : `${cleanSummary}.`;
+      return cleanSummary;
     }
-    const attacker = event.data.attacker_ip ? ` từ IP ${event.data.attacker_ip}` : "";
-    return `Phát hiện sự cố an ninh mới${attacker}.`;
+    const attacker = event.data.attacker_ip ? ` · IP: ${event.data.attacker_ip}` : "";
+    return `Phát hiện sự cố an ninh${attacker}`;
   }
   if (event.event === "incident_update") {
     const status = event.data.status ? ` → ${event.data.status}` : "";

@@ -145,7 +145,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 15 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Phát hiện 520 gói tin SYN với tỷ lệ bất đối xứng SYN/ACK đạt 130.0 (ngưỡng >= 3.0, số gói SYN >= 50). Đã kích hoạt lệnh nftables drop IP 203.0.113.195 (30m).",
+      "SYN: 520 (>= 50/10s) · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 (>= 3.0) · nftables: DROP 203.0.113.195 (30m)",
     event_count: 5,
     attacker_ip: "203.0.113.195",
     targeted_ports: [80, 443, 8080],
@@ -161,7 +161,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 3 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Tiến trình celery-worker (4 workers) chiếm 78.5% CPU đẩy tổng tải máy chủ lên 94.2% trong 3 chu kỳ đo liên tiếp.",
+      "CPU: 94.2% (>= 85.0%) · 3 mẫu · celery-worker (4 workers): 78.5%",
     event_count: 3,
     targeted_service: "Tiến trình celery-worker",
   },
@@ -175,7 +175,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 5 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Tiến trình java chiếm 68.2% RAM đẩy tổng dung lượng RAM máy chủ lên 89.5% (3.58 GB / 4.0 GB). Nguy cơ kích hoạt cơ chế Out-Of-Memory Killer của hệ điều hành.",
+      "RAM: 89.5% (3.58 / 4.0 GB, >= 85.0%) · java (PID 8291): 68.2%",
     event_count: 2,
     targeted_service: "Dịch vụ Java Application Gateway",
   },
@@ -189,7 +189,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "IP 198.51.100.42 rà quét 48 cổng dịch vụ trong cửa sổ 5s. Đang chờ đối soát chính sách bảo vệ.",
+      "IP: 198.51.100.42 · 48 cổng / 5s (>= 15) · Chờ chính sách",
     event_count: 3,
     attacker_ip: "198.51.100.42",
     targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],
@@ -205,7 +205,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 8 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Dung lượng phân vùng /var/log đạt 88.5% (ngưỡng cảnh báo >= 85.0%) do dồn ứ file nhật ký ứng dụng.",
+      "Ổ đĩa /var/log: 88.5% (>= 85.0%)",
     event_count: 1,
     targeted_service: "Phân vùng lưu trữ /var/log",
   },
@@ -219,7 +219,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 55 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Tấn công UDP Flood phản xạ NTP dồn dập từ 198.18.0.88 với tốc độ 3.800 pps, băng thông 18.2 MB/s. Đang kích hoạt chặn tạm thời qua tường lửa nftables.",
+      "UDP (NTP :123) · IP: 198.18.0.88 · 3.800 pps · 18.2 MB/s · nftables: DROP 198.18.0.88 (10m)",
     event_count: 4,
     attacker_ip: "198.18.0.88",
     targeted_ports: [123],
@@ -235,7 +235,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 25 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "Tấn công UDP Flood khuếch đại DNS từ 192.0.2.77 với tốc độ 5.420 pps, băng thông 42.5 MB/s gây nghẽn card mạng eth0.",
+      "UDP (DNS :53) · IP: 192.0.2.77 · 5.420 pps · 42.5 MB/s",
     event_count: 8,
     attacker_ip: "192.0.2.77",
     targeted_ports: [53],
