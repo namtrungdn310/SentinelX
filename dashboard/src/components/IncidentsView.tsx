@@ -9,7 +9,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
-  Zap,
 } from "lucide-react";
 import type {
   DefensePolicy,
@@ -51,7 +50,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
-  const [handlingFilter, setHandlingFilter] = useState<"all" | IncidentHandlingMode>("all");
+  const [handlingTab, setHandlingTab] = useState<IncidentHandlingMode>("auto");
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
   const loadIncidents = useCallback(async () => {
@@ -107,18 +106,20 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
   }, [incidents, statusFilter, severityFilter, searchQuery]);
 
   const { autoIncidents, manualIncidents } = useMemo(() => {
-    const auto: { incident: Incident; label: string; reason: string }[] = [];
-    const manual: { incident: Incident; label: string; reason: string }[] = [];
+    const auto: Incident[] = [];
+    const manual: Incident[] = [];
     for (const incident of filteredIncidents) {
       const info = classifyIncidentHandling(incident, policies);
       if (info.mode === "auto") {
-        auto.push({ incident, label: info.label, reason: info.reason });
+        auto.push(incident);
       } else {
-        manual.push({ incident, label: info.label, reason: info.reason });
+        manual.push(incident);
       }
     }
     return { autoIncidents: auto, manualIncidents: manual };
   }, [filteredIncidents, policies]);
+
+  const activeIncidents = handlingTab === "auto" ? autoIncidents : manualIncidents;
 
   // Metric counts
   const countDetected = useMemo(
@@ -180,131 +181,6 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
     }
   };
 
-  const renderIncidentSection = (
-    mode: IncidentHandlingMode,
-    title: string,
-    subtitle: string,
-    rows: { incident: Incident; label: string; reason: string }[],
-    emptyText: string,
-  ) => (
-    <section
-      className="panel table-panel incident-section-panel"
-      aria-label={title}
-    >
-      <div className={`incident-section-header ${mode === "auto" ? "is-auto" : "is-manual"}`}>
-        <div className="incident-section-heading">
-          {mode === "auto" ? (
-            <Zap size={15} className="incident-section-icon-auto" aria-hidden="true" />
-          ) : (
-            <ShieldAlert size={15} className="incident-section-icon-manual" aria-hidden="true" />
-          )}
-          <h3>{title}</h3>
-          <span className="count-badge">{rows.length}</span>
-        </div>
-        <span className="incident-section-desc">{subtitle}</span>
-      </div>
-
-      <div className="table-scroll">
-        <table className="host-table" aria-label={title}>
-          <thead>
-            <tr>
-              <th>Sự cố an ninh</th>
-              <th>Máy chủ</th>
-              <th>Cổng sự cố</th>
-              <th>Mức độ</th>
-              <th>Trạng thái</th>
-              <th>Số sự kiện</th>
-              <th>Thời điểm phát hiện</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: "32px 20px" }}>
-                  <div className="attention-empty" style={{ justifyContent: "center" }}>
-                    <ShieldCheck size={22} style={{ color: "var(--status-ok)" }} />
-                    <div>
-                      <strong>Không có sự cố</strong>
-                      <p style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
-                        {searchQuery || statusFilter !== "all" || severityFilter !== "all"
-                          ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
-                          : emptyText}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              rows.map(({ incident: inc, label, reason }) => {
-                const node = nodes?.find((n) => n.id === inc.node_id);
-                return (
-                  <tr key={inc.id} onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
-                    <td>
-                      <div className="incident-title-cell">
-                        <strong className="incident-title-text">{inc.title}</strong>
-                        <div className="incident-sub-meta">
-                          <small className="font-mono" style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                            Mã: {inc.id}
-                          </small>
-                          <span className={`handling-chip ${mode}`} title={reason}>
-                            {label}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="incident-node-cell">
-                        <span className="node-host-name">
-                          <Server size={13} className="text-muted" style={{ display: "inline", marginRight: 5, verticalAlign: -1 }} />
-                          <strong>{node?.hostname || (inc.node_id ? inc.node_id.slice(0, 8) : "—")}</strong>
-                        </span>
-                        {node?.ip_address && (
-                          <small className="font-mono text-muted">
-                            {node.ip_address}
-                          </small>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      {(() => {
-                        const summary = getPortSummary(inc.targeted_ports);
-                        if (!summary) return <span className="font-mono text-muted">—</span>;
-                        return (
-                          <span
-                            className="font-mono text-muted port-summary-wrap"
-                            style={{ fontWeight: 500, fontSize: 13, whiteSpace: "nowrap" }}
-                            title={inc.targeted_ports?.join(", ")}
-                          >
-                            <span>{summary.visible}</span>
-                            {summary.remaining > 0 && (
-                              <span className="port-overflow-badge">+{summary.remaining}</span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ whiteSpace: "nowrap" }}>{getSeverityBadge(inc.severity)}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{getStatusBadge(inc.status)}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <span className="font-mono count-badge">
-                        {inc.event_count} sự kiện
-                      </span>
-                    </td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <span className="font-mono" style={{ fontSize: 13 }}>
-                        {new Date(inc.started_at).toLocaleTimeString("vi-VN")} · {new Date(inc.started_at).toLocaleDateString("vi-VN")}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-
   return (
     <div className="incidents-container">
       {/* 1. Header KPI Cards */}
@@ -358,19 +234,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           <button
             type="button"
             role="tab"
-            aria-selected={handlingFilter === "all"}
-            className={`segmented-tab ${handlingFilter === "all" ? "active" : ""}`}
-            onClick={() => setHandlingFilter("all")}
-          >
-            <span>Tất cả</span>
-            <span className="count-pill">{filteredIncidents.length}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={handlingFilter === "auto"}
-            className={`segmented-tab ${handlingFilter === "auto" ? "active" : ""}`}
-            onClick={() => setHandlingFilter("auto")}
+            aria-selected={handlingTab === "auto"}
+            className={`segmented-tab ${handlingTab === "auto" ? "active" : ""}`}
+            onClick={() => setHandlingTab("auto")}
           >
             <span>Xử lý tự động</span>
             <span className="count-pill">{autoIncidents.length}</span>
@@ -378,9 +244,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           <button
             type="button"
             role="tab"
-            aria-selected={handlingFilter === "manual"}
-            className={`segmented-tab ${handlingFilter === "manual" ? "active" : ""}`}
-            onClick={() => setHandlingFilter("manual")}
+            aria-selected={handlingTab === "manual"}
+            className={`segmented-tab ${handlingTab === "manual" ? "active" : ""}`}
+            onClick={() => setHandlingTab("manual")}
           >
             <span>Cần xử lý thủ công</span>
             <span className="count-pill">{manualIncidents.length}</span>
@@ -435,33 +301,120 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
         </div>
       </div>
 
-      {error && (
-        <div className="connection-error" role="alert">
-          <span>{error}</span>
-          <button className="text-button" onClick={loadIncidents}>
-            Thử lại
-          </button>
+      {/* 3. Incidents Table Panel */}
+      <div className="panel table-panel">
+        {error && (
+          <div className="connection-error" role="alert">
+            <span>{error}</span>
+            <button className="text-button" onClick={loadIncidents}>
+              Thử lại
+            </button>
+          </div>
+        )}
+
+        <div className="table-scroll">
+          <table
+            className="host-table"
+            aria-label={
+              handlingTab === "auto"
+                ? "Danh sách sự cố có xử lý tự động"
+                : "Danh sách sự cố cần xử lý thủ công"
+            }
+          >
+            <thead>
+              <tr>
+                <th>Sự cố an ninh</th>
+                <th>Máy chủ</th>
+                <th>Cổng sự cố</th>
+                <th>Mức độ</th>
+                <th>Trạng thái</th>
+                <th>Số sự kiện</th>
+                <th>Thời điểm phát hiện</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeIncidents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "48px 20px" }}>
+                    <div className="attention-empty" style={{ justifyContent: "center" }}>
+                      <ShieldCheck size={28} style={{ color: "var(--status-ok)" }} />
+                      <div>
+                        <strong>Hạ tầng an toàn</strong>
+                        <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
+                          {searchQuery || statusFilter !== "all" || severityFilter !== "all"
+                            ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
+                            : handlingTab === "auto"
+                              ? "Không có sự cố nào thuộc nhóm xử lý tự động."
+                              : "Không có sự cố nào cần xử lý thủ công."}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                activeIncidents.map((inc) => {
+                  const node = nodes?.find((n) => n.id === inc.node_id);
+                  return (
+                    <tr key={inc.id} onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
+                      <td>
+                        <div className="incident-title-cell">
+                          <strong className="incident-title-text">{inc.title}</strong>
+                          <small className="font-mono" style={{ color: "var(--text-muted)", fontSize: 12 }}>
+                            Mã: {inc.id}
+                          </small>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="incident-node-cell">
+                          <span className="node-host-name">
+                            <Server size={13} className="text-muted" style={{ display: "inline", marginRight: 5, verticalAlign: -1 }} />
+                            <strong>{node?.hostname || (inc.node_id ? inc.node_id.slice(0, 8) : "—")}</strong>
+                          </span>
+                          {node?.ip_address && (
+                            <small className="font-mono text-muted">
+                              {node.ip_address}
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {(() => {
+                          const summary = getPortSummary(inc.targeted_ports);
+                          if (!summary) return <span className="font-mono text-muted">—</span>;
+                          return (
+                            <span
+                              className="font-mono text-muted port-summary-wrap"
+                              style={{ fontWeight: 500, fontSize: 13, whiteSpace: "nowrap" }}
+                              title={inc.targeted_ports?.join(", ")}
+                            >
+                              <span>{summary.visible}</span>
+                              {summary.remaining > 0 && (
+                                <span className="port-overflow-badge">+{summary.remaining}</span>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>{getSeverityBadge(inc.severity)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{getStatusBadge(inc.status)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="font-mono count-badge">
+                          {inc.event_count} sự kiện
+                        </span>
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="font-mono" style={{ fontSize: 13 }}>
+                          {new Date(inc.started_at).toLocaleTimeString("vi-VN")} · {new Date(inc.started_at).toLocaleDateString("vi-VN")}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
-
-      {/* 3. Separated Incidents Sections */}
-      {(handlingFilter === "all" || handlingFilter === "auto") &&
-        renderIncidentSection(
-          "auto",
-          "Sự cố có xử lý tự động",
-          "Khớp chính sách tự động thực thi (tường lửa nftables hoặc phục hồi thích ứng)",
-          autoIncidents,
-          "Không có sự cố nào thuộc nhóm xử lý tự động."
-        )}
-
-      {(handlingFilter === "all" || handlingFilter === "manual") &&
-        renderIncidentSection(
-          "manual",
-          "Sự cố chỉ báo cáo · Cần xử lý thủ công",
-          "Chưa có chính sách tự động hoặc chính sách đang tắt — cần quản trị viên kiểm tra và đóng thủ công",
-          manualIncidents,
-          "Không có sự cố nào cần xử lý thủ công."
-        )}
+      </div>
 
       {/* 4. Incident Detail Modal */}
       {selectedIncident && (

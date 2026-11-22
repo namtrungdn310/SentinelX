@@ -381,8 +381,12 @@ try {
             nodes: MOCK_NODES,
             isDemoMode: true,
         }));
-        assert.ok(html.includes("Sự cố có xử lý tự động"));
-        assert.ok(html.includes("Sự cố chỉ báo cáo · Cần xử lý thủ công"));
+        assert.ok(html.includes("Xử lý tự động"));
+        assert.ok(html.includes("Cần xử lý thủ công"));
+        assert.ok(!html.includes("incident-section-header"));
+        assert.ok(html.includes("inc-syn-401"));
+        assert.ok(!html.includes("inc-cpu-385"));
+        assert.ok(!html.includes("inc-disk-409"));
         assert.ok(html.includes('<span class="severity-badge crit">Khẩn cấp</span>'));
         assert.ok(html.includes('<span class="severity-badge warn">Cao</span>'));
     });
