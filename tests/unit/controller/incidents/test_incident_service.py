@@ -173,3 +173,18 @@ async def test_incident_technical_summary_and_mitigation_note() -> None:
         "SYN: 520 · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 · IP: 203.0.113.195"
         " · Port: 80, 443\nnftables: DROP 203.0.113.195 (thời hạn: 30 phút)"
     )
+
+    mem_model = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        title="Cạn kiệt RAM",
+        status=IncidentStatus.DETECTED.value,
+        severity=DetectionSeverity.CRITICAL.value,
+        started_at=datetime.now(UTC),
+        summary="RAM: 90.4% (>= 85.0%) · 3 mẫu · java (PID 4112): 71.0%",
+    )
+    repo.get_by_id.return_value = mem_model
+    await service.mark_mitigating(mem_model.id, action_note="service: RESTART java")
+    assert mem_model.summary == (
+        "RAM: 90.4% (>= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java"
+    )

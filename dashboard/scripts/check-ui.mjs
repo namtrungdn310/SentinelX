@@ -466,6 +466,7 @@ try {
         assert.equal(classifyIncidentHandling(memResolved, MOCK_POLICIES).mode, "auto");
         assert.equal(classifyIncidentHandling(cpuResolved, MOCK_POLICIES).mode, "manual");
         assert.ok(html.includes("inc-mem-389"));
+        assert.ok(memResolved.summary.includes("\nservice: RESTART java"));
     });
     const originalFetch = globalThis.fetch;
     try {

@@ -265,7 +265,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 210 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 195 * 60000).toISOString(),
     summary:
-      "RAM: 90.4% (3.62 / 4.0 GB, >= 85.0%) · 3 mẫu · java (PID 4112): 71.0%",
+      "RAM: 90.4% (3.62 / 4.0 GB, >= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java",
     event_count: 3,
     targeted_service: "Dịch vụ Java Application Gateway",
   },
@@ -719,6 +719,19 @@ export const MOCK_DEFENSE_ACTIONS: DefenseAction[] = [
     agent_ack_at: new Date(Date.now() - 179 * 60000).toISOString(),
     error_message: null,
     created_at: new Date(Date.now() - 180 * 60000).toISOString(),
+  },
+  {
+    id: "def-act-06",
+    incident_id: "inc-mem-389",
+    policy_id: "pol-05",
+    node_id: "node-api-02",
+    action_type: "RESTART_SERVICE",
+    target_ip: null,
+    command_payload: { service_name: "java", target: "java" },
+    status: "APPLIED",
+    agent_ack_at: new Date(Date.now() - 208 * 60000).toISOString(),
+    error_message: null,
+    created_at: new Date(Date.now() - 209 * 60000).toISOString(),
   },
   {
     id: "def-act-04",

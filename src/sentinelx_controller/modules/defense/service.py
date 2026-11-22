@@ -485,6 +485,15 @@ class DefenseService:
                     if ttl_min > 0
                     else f"nftables: DROP {action.target_ip}"
                 )
+            elif action.action_type == "RESTART_SERVICE":
+                svc = (
+                    action.command_payload.get("service_name")
+                    or action.command_payload.get("target")
+                    or "service"
+                )
+                action_note = f"service: RESTART {svc}"
+            elif action.action_type == "CLEAR_OS_CACHE":
+                action_note = "os-cache: CLEAR"
             await self._incidents.mark_mitigating(action.incident_id, action_note=action_note)
 
         # Trigger recovery completion hook if unblock action was acknowledged

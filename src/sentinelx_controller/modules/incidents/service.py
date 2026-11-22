@@ -222,14 +222,17 @@ class IncidentService:
                         break
             latest_event = max(events, key=lambda e: e.detected_at)
             new_summary = _format_event_summary(latest_event)
-            if active_incident.summary and "\nnftables:" in active_incident.summary:
-                defense_suffix = active_incident.summary.split("\nnftables:", 1)[1]
-                active_incident.summary = f"{new_summary}\nnftables:{defense_suffix}"
-            elif active_incident.summary and " · nftables:" in active_incident.summary:
-                defense_suffix = active_incident.summary.split(" · nftables:", 1)[1]
-                active_incident.summary = f"{new_summary}\nnftables:{defense_suffix}"
-            else:
-                active_incident.summary = new_summary
+            existing_summary = active_incident.summary or ""
+            preserved_suffix: str | None = None
+            for marker in ("\nnftables:", "\nservice:", "\nos-cache:"):
+                if marker in existing_summary:
+                    preserved_suffix = marker + existing_summary.split(marker, 1)[1]
+                    break
+            if preserved_suffix is None and " · nftables:" in existing_summary:
+                preserved_suffix = "\nnftables:" + existing_summary.split(" · nftables:", 1)[1]
+            active_incident.summary = (
+                f"{new_summary}{preserved_suffix}" if preserved_suffix else new_summary
+            )
             await self._repo.save(active_incident)
         active_incident.last_event_at = max(e.detected_at for e in events)
 
