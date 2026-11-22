@@ -2649,6 +2649,12 @@ body:has(.event-full) .event-full {
     font-size: 13px;
 }
 
+.incident-summary-panel p {
+    margin-top: 4px;
+    white-space: pre-line;
+    line-height: 1.5;
+}
+
 .incident-events-section {
     display: flex;
     flex-direction: column;

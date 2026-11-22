@@ -222,9 +222,12 @@ class IncidentService:
                         break
             latest_event = max(events, key=lambda e: e.detected_at)
             new_summary = _format_event_summary(latest_event)
-            if active_incident.summary and " · nftables:" in active_incident.summary:
+            if active_incident.summary and "\nnftables:" in active_incident.summary:
+                defense_suffix = active_incident.summary.split("\nnftables:", 1)[1]
+                active_incident.summary = f"{new_summary}\nnftables:{defense_suffix}"
+            elif active_incident.summary and " · nftables:" in active_incident.summary:
                 defense_suffix = active_incident.summary.split(" · nftables:", 1)[1]
-                active_incident.summary = f"{new_summary} · nftables:{defense_suffix}"
+                active_incident.summary = f"{new_summary}\nnftables:{defense_suffix}"
             else:
                 active_incident.summary = new_summary
             await self._repo.save(active_incident)
@@ -299,7 +302,7 @@ class IncidentService:
             incident.status = "MITIGATING"
             if action_note and (not incident.summary or action_note not in incident.summary):
                 incident.summary = (
-                    f"{incident.summary} · {action_note}" if incident.summary else action_note
+                    f"{incident.summary}\n{action_note}" if incident.summary else action_note
                 )
             await self._repo.save(incident)
 

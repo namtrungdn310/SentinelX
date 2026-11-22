@@ -165,9 +165,9 @@ async def test_incident_technical_summary_and_mitigation_note() -> None:
     repo.get_by_id.return_value = model
 
     service = IncidentService(repository=repo)
-    await service.mark_mitigating(model.id, action_note="nftables: DROP 203.0.113.195 (30m)")
+    await service.mark_mitigating(model.id, action_note="nftables: DROP 203.0.113.195 (30 phút)")
     assert model.status == IncidentStatus.MITIGATING.value
     assert model.summary == (
         "SYN: 520 · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 · IP: 203.0.113.195"
-        " · Port: 80, 443 · nftables: DROP 203.0.113.195 (30m)"
+        " · Port: 80, 443\nnftables: DROP 203.0.113.195 (30 phút)"
     )

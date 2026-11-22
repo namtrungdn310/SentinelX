@@ -93,7 +93,7 @@ export function IncidentDetailModal({
       }
       const updated = await updateIncident(incident.id, {
         status: "RESOLVED",
-        summary: detail.summary ? `${detail.summary} · Thủ công: Đã giải quyết` : "Thủ công: Đã giải quyết",
+        summary: detail.summary ? `${detail.summary}\nThủ công: Đã giải quyết` : "Thủ công: Đã giải quyết",
       });
       setDetail((prev) => (prev ? { ...prev, ...updated } : null));
       onIncidentUpdated?.(updated);
@@ -149,11 +149,7 @@ export function IncidentDetailModal({
       ? attackerIp
         ? `Kích hoạt lệnh chặn IP ${attackerIp}`
         : "Kích hoạt lệnh bảo vệ"
-      : incident.status === "RESOLVED"
-        ? handling.mode === "auto"
-          ? "Xử lý tự động · Đã hoàn tất"
-          : "Xử lý thủ công · Đã đóng"
-        : null;
+      : null;
 
   return (
     <Modal onClose={onClose} labelledBy={`${id}-title`} className="incident-modal">

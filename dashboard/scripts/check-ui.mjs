@@ -404,6 +404,7 @@ try {
         }));
         assert.ok(!modalHtml.includes("Cơ chế xử lý"));
         assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP 203.0.113.195"));
+        assert.ok(modalHtml.includes("\nnftables: DROP 203.0.113.195 (30 phút)"));
 
         const mem = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-408");
         const memModalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
@@ -434,6 +435,17 @@ try {
         assert.equal(classifyIncidentHandling(diskResolved, MOCK_POLICIES).mode, "manual");
         assert.ok(html.includes("inc-syn-390"));
         assert.ok(html.includes("Đã giải quyết"));
+
+        const synResolvedModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: synResolved,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(!synResolvedModal.includes("Xử lý tự động · Đã hoàn tất"));
+        assert.ok(!synResolvedModal.includes("Xử lý thủ công · Đã đóng"));
     });
     const originalFetch = globalThis.fetch;
     try {

@@ -145,7 +145,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 15 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "SYN: 520 (>= 50/10s) · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 (>= 3.0) · nftables: DROP 203.0.113.195 (30m)",
+      "SYN: 520 (>= 50/10s) · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 (>= 3.0)\nnftables: DROP 203.0.113.195 (30 phút)",
     event_count: 5,
     attacker_ip: "203.0.113.195",
     targeted_ports: [80, 443, 8080],
@@ -219,7 +219,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 55 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "UDP (NTP :123) · IP: 198.18.0.88 · 3.800 pps · 18.2 MB/s · nftables: DROP 198.18.0.88 (10m)",
+      "UDP (NTP :123) · IP: 198.18.0.88 · 3.800 pps · 18.2 MB/s\nnftables: DROP 198.18.0.88 (10 phút)",
     event_count: 4,
     attacker_ip: "198.18.0.88",
     targeted_ports: [123],
@@ -235,7 +235,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 120 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 90 * 60000).toISOString(),
     summary:
-      "SYN: 310 (>= 50/10s) · ACK: 2 · Tỷ lệ SYN/ACK: 155.0 (>= 3.0) · nftables: DROP 198.51.100.77 (30m)",
+      "SYN: 310 (>= 50/10s) · ACK: 2 · Tỷ lệ SYN/ACK: 155.0 (>= 3.0)\nnftables: DROP 198.51.100.77 (30 phút)",
     event_count: 3,
     attacker_ip: "198.51.100.77",
     targeted_ports: [80, 443],
@@ -251,7 +251,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 180 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 150 * 60000).toISOString(),
     summary:
-      "Ổ đĩa /tmp: 91.2% (>= 85.0%) · Thủ công: Đã giải quyết",
+      "Ổ đĩa /tmp: 91.2% (>= 85.0%)\nThủ công: Đã giải quyết",
     event_count: 2,
     targeted_service: "Phân vùng lưu trữ /tmp",
   },
