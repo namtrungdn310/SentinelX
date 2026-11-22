@@ -67,6 +67,7 @@ try {
     const { filterEvents, eventLabel, eventMatchesCategory, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
+    const { IncidentDetailModal } = await server.ssrLoadModule("/src/components/IncidentDetailModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
     const { MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
@@ -390,6 +391,17 @@ try {
         assert.ok(!html.includes("inc-disk-409"));
         assert.ok(html.includes('<span class="severity-badge crit">Khẩn cấp</span>'));
         assert.ok(html.includes('<span class="severity-badge warn">Cao</span>'));
+
+        const modalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: syn,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(!modalHtml.includes("Cơ chế xử lý"));
+        assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP qua nftables (203.0.113.195)"));
     });
     const originalFetch = globalThis.fetch;
     try {

@@ -143,6 +143,21 @@ export function IncidentDetailModal({
     (Array.isArray(firstEvent?.details?.targeted_ports)
       ? (firstEvent.details.targeted_ports as number[])
       : undefined);
+  const attackerIp = incident.attacker_ip || firstEvent?.attacker_ip || null;
+  const statusSubtext =
+    incident.status === "MITIGATING"
+      ? attackerIp
+        ? `Kích hoạt lệnh chặn IP qua nftables (${attackerIp})`
+        : "Kích hoạt lệnh bảo vệ qua nftables"
+      : incident.status === "RESOLVED"
+        ? handling.mode === "auto"
+          ? "Xử lý tự động · Đã hoàn tất"
+          : "Xử lý thủ công · Đã đóng"
+        : handling.mode === "auto"
+          ? attackerIp
+            ? `${handling.label} (${attackerIp})`
+            : handling.label
+          : handling.reason;
 
   return (
     <Modal onClose={onClose} labelledBy={`${id}-title`} className="incident-modal">
@@ -216,14 +231,8 @@ export function IncidentDetailModal({
               <i />
               {statusLabel}
             </span>
-          </div>
-          <div className="meta-card">
-            <span className="meta-label">Cơ chế xử lý</span>
-            <span className={`handling-chip ${handling.mode}`} style={{ width: "fit-content" }}>
-              {handling.mode === "auto" ? "Xử lý tự động" : "Cần xử lý thủ công"}
-            </span>
-            <small className="text-muted" style={{ fontSize: 11.5 }}>
-              {handling.reason}
+            <small className="text-muted" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
+              {statusSubtext}
             </small>
           </div>
           <div className="meta-card">
