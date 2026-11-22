@@ -63,12 +63,13 @@ try {
         "/src/components/KPICards.tsx",
     );
     const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
-    const { nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
+    const { classifyIncidentHandling, nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
     const { filterEvents, eventLabel, eventMatchesCategory, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
+    const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
-    const { MOCK_NODES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
+    const { MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
     const node = MOCK_NODES[0];
     const noop = () => {};
 
@@ -366,6 +367,24 @@ try {
         assert.ok(html.includes("Cập nhật cấu hình thành công"));
         assert.ok(html.includes("Đã áp dụng cấu hình [Tiết kiệm tài nguyên (Resource-Saving)] cho máy chủ api-gateway-node."));
         assert.equal((html.match(/toast-link-btn/g) || []).length, 2);
+    });
+    check("IncidentsView omits icons from Khẩn cấp/Cao badges and splits auto vs manual handling", () => {
+        const syn = MOCK_INCIDENTS.find((i) => i.id === "inc-syn-401");
+        const cpu = MOCK_INCIDENTS.find((i) => i.id === "inc-cpu-385");
+        const disk = MOCK_INCIDENTS.find((i) => i.id === "inc-disk-409");
+        assert.equal(classifyIncidentHandling(syn, MOCK_POLICIES).mode, "auto");
+        assert.equal(classifyIncidentHandling(cpu, MOCK_POLICIES).mode, "manual");
+        assert.equal(classifyIncidentHandling(disk, MOCK_POLICIES).mode, "manual");
+
+        const html = renderToStaticMarkup(createElement(IncidentsView, {
+            selectedProjectId: MOCK_PROJECTS[0].id,
+            nodes: MOCK_NODES,
+            isDemoMode: true,
+        }));
+        assert.ok(html.includes("Sự cố có xử lý tự động"));
+        assert.ok(html.includes("Sự cố chỉ báo cáo · Cần xử lý thủ công"));
+        assert.ok(html.includes('<span class="severity-badge crit">Khẩn cấp</span>'));
+        assert.ok(html.includes('<span class="severity-badge warn">Cao</span>'));
     });
     const originalFetch = globalThis.fetch;
     try {

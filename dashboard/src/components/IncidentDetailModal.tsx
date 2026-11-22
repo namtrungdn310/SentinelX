@@ -10,10 +10,15 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import type { Incident, IncidentDetail, Node } from "../types";
+import type { DefensePolicy, Incident, IncidentDetail, Node } from "../types";
 import { fetchIncidentDetail, updateIncident } from "../api";
-import { MOCK_INCIDENT_DETAILS } from "../mockData";
-import { formatBytes, formatPortRanges, severityLabel } from "../presentation";
+import { MOCK_INCIDENT_DETAILS, MOCK_POLICIES } from "../mockData";
+import {
+  classifyIncidentHandling,
+  formatBytes,
+  formatPortRanges,
+  severityLabel,
+} from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -23,6 +28,7 @@ interface Props {
   onIncidentUpdated?: (updated: Incident) => void;
   isDemoMode: boolean;
   nodes?: Node[];
+  policies?: DefensePolicy[];
 }
 
 export function IncidentDetailModal({
@@ -32,6 +38,7 @@ export function IncidentDetailModal({
   onIncidentUpdated,
   isDemoMode,
   nodes,
+  policies,
 }: Props) {
   const id = useId();
   const [detail, setDetail] = useState<IncidentDetail | null>(() => {
@@ -118,9 +125,14 @@ export function IncidentDetailModal({
       ? "crit"
       : incident.severity === "HIGH"
         ? "warn"
-        : "ok";
+        : "medium";
 
   const firstEvent = detail?.events?.[0];
+  const handling = classifyIncidentHandling(
+    incident,
+    policies ?? (isDemoMode ? MOCK_POLICIES : []),
+    firstEvent?.detector_name,
+  );
   const incidentNode = nodes?.find(
     (n) => n.id === (incident.node_id || firstEvent?.node_id)
   );
@@ -192,8 +204,7 @@ export function IncidentDetailModal({
           </div>
           <div className="meta-card">
             <span className="meta-label">Mức độ</span>
-            <span className={`status-badge ${severityTone}`}>
-              <i />
+            <span className={`severity-badge ${severityTone}`} style={{ width: "fit-content" }}>
               {severityLabel(incident.severity)}
             </span>
           </div>
@@ -203,6 +214,15 @@ export function IncidentDetailModal({
               <i />
               {statusLabel}
             </span>
+          </div>
+          <div className="meta-card">
+            <span className="meta-label">Cơ chế xử lý</span>
+            <span className={`handling-chip ${handling.mode}`} style={{ width: "fit-content" }}>
+              {handling.mode === "auto" ? "Xử lý tự động" : "Cần xử lý thủ công"}
+            </span>
+            <small className="text-muted" style={{ fontSize: 11.5 }}>
+              {handling.reason}
+            </small>
           </div>
           <div className="meta-card">
             <span className="meta-label">Cổng sự cố</span>

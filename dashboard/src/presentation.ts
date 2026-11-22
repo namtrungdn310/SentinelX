@@ -1,4 +1,4 @@
-import type { DetectionSeverity, Node } from "./types";
+import type { DefensePolicy, DetectionSeverity, Incident, Node } from "./types";
 
 export const SEVERITY_LABELS: Record<DetectionSeverity, string> = {
   MEDIUM: "Trung bình",
@@ -380,5 +380,108 @@ export function getTargetedAsset(params: {
     badgeLabel: "Mạng máy chủ",
     subLabel: `${portStr} / ${protocol.toUpperCase()}`,
     riskSummary: "Lưu lượng bất thường gây áp lực lên tầng mạng của máy chủ",
+  };
+}
+
+export type IncidentHandlingMode = "auto" | "manual";
+
+export interface IncidentHandlingInfo {
+  mode: IncidentHandlingMode;
+  detectorType: string | null;
+  label: string;
+  reason: string;
+}
+
+const POLICY_ACTION_SHORT_LABELS: Record<string, string> = {
+  BLOCK_IP_NFTABLES: "Khóa IP tường lửa",
+  ADAPTIVE: "Tự động tối ưu",
+  RESTART_SERVICE: "Khởi động lại dịch vụ",
+  CLEAR_OS_CACHE: "Giải phóng bộ nhớ đệm",
+  RATE_LIMIT: "Giới hạn tốc độ",
+};
+
+export function inferIncidentDetector(
+  incident: Pick<Incident, "title" | "summary">,
+  explicitDetector?: string | null,
+): string | null {
+  if (explicitDetector) return explicitDetector;
+  const title = incident.title.toLowerCase();
+  const summary = (incident.summary || "").toLowerCase();
+  if (title.includes("syn") || summary.includes("syn:")) return "syn_flood_detector";
+  if (title.includes("quét cổng") || title.includes("port scan")) return "port_scan_detector";
+  if (title.includes("udp") || title.includes("lưu lượng") || title.includes("traffic")) {
+    return "traffic_spike_detector";
+  }
+  if (title.includes("cpu") || summary.startsWith("cpu:")) return "cpu_threshold_detector";
+  if (title.includes("ram") || title.includes("memory") || summary.startsWith("ram:")) {
+    return "memory_exhaustion_detector";
+  }
+  if (title.includes("đĩa") || title.includes("disk") || summary.includes("ổ đĩa")) {
+    return "disk_saturation_detector";
+  }
+  return null;
+}
+
+export function classifyIncidentHandling(
+  incident: Pick<Incident, "status" | "title" | "summary" | "attacker_ip">,
+  policies: DefensePolicy[],
+  explicitDetector?: string | null,
+): IncidentHandlingInfo {
+  const detectorType = inferIncidentDetector(incident, explicitDetector);
+
+  if (incident.status === "MITIGATING" || (incident.summary || "").includes("nftables:")) {
+    return {
+      mode: "auto",
+      detectorType,
+      label: "Tự động · nftables",
+      reason: "Đã kích hoạt lệnh chặn tự động qua tường lửa nftables",
+    };
+  }
+
+  const matching = detectorType
+    ? policies.filter((p) => p.event_type === detectorType)
+    : [];
+  const activePolicy = matching.find((p) => p.is_active);
+
+  if (!activePolicy) {
+    return {
+      mode: "manual",
+      detectorType,
+      label: "Chỉ báo cáo",
+      reason:
+        matching.length > 0
+          ? "Chính sách tự động đang tắt — cần xử lý thủ công"
+          : "Chưa có chính sách tự động — cần xử lý thủ công",
+    };
+  }
+
+  if (activePolicy.action_type === "ALERT_ONLY" || !activePolicy.is_auto_execute) {
+    return {
+      mode: "manual",
+      detectorType,
+      label: "Chỉ báo cáo",
+      reason:
+        activePolicy.action_type === "ALERT_ONLY"
+          ? "Chính sách chỉ ghi nhận cảnh báo — cần xử lý thủ công"
+          : "Chính sách tắt tự động thực thi — cần xử lý thủ công",
+    };
+  }
+
+  if (activePolicy.action_type === "BLOCK_IP_NFTABLES" && !incident.attacker_ip) {
+    return {
+      mode: "manual",
+      detectorType,
+      label: "Chỉ báo cáo",
+      reason: "Thiếu IP nguồn tấn công để chặn tự động — cần xử lý thủ công",
+    };
+  }
+
+  const actionLabel =
+    POLICY_ACTION_SHORT_LABELS[activePolicy.action_type] ?? activePolicy.action_type;
+  return {
+    mode: "auto",
+    detectorType,
+    label: `Tự động · ${actionLabel}`,
+    reason: `Chính sách "${activePolicy.name}" tự động thực thi`,
   };
 }
