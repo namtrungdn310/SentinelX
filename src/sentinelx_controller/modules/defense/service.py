@@ -481,7 +481,7 @@ class DefenseService:
             if action.action_type == "BLOCK_IP_NFTABLES" and action.target_ip:
                 ttl_min = int(action.command_payload.get("duration_seconds", 0)) // 60
                 action_note = (
-                    f"nftables: DROP {action.target_ip} ({ttl_min} phút)"
+                    f"nftables: DROP {action.target_ip} (thời hạn: {ttl_min} phút)"
                     if ttl_min > 0
                     else f"nftables: DROP {action.target_ip}"
                 )

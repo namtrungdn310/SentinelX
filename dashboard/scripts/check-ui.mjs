@@ -404,7 +404,7 @@ try {
         }));
         assert.ok(!modalHtml.includes("Cơ chế xử lý"));
         assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP 203.0.113.195"));
-        assert.ok(modalHtml.includes("\nnftables: DROP 203.0.113.195 (30 phút)"));
+        assert.ok(modalHtml.includes("\nnftables: DROP 203.0.113.195 (thời hạn: 30 phút)"));
 
         const mem = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-408");
         const memModalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
