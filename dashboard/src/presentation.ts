@@ -80,11 +80,21 @@ export function getNodeHardware(node: Partial<Node>): {
   };
 }
 
+export function formatCapacityPair(usedBytes: number, totalBytes: number): string {
+  if (!validMetric(usedBytes) || !validMetric(totalBytes) || totalBytes <= 0) return "—";
+  const index = Math.min(3, Math.floor(Math.log(totalBytes) / Math.log(1024)));
+  const unit = ["B", "KB", "MB", "GB"][index];
+  const divisor = 1024 ** index;
+  const usedVal = (usedBytes / divisor).toFixed(1);
+  const totalVal = (totalBytes / divisor).toFixed(1);
+  return `${usedVal} / ${totalVal} ${unit}`;
+}
+
 export function formatMemoryUsage(percent?: number, totalBytes?: number): string {
   if (!validMetric(percent)) return "—";
   const total = totalBytes ?? 2 * 1024 * 1024 * 1024;
   const usedBytes = (percent / 100) * total;
-  return `${formatBytes(usedBytes)} / ${formatBytes(total)}`;
+  return formatCapacityPair(usedBytes, total);
 }
 
 export function formatCpuUsage(percent?: number, cores?: number): string {
@@ -98,7 +108,7 @@ export function formatDiskUsage(percent?: number, totalBytes?: number): string {
   if (!validMetric(percent)) return "—";
   const total = totalBytes ?? 100 * 1024 * 1024 * 1024;
   const usedBytes = (percent / 100) * total;
-  return `${formatBytes(usedBytes)} / ${formatBytes(total)}`;
+  return formatCapacityPair(usedBytes, total);
 }
 
 /**
