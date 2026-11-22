@@ -14,6 +14,7 @@ import {
 import type { Node, DefenseAction, DefenseActionStatus } from "../types";
 import { fetchDefenseActions, revertDefenseAction } from "../api";
 import { MOCK_DEFENSE_ACTIONS } from "../mockData";
+import { isDeliveryFailureMessage } from "../presentation";
 import { ManualBlockModal } from "./ManualBlockModal";
 
 interface Props {
@@ -469,14 +470,35 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
                             <i /> Đã gỡ bỏ
                           </span>
                         )}
-                        {isFailed && (
-                          <span className="status-badge crit" title={act.error_message ?? "Lệnh thất bại"}>
-                            <i /> Thất bại
+                        {(isFailed || act.status === "EXPIRED") && (
+                          <span
+                            className="status-badge crit"
+                            title={
+                              act.error_message ??
+                              (act.status === "EXPIRED"
+                                ? "Hết hạn tải hoặc quá số lần gửi lệnh"
+                                : "Lệnh thất bại")
+                            }
+                          >
+                            <i />{" "}
+                            {act.status === "EXPIRED" || isDeliveryFailureMessage(act.error_message)
+                              ? "Tải lệnh bị lỗi"
+                              : "Kích hoạt bị lỗi"}
                           </span>
                         )}
                         {act.status === "PENDING" && (
                           <span className="status-badge warn">
-                            <i /> Đang chờ
+                            <i /> Đang chờ tải
+                          </span>
+                        )}
+                        {act.status === "SENT" && (
+                          <span className="status-badge warn">
+                            <i /> Đang gửi Agent
+                          </span>
+                        )}
+                        {act.status === "CANCELLED" && (
+                          <span className="status-badge neutral">
+                            <i /> Đã hủy
                           </span>
                         )}
                       </td>

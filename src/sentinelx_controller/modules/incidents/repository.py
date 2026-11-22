@@ -63,6 +63,33 @@ class IncidentRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def find_recently_closed_incident(
+        self,
+        project_id: uuid.UUID,
+        since: datetime,
+        *,
+        node_id: uuid.UUID | None = None,
+        correlation_key: str | None = None,
+    ) -> IncidentModel | None:
+        """Tìm sự cố đã đóng (RESOLVED/FALSE_POSITIVE) gần nhất theo ngữ cảnh."""
+        stmt = (
+            select(IncidentModel)
+            .where(
+                IncidentModel.project_id == project_id,
+                IncidentModel.status.in_(["RESOLVED", "FALSE_POSITIVE"]),
+                IncidentModel.resolved_at.is_not(None),
+                IncidentModel.resolved_at >= since,
+            )
+            .order_by(IncidentModel.resolved_at.desc())
+            .limit(1)
+        )
+        if node_id is not None:
+            stmt = stmt.where(
+                IncidentModel.node_id == node_id, IncidentModel.correlation_key == correlation_key
+            )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def query_incidents(
         self,
         project_id: uuid.UUID | None = None,

@@ -71,6 +71,7 @@ export interface DetectionEvent {
 // ----------------------------------------------------
 
 export type IncidentStatus = 'DETECTED' | 'MITIGATING' | 'RESOLVED' | 'FALSE_POSITIVE';
+export type IncidentDefenseStatus = 'DELIVERY_FAILED' | 'EXECUTION_FAILED';
 export type DetectionSeverity = 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface Incident {
@@ -83,6 +84,7 @@ export interface Incident {
   started_at: string;
   resolved_at: string | null;
   summary: string | null;
+  defense_status?: IncidentDefenseStatus | null;
   event_count: number;
   attacker_ip?: string | null;
   targeted_ports?: number[];

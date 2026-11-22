@@ -12,9 +12,17 @@ from sentinelx_common.contracts.detection import (
     NetworkAnomalyDetail,
     ResourceAnomalyDetail,
 )
-from sentinelx_common.contracts.incidents import IncidentStatus, IncidentUpdateRequest
+from sentinelx_common.contracts.incidents import (
+    IncidentDefenseStatus,
+    IncidentStatus,
+    IncidentUpdateRequest,
+)
 from sentinelx_controller.modules.incidents.models import IncidentModel
-from sentinelx_controller.modules.incidents.service import IncidentService, _format_event_summary
+from sentinelx_controller.modules.incidents.service import (
+    IncidentService,
+    _extract_defense_status,
+    _format_event_summary,
+)
 
 
 def make_event(
@@ -188,3 +196,101 @@ async def test_incident_technical_summary_and_mitigation_note() -> None:
     assert mem_model.summary == (
         "RAM: 90.4% (>= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java"
     )
+
+
+@pytest.mark.asyncio
+async def test_recently_closed_incident_suppresses_immediate_retrigger_and_stale_events() -> None:
+    repo = AsyncMock()
+    detection_service = AsyncMock()
+    repo.find_active_incident.return_value = None
+
+    project_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    closed_at = datetime.now(UTC) - timedelta(seconds=10)
+    repo.find_recently_closed_incident.return_value = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        node_id=node_id,
+        title="Quá tải CPU",
+        status=IncidentStatus.RESOLVED.value,
+        severity=DetectionSeverity.HIGH.value,
+        started_at=closed_at - timedelta(minutes=2),
+        resolved_at=closed_at,
+        correlation_key="resource",
+    )
+
+    service = IncidentService(repository=repo, detection_service=detection_service)
+
+    stale_event = make_event(severity=DetectionSeverity.HIGH)
+    stale_event.detected_at = closed_at - timedelta(seconds=2)
+    residual_event = make_event(severity=DetectionSeverity.HIGH)
+    residual_event.detected_at = closed_at + timedelta(seconds=5)
+
+    assert await service.correlate_events(project_id, node_id, [stale_event, residual_event]) == []
+    assert repo.create.await_count == 0
+
+    # Once outside the 60s grace window, a new event after resolved_at opens a fresh incident.
+    repo.find_recently_closed_incident.return_value.resolved_at = datetime.now(UTC) - timedelta(
+        seconds=90
+    )
+
+    async def mock_create(inc: IncidentModel) -> IncidentModel:
+        inc.id = uuid.uuid4()
+        return inc
+
+    repo.create.side_effect = mock_create
+    fresh_event = make_event(severity=DetectionSeverity.HIGH)
+    fresh_event.detected_at = datetime.now(UTC)
+    correlated = await service.correlate_events(project_id, node_id, [fresh_event])
+    assert len(correlated) == 1
+    assert repo.create.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_mark_defense_failed_delivery_and_execution_states() -> None:
+    repo = AsyncMock()
+    model = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        title="Tấn công SYN Flood",
+        status=IncidentStatus.DETECTED.value,
+        severity=DetectionSeverity.CRITICAL.value,
+        started_at=datetime.now(UTC),
+        summary="SYN: 520 · ACK: 4 · IP: 203.0.113.195",
+    )
+    repo.get_by_id.return_value = model
+
+    service = IncidentService(repository=repo)
+    await service.mark_defense_failed(
+        model.id,
+        stage="delivery",
+        error_detail="Command expired",
+    )
+    assert model.status == IncidentStatus.DETECTED.value
+    assert model.summary == "SYN: 520 · ACK: 4 · IP: 203.0.113.195\nlỗi tải lệnh: Command expired"
+    assert _extract_defense_status(model.summary, model.status) == (
+        IncidentDefenseStatus.DELIVERY_FAILED
+    )
+
+    await service.mark_defense_failed(
+        model.id,
+        stage="execution",
+        error_detail="nft binary missing",
+    )
+    assert model.summary == (
+        "SYN: 520 · ACK: 4 · IP: 203.0.113.195\nlỗi kích hoạt: nft binary missing"
+    )
+    assert _extract_defense_status(model.summary, model.status) == (
+        IncidentDefenseStatus.EXECUTION_FAILED
+    )
+
+    await service.mark_mitigating(
+        model.id,
+        action_note="nftables: DROP 203.0.113.195 (thời hạn: 30 phút)",
+    )
+    assert model.status == IncidentStatus.MITIGATING.value
+    assert model.summary == (
+        "SYN: 520 · ACK: 4 · IP: 203.0.113.195\n"
+        "nftables: DROP 203.0.113.195 (thời hạn: 30 phút)"
+    )
+    assert _extract_defense_status(model.summary, model.status) is None

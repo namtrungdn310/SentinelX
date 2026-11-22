@@ -98,3 +98,56 @@ async def test_operator_cancels_only_before_delivery() -> None:
         assert (
             await h.client.post(f"/api/v1/defense/actions/{next_action['id']}/cancel")
         ).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_incident_tracks_delivery_and_execution_failures() -> None:
+    from sentinelx_controller.modules.incidents.models import IncidentModel
+
+    async with core_harness() as h:
+        incident_id = uuid4()
+        async with h.sessions() as db:
+            db.add(
+                IncidentModel(
+                    id=incident_id,
+                    project_id=UUID(h.project),
+                    node_id=UUID(h.node),
+                    title="Tấn công SYN Flood",
+                    status="DETECTED",
+                    severity="CRITICAL",
+                    started_at=datetime.now(UTC),
+                    summary="SYN: 200 · ACK: 1 · IP: 198.51.100.88",
+                    correlation_key="network:198.51.100.88",
+                )
+            )
+            await db.commit()
+
+        expired_action = await h.block(
+            incident_id=str(incident_id),
+            target_ip="198.51.100.88",
+        )
+        async with h.sessions() as db:
+            row = await db.get(DefenseActionModel, UUID(expired_action["id"]))
+            assert row is not None
+            row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            await db.commit()
+
+        assert await h.heartbeat() == []
+        inc_delivery = (await h.client.get(f"/api/v1/incidents/{incident_id}")).json()
+        assert inc_delivery["status"] == "DETECTED"
+        assert inc_delivery["defense_status"] == "DELIVERY_FAILED"
+        assert "lỗi tải lệnh:" in inc_delivery["summary"]
+
+        retry_action = await h.block(
+            incident_id=str(incident_id),
+            target_ip="198.51.100.88",
+        )
+        command = (await h.heartbeat())[0]
+        assert command["id"] == retry_action["id"]
+        ack_res = await h.ack(command, state="FAILED", error_message="nftables rule rejected")
+        assert ack_res.status_code == 200
+
+        inc_exec = (await h.client.get(f"/api/v1/incidents/{incident_id}")).json()
+        assert inc_exec["status"] == "DETECTED"
+        assert inc_exec["defense_status"] == "EXECUTION_FAILED"
+        assert "lỗi kích hoạt: nftables rule rejected" in inc_exec["summary"]

@@ -18,6 +18,13 @@ class IncidentStatus(StrEnum):
     FALSE_POSITIVE = "FALSE_POSITIVE"
 
 
+class IncidentDefenseStatus(StrEnum):
+    """Trạng thái phụ khi tải lệnh hoặc kích hoạt phòng thủ gặp lỗi."""
+
+    DELIVERY_FAILED = "DELIVERY_FAILED"
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+
+
 class IncidentResponse(SentinelXBaseModel):
     """Thông tin phản hồi của một sự cố an ninh."""
 
@@ -30,6 +37,10 @@ class IncidentResponse(SentinelXBaseModel):
     started_at: datetime = Field(..., description="Thời điểm bắt đầu ghi nhận sự cố")
     resolved_at: datetime | None = Field(default=None, description="Thời điểm kết thúc sự cố")
     summary: str | None = Field(default=None, description="Tóm tắt tiến trình và hành động")
+    defense_status: IncidentDefenseStatus | None = Field(
+        default=None,
+        description="Trạng thái lỗi tải lệnh hoặc kích hoạt phòng thủ nếu có",
+    )
     event_count: int = Field(default=0, description="Tổng số detection events thuộc incident này")
 
 

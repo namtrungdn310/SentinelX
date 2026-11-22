@@ -11,18 +11,19 @@ import {
   ShieldX,
 } from "lucide-react";
 import type {
+  DefenseAction,
   DefensePolicy,
   DetectionSeverity,
   Incident,
-  IncidentStatus,
   Node,
 } from "../types";
-import { fetchIncidents, fetchPolicies } from "../api";
-import { MOCK_INCIDENTS, MOCK_POLICIES } from "../mockData";
+import { fetchDefenseActions, fetchIncidents, fetchPolicies } from "../api";
+import { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_POLICIES } from "../mockData";
 import {
   classifyIncidentHandling,
   getPortSummary,
   type IncidentHandlingMode,
+  resolveIncidentDefenseFailure,
   SEVERITY_LABELS,
 } from "../presentation";
 import { IncidentDetailModal } from "./IncidentDetailModal";
@@ -47,6 +48,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
   const [policies, setPolicies] = useState<DefensePolicy[]>(() =>
     isDemoMode ? MOCK_POLICIES : []
   );
+  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>(() =>
+    isDemoMode ? MOCK_DEFENSE_ACTIONS : []
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,17 +70,20 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
         }
         setIncidents(items);
         setPolicies(MOCK_POLICIES);
+        setDefenseActions(MOCK_DEFENSE_ACTIONS);
         return;
       }
-      const [incidentList, policyList] = await Promise.all([
+      const [incidentList, policyList, actionList] = await Promise.all([
         fetchIncidents({
           projectId: selectedProjectId ?? undefined,
           limit: 100,
         }),
         fetchPolicies(selectedProjectId ?? undefined).catch(() => []),
+        fetchDefenseActions({ limit: 100 }).catch(() => []),
       ]);
       setIncidents(incidentList);
       setPolicies(policyList);
+      setDefenseActions(actionList);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Lỗi tải danh sách sự cố");
     } finally {
@@ -93,7 +100,18 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter((inc) => {
-      if (statusFilter !== "all" && inc.status !== statusFilter) return false;
+      if (statusFilter !== "all") {
+        const failure = resolveIncidentDefenseFailure(inc, defenseActions);
+        if (statusFilter === "DELIVERY_FAILED") {
+          if (failure !== "DELIVERY_FAILED") return false;
+        } else if (statusFilter === "EXECUTION_FAILED") {
+          if (failure !== "EXECUTION_FAILED") return false;
+        } else if (statusFilter === "DETECTED" && handlingTab === "auto") {
+          if (inc.status !== "DETECTED" || failure !== null) return false;
+        } else if (inc.status !== statusFilter) {
+          return false;
+        }
+      }
       if (severityFilter !== "all" && inc.severity !== severityFilter) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -105,7 +123,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
       }
       return true;
     });
-  }, [incidents, statusFilter, severityFilter, searchQuery]);
+  }, [incidents, statusFilter, severityFilter, searchQuery, defenseActions, handlingTab]);
 
   const { autoIncidents, manualIncidents } = useMemo(() => {
     const auto: Incident[] = [];
@@ -146,8 +164,8 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
     );
   };
 
-  const getStatusBadge = (status: IncidentStatus) => {
-    switch (status) {
+  const getStatusBadge = (inc: Incident) => {
+    switch (inc.status) {
       case "RESOLVED":
         return (
           <span className="status-badge ok">
@@ -160,12 +178,30 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             <i /> Đang kích hoạt
           </span>
         );
-      case "DETECTED":
+      case "DETECTED": {
+        if (handlingTab === "auto") {
+          const failure = resolveIncidentDefenseFailure(inc, defenseActions);
+          if (failure === "DELIVERY_FAILED") {
+            return (
+              <span className="status-badge crit">
+                <i /> Tải lệnh bị lỗi
+              </span>
+            );
+          }
+          if (failure === "EXECUTION_FAILED") {
+            return (
+              <span className="status-badge crit">
+                <i /> Kích hoạt bị lỗi
+              </span>
+            );
+          }
+        }
         return (
           <span className="status-badge crit">
             <i /> {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
           </span>
         );
+      }
       case "FALSE_POSITIVE":
         return (
           <span className="status-badge unknown">
@@ -175,7 +211,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
       default:
         return (
           <span className="status-badge unknown">
-            <i /> {status}
+            <i /> {inc.status}
           </span>
         );
     }
@@ -259,7 +295,13 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             className={`segmented-tab ${handlingTab === "manual" ? "active" : ""}`}
             onClick={() => {
               setHandlingTab("manual");
-              if (statusFilter === "MITIGATING") setStatusFilter("all");
+              if (
+                statusFilter === "MITIGATING" ||
+                statusFilter === "DELIVERY_FAILED" ||
+                statusFilter === "EXECUTION_FAILED"
+              ) {
+                setStatusFilter("all");
+              }
             }}
           >
             <span>Xử lý thủ công</span>
@@ -291,7 +333,11 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
               {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
             </option>
             {handlingTab === "auto" && (
-              <option value="MITIGATING">Đang kích hoạt</option>
+              <>
+                <option value="MITIGATING">Đang kích hoạt</option>
+                <option value="DELIVERY_FAILED">Tải lệnh bị lỗi</option>
+                <option value="EXECUTION_FAILED">Kích hoạt bị lỗi</option>
+              </>
             )}
             <option value="RESOLVED">Đã giải quyết</option>
           </select>
@@ -413,7 +459,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
                         })()}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>{getSeverityBadge(inc.severity)}</td>
-                      <td style={{ whiteSpace: "nowrap" }}>{getStatusBadge(inc.status)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{getStatusBadge(inc)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <span className="font-mono count-badge">
                           {inc.event_count} sự kiện
@@ -440,6 +486,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
           incident={selectedIncident}
           nodes={nodes}
           policies={policies}
+          defenseActions={defenseActions}
           isOpen={Boolean(selectedIncident)}
           onClose={() => setSelectedIncident(null)}
           onIncidentUpdated={handleIncidentUpdated}

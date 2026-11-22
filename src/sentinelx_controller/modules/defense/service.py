@@ -352,12 +352,27 @@ class DefenseService:
         supported_actions: list[str] | None = None,
     ) -> list[AgentCommandContract]:
         """Fetch pending commands for heartbeat piggyback and transition to SENT."""
-        actions = await self._repo.get_and_mark_pending_commands(
+        actions, delivery_failures = await self._repo.claim_pending_commands(
             node_id=node_id,
             lease_seconds=self._safety.command_lease_seconds,
             max_attempts=self._safety.command_max_attempts,
             supported_actions=supported_actions,
         )
+        for failed_action in delivery_failures:
+            await self._broadcast(
+                RealtimeEventType.DEFENSE_ACTION_UPDATED,
+                self._to_response(failed_action).model_dump(mode="json"),
+            )
+            if (
+                failed_action.incident_id is not None
+                and self._incidents is not None
+                and failed_action.action_type != "UNBLOCK_IP_NFTABLES"
+            ):
+                await self._incidents.mark_defense_failed(
+                    failed_action.incident_id,
+                    stage="delivery",
+                    error_detail=failed_action.error_message,
+                )
         commands: list[AgentCommandContract] = []
         for a in actions:
             commands.append(
@@ -495,6 +510,17 @@ class DefenseService:
             elif action.action_type == "CLEAR_OS_CACHE":
                 action_note = "os-cache: CLEAR"
             await self._incidents.mark_mitigating(action.incident_id, action_note=action_note)
+        elif (
+            action.incident_id is not None
+            and self._incidents is not None
+            and request.status in (DefenseActionStatus.FAILED, DefenseActionStatus.EXPIRED)
+            and action.action_type != "UNBLOCK_IP_NFTABLES"
+        ):
+            await self._incidents.mark_defense_failed(
+                action.incident_id,
+                stage="delivery" if request.status == DefenseActionStatus.EXPIRED else "execution",
+                error_detail=request.error_message,
+            )
 
         # Trigger recovery completion hook if unblock action was acknowledged
         if self._recovery_ack_handler is not None and action.action_type == "UNBLOCK_IP_NFTABLES":

@@ -3,6 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import HTTPException
 from fastapi import status as http_status
@@ -14,6 +15,7 @@ from sentinelx_common.contracts.detection import (
     ResourceAnomalyDetail,
 )
 from sentinelx_common.contracts.incidents import (
+    IncidentDefenseStatus,
     IncidentDetailResponse,
     IncidentListResponse,
     IncidentResponse,
@@ -21,6 +23,7 @@ from sentinelx_common.contracts.incidents import (
     IncidentUpdateRequest,
 )
 from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
+from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
 from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.detection.service import DetectionService
@@ -49,6 +52,44 @@ _METRIC_LABELS: dict[str, str] = {
     "memory_percent": "RAM",
     "disk_percent": "Ổ đĩa",
 }
+
+_DELIVERY_FAILED_MARKER = "lỗi tải lệnh:"
+_EXECUTION_FAILED_MARKER = "lỗi kích hoạt:"
+_CLOSED_SUPPRESSION_WINDOW = timedelta(seconds=60)
+
+
+def _strip_error_lines(summary: str | None) -> str:
+    if not summary:
+        return ""
+    kept = [
+        line
+        for line in summary.splitlines()
+        if not line.startswith((_DELIVERY_FAILED_MARKER, _EXECUTION_FAILED_MARKER))
+    ]
+    return "\n".join(kept).strip()
+
+
+def _extract_defense_status(summary: str | None, status: str) -> IncidentDefenseStatus | None:
+    if status != IncidentStatus.DETECTED.value or not summary:
+        return None
+    if _DELIVERY_FAILED_MARKER in summary:
+        return IncidentDefenseStatus.DELIVERY_FAILED
+    if _EXECUTION_FAILED_MARKER in summary:
+        return IncidentDefenseStatus.EXECUTION_FAILED
+    return None
+
+
+def _expected_title(event: DetectionEventContract) -> str:
+    if event.detector_name == "traffic_spike_detector":
+        attack_type = getattr(event.details, "attack_type", None)
+        if not attack_type and isinstance(event.details, dict):
+            attack_type = event.details.get("attack_type")
+        return (
+            "Đột biến lưu lượng mạng"
+            if attack_type == "TRAFFIC_SPIKE"
+            else "Tấn công UDP Flood"
+        )
+    return DETECTOR_TITLES.get(event.detector_name, f"Sự cố {event.detector_name}")
 
 
 def _format_port_list(ports: list[int]) -> str:
@@ -183,21 +224,37 @@ class IncidentService:
         is_new = False
 
         if active_incident is None:
+            closed_incident = await self._repo.find_recently_closed_incident(
+                project_id,
+                since,
+                node_id=node_id,
+                correlation_key=correlation_key,
+            )
+            if (
+                isinstance(closed_incident, IncidentModel)
+                and closed_incident.resolved_at is not None
+            ):
+                resolved_at = ensure_utc(closed_incident.resolved_at)
+                in_grace = (now - resolved_at) < _CLOSED_SUPPRESSION_WINDOW
+                surviving: list[DetectionEventContract] = []
+                for ev in events:
+                    detected_at = ensure_utc(ev.detected_at)
+                    if detected_at <= resolved_at:
+                        continue
+                    same_context = (
+                        correlation_key.startswith("network:")
+                        or _expected_title(ev) == closed_incident.title
+                    )
+                    if in_grace and same_context:
+                        continue
+                    surviving.append(ev)
+                if not surviving:
+                    return []
+                events = surviving
+
             is_new = True
             first_event = events[0]
-            if first_event.detector_name == "traffic_spike_detector":
-                attack_type = getattr(first_event.details, "attack_type", None)
-                if not attack_type and isinstance(first_event.details, dict):
-                    attack_type = first_event.details.get("attack_type")
-                if attack_type == "TRAFFIC_SPIKE":
-                    title = "Đột biến lưu lượng mạng"
-                else:
-                    title = "Tấn công UDP Flood"
-            else:
-                title = DETECTOR_TITLES.get(
-                    first_event.detector_name,
-                    f"Sự cố {first_event.detector_name}",
-                )
+            title = _expected_title(first_event)
             peak_event = max(events, key=lambda e: SEVERITY_WEIGHT[e.severity.value])
             active_incident = IncidentModel(
                 project_id=project_id,
@@ -224,7 +281,13 @@ class IncidentService:
             new_summary = _format_event_summary(latest_event)
             existing_summary = active_incident.summary or ""
             preserved_suffix: str | None = None
-            for marker in ("\nnftables:", "\nservice:", "\nos-cache:"):
+            for marker in (
+                "\nnftables:",
+                "\nservice:",
+                "\nos-cache:",
+                f"\n{_DELIVERY_FAILED_MARKER}",
+                f"\n{_EXECUTION_FAILED_MARKER}",
+            ):
                 if marker in existing_summary:
                     preserved_suffix = marker + existing_summary.split(marker, 1)[1]
                     break
@@ -289,6 +352,9 @@ class IncidentService:
                     started_at=active_incident.started_at,
                     resolved_at=active_incident.resolved_at,
                     summary=active_incident.summary,
+                    defense_status=_extract_defense_status(
+                        active_incident.summary, active_incident.status
+                    ),
                     event_count=len(events),
                 ),
                 events,
@@ -303,11 +369,54 @@ class IncidentService:
         incident = await self._repo.get_by_id(incident_id)
         if incident is not None and incident.status == "DETECTED":
             incident.status = "MITIGATING"
-            if action_note and (not incident.summary or action_note not in incident.summary):
-                incident.summary = (
-                    f"{incident.summary}\n{action_note}" if incident.summary else action_note
-                )
+            cleaned = _strip_error_lines(incident.summary)
+            if action_note and action_note not in cleaned:
+                incident.summary = f"{cleaned}\n{action_note}" if cleaned else action_note
+            else:
+                incident.summary = cleaned or None
             await self._repo.save(incident)
+
+    async def mark_defense_failed(
+        self,
+        incident_id: uuid.UUID,
+        *,
+        stage: Literal["delivery", "execution"],
+        error_detail: str | None = None,
+    ) -> None:
+        """Ghi nhận trạng thái lỗi tải lệnh hoặc lỗi kích hoạt cho sự cố đang mở."""
+        incident = await self._repo.get_by_id(incident_id)
+        if incident is None or incident.status != IncidentStatus.DETECTED.value:
+            return
+        prefix = _DELIVERY_FAILED_MARKER if stage == "delivery" else _EXECUTION_FAILED_MARKER
+        fallback = (
+            "Hết hạn tải hoặc quá số lần gửi lệnh tới Agent"
+            if stage == "delivery"
+            else "Agent thực thi lệnh thất bại"
+        )
+        detail = (error_detail or "").strip() or fallback
+        note = f"{prefix} {detail}"
+        base_summary = _strip_error_lines(incident.summary)
+        incident.summary = f"{base_summary}\n{note}" if base_summary else note
+        await self._repo.save(incident)
+
+        defense_status = _extract_defense_status(incident.summary, incident.status)
+        msg = RealtimeMessage(
+            event=RealtimeEventType.INCIDENT_UPDATE.value,
+            data={
+                "id": str(incident.id),
+                "project_id": str(incident.project_id),
+                "title": incident.title,
+                "status": incident.status,
+                "severity": incident.severity,
+                "defense_status": defense_status.value if defense_status else None,
+                "summary": incident.summary,
+            },
+            timestamp=datetime.now(UTC),
+        )
+        if self._publisher is not None:
+            self._publisher.enqueue(msg)
+        elif self._realtime_hub is not None:
+            await self._realtime_hub.broadcast(msg)
 
     async def resolve_if_quiet(self, incident_id: uuid.UUID, quiet_after: datetime) -> bool:
         incident = await self._repo.get_by_id(incident_id)
@@ -390,6 +499,7 @@ class IncidentService:
                     started_at=m.started_at,
                     resolved_at=m.resolved_at,
                     summary=m.summary,
+                    defense_status=_extract_defense_status(m.summary, m.status),
                     event_count=count,
                 )
             )
@@ -432,6 +542,7 @@ class IncidentService:
             started_at=model.started_at,
             resolved_at=model.resolved_at,
             summary=model.summary,
+            defense_status=_extract_defense_status(model.summary, model.status),
             event_count=count,
             events=events_list,
         )
@@ -499,5 +610,6 @@ class IncidentService:
             started_at=model.started_at,
             resolved_at=model.resolved_at,
             summary=model.summary,
+            defense_status=_extract_defense_status(model.summary, model.status),
             event_count=count,
         )

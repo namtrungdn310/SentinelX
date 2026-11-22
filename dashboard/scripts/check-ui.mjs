@@ -506,6 +506,28 @@ try {
         }));
         assert.ok(falsePositiveModal.includes("Báo động giả"));
         assert.ok(!falsePositiveModal.includes("Đánh dấu đã giải quyết"));
+
+        const deliveryFailedModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: { ...scan, defense_status: "DELIVERY_FAILED" },
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(deliveryFailedModal.includes("Tải lệnh bị lỗi"));
+        assert.ok(deliveryFailedModal.includes("Đánh dấu đã giải quyết"));
+
+        const executionFailedModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: { ...scan, defense_status: "EXECUTION_FAILED" },
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(executionFailedModal.includes("Kích hoạt bị lỗi"));
+        assert.ok(executionFailedModal.includes("Đánh dấu đã giải quyết"));
     });
     const originalFetch = globalThis.fetch;
     try {

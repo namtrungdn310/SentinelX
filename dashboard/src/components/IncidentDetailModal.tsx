@@ -10,7 +10,7 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import type { DefensePolicy, Incident, IncidentDetail, Node } from "../types";
+import type { DefenseAction, DefensePolicy, Incident, IncidentDetail, Node } from "../types";
 import {
   cancelDefenseAction,
   fetchDefenseActions,
@@ -23,6 +23,7 @@ import {
   classifyIncidentHandling,
   formatBytes,
   formatPortRanges,
+  resolveIncidentDefenseFailure,
   severityLabel,
 } from "../presentation";
 import { Modal } from "./Modal";
@@ -37,6 +38,7 @@ interface Props {
   isDemoMode: boolean;
   nodes?: Node[];
   policies?: DefensePolicy[];
+  defenseActions?: DefenseAction[];
 }
 
 export function IncidentDetailModal({
@@ -48,6 +50,7 @@ export function IncidentDetailModal({
   isDemoMode,
   nodes,
   policies,
+  defenseActions,
 }: Props) {
   const id = useId();
   const [detail, setDetail] = useState<IncidentDetail | null>(() => {
@@ -169,6 +172,11 @@ export function IncidentDetailModal({
     firstEvent?.detector_name,
   );
 
+  const defenseFailure =
+    handling.mode === "auto"
+      ? resolveIncidentDefenseFailure(incident, defenseActions)
+      : null;
+
   const statusTone =
     incident.status === "RESOLVED"
       ? "ok"
@@ -183,7 +191,11 @@ export function IncidentDetailModal({
         ? "Đang kích hoạt"
         : incident.status === "DETECTED"
           ? handling.mode === "auto"
-            ? "Đang chờ Agent tải lệnh"
+            ? defenseFailure === "DELIVERY_FAILED"
+              ? "Tải lệnh bị lỗi"
+              : defenseFailure === "EXECUTION_FAILED"
+                ? "Kích hoạt bị lỗi"
+                : "Đang chờ Agent tải lệnh"
             : "Đang diễn ra"
           : incident.status === "FALSE_POSITIVE"
             ? "Báo động giả"

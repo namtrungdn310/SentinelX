@@ -92,6 +92,24 @@ class DefenseRepository:
         supported_actions: list[str] | None = None,
     ) -> list[DefenseActionModel]:
         """Claim pending/expired leases, bounded by command expiry and retry budget."""
+        claimed, _ = await self.claim_pending_commands(
+            node_id=node_id,
+            limit=limit,
+            lease_seconds=lease_seconds,
+            max_attempts=max_attempts,
+            supported_actions=supported_actions,
+        )
+        return claimed
+
+    async def claim_pending_commands(
+        self,
+        node_id: uuid.UUID,
+        limit: int = 20,
+        lease_seconds: int = 30,
+        max_attempts: int = 5,
+        supported_actions: list[str] | None = None,
+    ) -> tuple[list[DefenseActionModel], list[DefenseActionModel]]:
+        """Claim pending commands and return both claimed items and delivery failures."""
         await self.lock_node(node_id)
         now = datetime.now(UTC)
         stmt = (
@@ -113,10 +131,12 @@ class DefenseRepository:
         actions = list(result.scalars().all())
 
         claimed: list[DefenseActionModel] = []
+        delivery_failures: list[DefenseActionModel] = []
         for action in actions:
             if supported_actions is not None and action.action_type not in supported_actions:
                 action.status = "FAILED"
                 action.error_message = "Agent does not advertise support for this action"
+                delivery_failures.append(action)
                 continue
             expiry = (
                 action.expires_at.replace(tzinfo=UTC)
@@ -128,6 +148,7 @@ class DefenseRepository:
                 action.error_message = (
                     "Command expired or delivery attempts exhausted; reconcile host state"
                 )
+                delivery_failures.append(action)
                 continue
             action.status = DefenseActionStatus.SENT.value
             action.delivery_token = action.delivery_token or secrets.token_urlsafe(32)
@@ -138,7 +159,7 @@ class DefenseRepository:
         if actions:
             await self._session.flush()
 
-        return claimed
+        return claimed, delivery_failures
 
     async def record_ack(
         self,

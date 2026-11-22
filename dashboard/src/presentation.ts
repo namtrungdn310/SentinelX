@@ -1,4 +1,11 @@
-import type { DefensePolicy, DetectionSeverity, Incident, Node } from "./types";
+import type {
+  DefenseAction,
+  DefensePolicy,
+  DetectionSeverity,
+  Incident,
+  IncidentDefenseStatus,
+  Node,
+} from "./types";
 
 export const SEVERITY_LABELS: Record<DetectionSeverity, string> = {
   MEDIUM: "Trung bình",
@@ -484,4 +491,48 @@ export function classifyIncidentHandling(
     label: `Tự động · ${actionLabel}`,
     reason: `Chính sách "${activePolicy.name}" tự động thực thi`,
   };
+}
+
+export function isDeliveryFailureMessage(errorMessage?: string | null): boolean {
+  if (!errorMessage) return false;
+  const lower = errorMessage.toLowerCase();
+  return (
+    lower.includes("advertise support") ||
+    lower.includes("expired") ||
+    lower.includes("delivery attempts exhausted")
+  );
+}
+
+export function resolveIncidentDefenseFailure(
+  incident: Pick<Incident, "id" | "status" | "summary" | "defense_status">,
+  defenseActions?: DefenseAction[],
+): IncidentDefenseStatus | null {
+  if (incident.status !== "DETECTED") return null;
+  if (
+    incident.defense_status === "DELIVERY_FAILED" ||
+    incident.defense_status === "EXECUTION_FAILED"
+  ) {
+    return incident.defense_status;
+  }
+  const summary = incident.summary || "";
+  if (summary.includes("lỗi tải lệnh:")) return "DELIVERY_FAILED";
+  if (summary.includes("lỗi kích hoạt:")) return "EXECUTION_FAILED";
+  if (defenseActions && defenseActions.length > 0) {
+    const related = defenseActions
+      .filter((a) => a.incident_id === incident.id && a.action_type !== "UNBLOCK_IP_NFTABLES")
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const latest = related[0];
+    if (latest) {
+      if (
+        latest.status === "EXPIRED" ||
+        (latest.status === "FAILED" && isDeliveryFailureMessage(latest.error_message))
+      ) {
+        return "DELIVERY_FAILED";
+      }
+      if (latest.status === "FAILED") {
+        return "EXECUTION_FAILED";
+      }
+    }
+  }
+  return null;
 }
