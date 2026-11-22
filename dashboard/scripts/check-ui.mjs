@@ -463,10 +463,24 @@ try {
 
         const memResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-389");
         const cpuResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-cpu-382");
+        const memMitigating = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-405");
         assert.equal(classifyIncidentHandling(memResolved, MOCK_POLICIES).mode, "auto");
         assert.equal(classifyIncidentHandling(cpuResolved, MOCK_POLICIES).mode, "manual");
+        assert.equal(classifyIncidentHandling(memMitigating, MOCK_POLICIES).mode, "auto");
         assert.ok(html.includes("inc-mem-389"));
         assert.ok(memResolved.summary.includes("\nservice: RESTART java"));
+
+        const memMitigatingModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: memMitigating,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(memMitigatingModal.includes("Đang ngăn chặn"));
+        assert.ok(memMitigatingModal.includes("Kích hoạt khởi động lại dịch vụ nginx"));
+        assert.ok(memMitigatingModal.includes("\nservice: RESTART nginx"));
     });
     const originalFetch = globalThis.fetch;
     try {

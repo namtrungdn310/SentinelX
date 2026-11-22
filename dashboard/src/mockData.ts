@@ -180,6 +180,20 @@ export const MOCK_INCIDENTS: Incident[] = [
     targeted_service: "Dịch vụ Java Application Gateway",
   },
   {
+    id: "inc-mem-405",
+    project_id: PROJ_PROD_ID,
+    node_id: "node-api-02",
+    title: "Quá tải RAM",
+    status: "MITIGATING",
+    severity: "CRITICAL",
+    started_at: new Date(Date.now() - 10 * 60000).toISOString(),
+    resolved_at: null,
+    summary:
+      "RAM: 92.1% (3.68 / 4.0 GB, >= 85.0%) · 3 mẫu · nginx (PID 5104): 44.5%\nservice: RESTART nginx",
+    event_count: 3,
+    targeted_service: "Dịch vụ Web Proxy Nginx",
+  },
+  {
     id: "inc-scan-402",
     project_id: PROJ_PROD_ID,
     node_id: "node-api-02",
@@ -665,6 +679,32 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
       },
     ],
   },
+  "inc-mem-405": {
+    ...getMockIncident("inc-mem-405"),
+    events: [
+      {
+        id: "ev-mem-405-01",
+        incident_id: "inc-mem-405",
+        node_id: "node-api-02",
+        detector_name: "memory_exhaustion_detector",
+        severity: "CRITICAL",
+        attacker_ip: null,
+        confidence_score: 0.96,
+        details: {
+          metric_name: "memory_percent",
+          process_name: "nginx",
+          pid: 5104,
+          process_count: 4,
+          cgroup: "nginx.service",
+          process_percent: 44.5,
+          current_value: 92.1,
+          threshold_value: 85.0,
+          command: "nginx: worker process",
+        },
+        detected_at: new Date(Date.now() - 10 * 60000).toISOString(),
+      },
+    ],
+  },
 };
 
 export const MOCK_DEFENSE_ACTIONS: DefenseAction[] = [
@@ -732,6 +772,19 @@ export const MOCK_DEFENSE_ACTIONS: DefenseAction[] = [
     agent_ack_at: new Date(Date.now() - 208 * 60000).toISOString(),
     error_message: null,
     created_at: new Date(Date.now() - 209 * 60000).toISOString(),
+  },
+  {
+    id: "def-act-07",
+    incident_id: "inc-mem-405",
+    policy_id: "pol-05",
+    node_id: "node-api-02",
+    action_type: "RESTART_SERVICE",
+    target_ip: null,
+    command_payload: { service_name: "nginx", target: "nginx" },
+    status: "APPLIED",
+    agent_ack_at: new Date(Date.now() - 9 * 60000).toISOString(),
+    error_message: null,
+    created_at: new Date(Date.now() - 10 * 60000).toISOString(),
   },
   {
     id: "def-act-04",
