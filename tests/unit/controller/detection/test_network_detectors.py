@@ -115,7 +115,7 @@ def test_port_scan_detector_normal_ports_no_alert() -> None:
     assert events == []
 
 
-def test_port_scan_detector_triggers_medium_on_15_ports() -> None:
+def test_port_scan_detector_triggers_high_on_15_ports() -> None:
     detector = PortScanDetector(port_threshold=15)
     node_id = uuid.uuid4()
     ports = sorted(list(range(1000, 1016)))  # 16 ports
@@ -134,13 +134,13 @@ def test_port_scan_detector_triggers_medium_on_15_ports() -> None:
     event = events[0]
     assert event.detector_name == "port_scan_detector"
     assert event.attacker_ip == "203.0.113.88"
-    assert event.severity == DetectionSeverity.MEDIUM
+    assert event.severity == DetectionSeverity.HIGH
     assert isinstance(event.details, NetworkAnomalyDetail)
     assert event.details.attack_type == "PORT_SCAN"
     assert len(event.details.targeted_ports) == 16
 
 
-def test_port_scan_detector_triggers_high_on_30_ports_or_truncated() -> None:
+def test_port_scan_detector_triggers_critical_on_30_ports_or_truncated() -> None:
     detector = PortScanDetector(port_threshold=15)
     node_id = uuid.uuid4()
     ports = sorted(list(range(2000, 2035)))  # 35 ports
@@ -157,7 +157,7 @@ def test_port_scan_detector_triggers_high_on_30_ports_or_truncated() -> None:
     events = detector.evaluate(node_id, window)
 
     assert len(events) == 1
-    assert events[0].severity == DetectionSeverity.HIGH
+    assert events[0].severity == DetectionSeverity.CRITICAL
 
 
 # ─── 3. TRAFFIC SPIKE DETECTOR TESTS ───

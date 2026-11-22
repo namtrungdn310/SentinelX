@@ -2547,12 +2547,6 @@ body:has(.event-full) .event-full {
     border: 1px solid #fde68a;
 }
 
-.severity-badge.low {
-    color: var(--brand-indigo);
-    background: var(--brand-indigo-subtle);
-    border: 1px solid #c7d2fe;
-}
-
 .incident-modal {
     max-width: 720px;
     width: 90vw;

@@ -13,7 +13,6 @@ from sentinelx_common.contracts.base import SentinelXBaseModel
 class DetectionSeverity(StrEnum):
     """Mức độ nghiêm trọng của sự kiện bất thường."""
 
-    LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"

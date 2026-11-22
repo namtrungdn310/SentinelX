@@ -1,7 +1,6 @@
 import type { DetectionSeverity, Node } from "./types";
 
 export const SEVERITY_LABELS: Record<DetectionSeverity, string> = {
-  LOW: "Thấp",
   MEDIUM: "Trung bình",
   HIGH: "Cao",
   CRITICAL: "Khẩn cấp",

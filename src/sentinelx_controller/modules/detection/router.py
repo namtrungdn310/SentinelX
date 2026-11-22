@@ -51,7 +51,7 @@ async def list_detection_events(
     service: Annotated[DetectionService, Depends(get_detection_service)],
     node_id: Annotated[str | None, Query(description="Filter by node ID")] = None,
     severity: Annotated[
-        DetectionSeverity | None, Query(description="Filter by severity (LOW, HIGH, etc)")
+        DetectionSeverity | None, Query(description="Filter by severity (MEDIUM, HIGH, CRITICAL)")
     ] = None,
     start_time: Annotated[AwareDatetime | None, Query(description="Start time (UTC)")] = None,
     end_time: Annotated[AwareDatetime | None, Query(description="End time (UTC)")] = None,

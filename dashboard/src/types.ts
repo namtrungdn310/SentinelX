@@ -61,7 +61,7 @@ export interface DetectionEvent {
   id: string;
   node_id: string;
   detector_name: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  severity: 'MEDIUM' | 'HIGH' | 'CRITICAL';
   detected_at: string;
   details: Record<string, unknown>;
 }
@@ -71,7 +71,7 @@ export interface DetectionEvent {
 // ----------------------------------------------------
 
 export type IncidentStatus = 'DETECTED' | 'MITIGATING' | 'RESOLVED' | 'FALSE_POSITIVE';
-export type DetectionSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type DetectionSeverity = 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface Incident {
   id: string;

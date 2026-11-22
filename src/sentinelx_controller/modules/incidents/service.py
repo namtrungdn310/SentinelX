@@ -29,7 +29,6 @@ from sentinelx_controller.modules.incidents.repository import IncidentRepository
 logger = logging.getLogger(__name__)
 
 SEVERITY_WEIGHT = {
-    DetectionSeverity.LOW.value: 1,
     DetectionSeverity.MEDIUM.value: 2,
     DetectionSeverity.HIGH.value: 3,
     DetectionSeverity.CRITICAL.value: 4,

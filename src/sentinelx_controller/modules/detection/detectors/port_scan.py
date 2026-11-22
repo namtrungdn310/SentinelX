@@ -37,9 +37,9 @@ class PortScanDetector(BaseNetworkDetector):
             )
             if normalized_ports >= self.port_threshold or feature.ports_truncated:
                 severity = (
-                    DetectionSeverity.HIGH
+                    DetectionSeverity.CRITICAL
                     if ports_count >= 30 or feature.ports_truncated
-                    else DetectionSeverity.MEDIUM
+                    else DetectionSeverity.HIGH
                 )
                 confidence = (
                     0.95 if feature.ports_truncated else min(0.92, 0.80 + (ports_count * 0.005))

@@ -147,16 +147,10 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             <ShieldX size={13} /> {SEVERITY_LABELS.HIGH}
           </span>
         );
-      case "MEDIUM":
+      default:
         return (
           <span className="severity-badge medium">
             <ShieldAlert size={13} /> {SEVERITY_LABELS.MEDIUM}
-          </span>
-        );
-      default:
-        return (
-          <span className="severity-badge low">
-            <ShieldCheck size={13} /> {SEVERITY_LABELS.LOW}
           </span>
         );
     }
@@ -243,7 +237,6 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             <option value="CRITICAL">{SEVERITY_LABELS.CRITICAL}</option>
             <option value="HIGH">{SEVERITY_LABELS.HIGH}</option>
             <option value="MEDIUM">{SEVERITY_LABELS.MEDIUM}</option>
-            <option value="LOW">{SEVERITY_LABELS.LOW}</option>
           </select>
 
           <button
