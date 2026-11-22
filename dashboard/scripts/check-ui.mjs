@@ -383,6 +383,7 @@ try {
         }));
         assert.ok(html.includes("Xử lý tự động"));
         assert.ok(html.includes("Cần xử lý thủ công"));
+        assert.ok(html.includes("Đang chờ Agent xử lý"));
         assert.ok(!html.includes("incident-section-header"));
         assert.ok(html.includes("inc-syn-401"));
         assert.ok(!html.includes("inc-cpu-385"));

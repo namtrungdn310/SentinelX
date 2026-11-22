@@ -104,6 +104,13 @@ export function IncidentDetailModal({
     }
   };
 
+  const firstEvent = detail?.events?.[0];
+  const handling = classifyIncidentHandling(
+    incident,
+    policies ?? (isDemoMode ? MOCK_POLICIES : []),
+    firstEvent?.detector_name,
+  );
+
   const statusTone =
     incident.status === "RESOLVED"
       ? "ok"
@@ -117,7 +124,9 @@ export function IncidentDetailModal({
       : incident.status === "MITIGATING"
         ? "Đang ngăn chặn"
         : incident.status === "DETECTED"
-          ? "Đang diễn ra"
+          ? handling.mode === "auto"
+            ? "Đang chờ Agent xử lý"
+            : "Đang diễn ra"
           : incident.status;
 
   const severityTone =
@@ -126,13 +135,6 @@ export function IncidentDetailModal({
       : incident.severity === "HIGH"
         ? "warn"
         : "medium";
-
-  const firstEvent = detail?.events?.[0];
-  const handling = classifyIncidentHandling(
-    incident,
-    policies ?? (isDemoMode ? MOCK_POLICIES : []),
-    firstEvent?.detector_name,
-  );
   const incidentNode = nodes?.find(
     (n) => n.id === (incident.node_id || firstEvent?.node_id)
   );

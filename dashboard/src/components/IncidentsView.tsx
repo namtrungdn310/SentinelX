@@ -158,7 +158,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
       case "DETECTED":
         return (
           <span className="status-badge crit">
-            <i /> Đang diễn ra
+            <i /> {handlingTab === "auto" ? "Đang chờ Agent xử lý" : "Đang diễn ra"}
           </span>
         );
       default:
@@ -196,13 +196,13 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
 
         <div className="panel kpi-card">
           <div className="kpi-head">
-            <span className="kpi-label">Đang diễn ra</span>
+            <span className="kpi-label">Chờ xử lý</span>
             <AlertOctagon size={18} style={{ color: "var(--status-crit)" }} />
           </div>
           <div className="kpi-value" style={{ color: "var(--status-crit)" }}>
             {countDetected}
           </div>
-          <span className="kpi-footnote">Cần rà soát hoặc kích hoạt ngăn chặn</span>
+          <span className="kpi-footnote">Chờ Agent thực thi hoặc xử lý thủ công</span>
         </div>
 
         <div className="panel kpi-card">
@@ -246,7 +246,10 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             role="tab"
             aria-selected={handlingTab === "manual"}
             className={`segmented-tab ${handlingTab === "manual" ? "active" : ""}`}
-            onClick={() => setHandlingTab("manual")}
+            onClick={() => {
+              setHandlingTab("manual");
+              if (statusFilter === "MITIGATING") setStatusFilter("all");
+            }}
           >
             <span>Cần xử lý thủ công</span>
             <span className="count-pill">{manualIncidents.length}</span>
@@ -273,8 +276,12 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             aria-label="Lọc theo trạng thái sự cố"
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="DETECTED">Đang diễn ra</option>
-            <option value="MITIGATING">Đang ngăn chặn</option>
+            <option value="DETECTED">
+              {handlingTab === "auto" ? "Đang chờ Agent xử lý" : "Đang diễn ra"}
+            </option>
+            {handlingTab === "auto" && (
+              <option value="MITIGATING">Đang ngăn chặn</option>
+            )}
             <option value="RESOLVED">Đã giải quyết</option>
           </select>
 
