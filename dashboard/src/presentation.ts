@@ -1,4 +1,17 @@
-import type { Node } from "./types";
+import type { DetectionSeverity, Node } from "./types";
+
+export const SEVERITY_LABELS: Record<DetectionSeverity, string> = {
+  LOW: "Thấp",
+  MEDIUM: "Trung bình",
+  HIGH: "Cao",
+  CRITICAL: "Khẩn cấp",
+};
+
+export function severityLabel(severity: string, fallback = severity): string {
+  return Object.hasOwn(SEVERITY_LABELS, severity)
+    ? SEVERITY_LABELS[severity as DetectionSeverity]
+    : fallback;
+}
 export type Health = "ok" | "warn" | "crit" | "unenrolled" | "unknown";
 export const validMetric = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;

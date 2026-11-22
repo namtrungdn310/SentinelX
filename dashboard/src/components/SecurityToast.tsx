@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { CheckCircle2, X } from "lucide-react";
+import { severityLabel } from "../presentation";
 
 export interface SecurityToastPayload {
   id: string;
@@ -16,13 +17,6 @@ interface Props {
   onClose: (id: string) => void;
   onNavigate: (view: string) => void;
 }
-
-const severityLabels: Record<string, string> = {
-  CRITICAL: "Khẩn cấp",
-  HIGH: "Cao",
-  MEDIUM: "Trung bình",
-  LOW: "Thấp",
-};
 
 function SecurityToastItem({
   toast,
@@ -68,7 +62,7 @@ function SecurityToastItem({
           </div>
           {!isDefense && !isSettings && !isRecovery && toast.severity && (
             <span className="toast-severity-badge font-mono">
-              {severityLabels[toast.severity] ?? toast.severity}
+              {severityLabel(toast.severity)}
             </span>
           )}
         </div>

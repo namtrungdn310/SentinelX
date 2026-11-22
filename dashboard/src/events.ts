@@ -1,4 +1,5 @@
 import type { Node, RealtimeMessage } from "./types";
+import { severityLabel } from "./presentation";
 
 export type EventCategory =
   | "all"
@@ -48,14 +49,7 @@ export function eventLabel(event: string): string {
 
 export function detectionMessage(event: RealtimeMessage): string {
   const details = event.data.details;
-  const severities: Record<string, string> = {
-    LOW: "Thấp",
-    MEDIUM: "Trung bình",
-    HIGH: "Cao",
-    CRITICAL: "Nghiêm trọng",
-  };
-  const rawSeverity = String(event.data.severity);
-  const severity = Object.hasOwn(severities, rawSeverity) ? severities[rawSeverity] : "Cảnh báo";
+  const severity = severityLabel(String(event.data.severity), "Cảnh báo");
   if (!details || typeof details !== "object" || Array.isArray(details)) return severity;
   const value = details as Record<string, unknown>;
   const names: Record<string, string> = {

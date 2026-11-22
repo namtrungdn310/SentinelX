@@ -13,7 +13,7 @@ import {
 import type { Incident, IncidentStatus, DetectionSeverity, Node } from "../types";
 import { fetchIncidents } from "../api";
 import { MOCK_INCIDENTS } from "../mockData";
-import { getPortSummary } from "../presentation";
+import { getPortSummary, SEVERITY_LABELS } from "../presentation";
 import { IncidentDetailModal } from "./IncidentDetailModal";
 
 interface Props {
@@ -138,25 +138,25 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
       case "CRITICAL":
         return (
           <span className="severity-badge crit">
-            <AlertOctagon size={13} /> Khẩn cấp
+            <AlertOctagon size={13} /> {SEVERITY_LABELS.CRITICAL}
           </span>
         );
       case "HIGH":
         return (
           <span className="severity-badge warn">
-            <ShieldX size={13} /> Cao
+            <ShieldX size={13} /> {SEVERITY_LABELS.HIGH}
           </span>
         );
       case "MEDIUM":
         return (
           <span className="severity-badge medium">
-            <ShieldAlert size={13} /> Trung bình
+            <ShieldAlert size={13} /> {SEVERITY_LABELS.MEDIUM}
           </span>
         );
       default:
         return (
           <span className="severity-badge low">
-            <ShieldCheck size={13} /> Thấp
+            <ShieldCheck size={13} /> {SEVERITY_LABELS.LOW}
           </span>
         );
     }
@@ -240,10 +240,10 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             aria-label="Lọc theo mức độ nghiêm trọng"
           >
             <option value="all">Tất cả mức độ</option>
-            <option value="CRITICAL">Khẩn cấp</option>
-            <option value="HIGH">Cao</option>
-            <option value="MEDIUM">Trung bình</option>
-            <option value="LOW">Thấp</option>
+            <option value="CRITICAL">{SEVERITY_LABELS.CRITICAL}</option>
+            <option value="HIGH">{SEVERITY_LABELS.HIGH}</option>
+            <option value="MEDIUM">{SEVERITY_LABELS.MEDIUM}</option>
+            <option value="LOW">{SEVERITY_LABELS.LOW}</option>
           </select>
 
           <button

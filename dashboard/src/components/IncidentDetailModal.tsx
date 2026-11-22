@@ -13,7 +13,7 @@ import {
 import type { Incident, IncidentDetail, Node } from "../types";
 import { fetchIncidentDetail, updateIncident } from "../api";
 import { MOCK_INCIDENT_DETAILS } from "../mockData";
-import { formatBytes, formatPortRanges } from "../presentation";
+import { formatBytes, formatPortRanges, severityLabel } from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -120,13 +120,6 @@ export function IncidentDetailModal({
         ? "warn"
         : "ok";
 
-  const severityLabels: Record<string, string> = {
-    CRITICAL: "Khẩn cấp",
-    HIGH: "Cao",
-    MEDIUM: "Trung bình",
-    LOW: "Thấp",
-  };
-
   const firstEvent = detail?.events?.[0];
   const incidentNode = nodes?.find(
     (n) => n.id === (incident.node_id || firstEvent?.node_id)
@@ -201,7 +194,7 @@ export function IncidentDetailModal({
             <span className="meta-label">Mức độ</span>
             <span className={`status-badge ${severityTone}`}>
               <i />
-              {severityLabels[incident.severity] ?? incident.severity}
+              {severityLabel(incident.severity)}
             </span>
           </div>
           <div className="meta-card">

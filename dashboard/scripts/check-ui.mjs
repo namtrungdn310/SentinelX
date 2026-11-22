@@ -204,7 +204,7 @@ try {
     }};
     check("Detection alerts show severity and resource details with text, and belong to Alert category", () => {
         const html = renderToStaticMarkup(createElement(LiveEventStream, { events: [detection], nodes: [node], isConnected: true, isDemoMode: false }));
-        assert.ok(html.includes("Nghiêm trọng"));
+        assert.ok(html.includes("Khẩn cấp"));
         assert.ok(html.includes("CPU 98% ≥ 95%"));
         assert.ok(html.includes("3 mẫu liên tiếp"));
         assert.ok(html.includes("Bất thường tài nguyên"));
