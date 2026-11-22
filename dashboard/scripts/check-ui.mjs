@@ -427,6 +427,13 @@ try {
         }));
         assert.ok(cpuModalHtml.includes("Đang diễn ra"));
         assert.ok(!cpuModalHtml.includes("Chính sách tự động đang tắt"));
+
+        const synResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-syn-390");
+        const diskResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-disk-391");
+        assert.equal(classifyIncidentHandling(synResolved, MOCK_POLICIES).mode, "auto");
+        assert.equal(classifyIncidentHandling(diskResolved, MOCK_POLICIES).mode, "manual");
+        assert.ok(html.includes("inc-syn-390"));
+        assert.ok(html.includes("Đã giải quyết"));
     });
     const originalFetch = globalThis.fetch;
     try {
