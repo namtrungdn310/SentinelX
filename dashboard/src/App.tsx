@@ -3,7 +3,6 @@ import {
   Activity,
   ChevronRight,
   Box,
-  Clock,
   LayoutDashboard,
   Server,
   Settings2,
@@ -43,8 +42,7 @@ import { AddProjectModal } from "./components/AddProjectModal";
 import { AuthView } from "./components/AuthView";
 import { authService, type User } from "./auth";
 import { useInfrastructure } from "./useInfrastructure";
-import type { Node, PresetProfileType } from "./types";
-import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "./mockData";
+import type { Node } from "./types";
 
 const STORAGE_KEY_SELECTED_PROJECT = "sentinelx_selected_project_id";
 
@@ -232,20 +230,6 @@ export function App() {
     policies: "Chính sách bảo vệ",
     settings: "Thiết lập cấu hình",
   };
-  const activeProjectProfile = useMemo(() => {
-    if (!selectedProjectId) return "balanced";
-    try {
-      const saved = localStorage.getItem(`sentinelx_settings_${selectedProjectId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.active_profile) return parsed.active_profile;
-      }
-    } catch {
-      // fallback
-    }
-    return MOCK_PROJECT_SETTINGS[selectedProjectId]?.active_profile || "balanced";
-  }, [selectedProjectId]);
-  const activePreset = TELEMETRY_PRESETS[activeProjectProfile as PresetProfileType] || TELEMETRY_PRESETS.balanced;
   const openDetail = (node: Node) => {
     setSelectedNodeId(node.id);
     setDetailNodeId(node.id);
@@ -602,14 +586,6 @@ export function App() {
                     Lịch sử CPU &amp; RAM <span className="panel-unit">%</span>
                   </h2>
                   <div className="telemetry-controls-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <a
-                      href="#settings"
-                      className="cadence-profile-pill font-mono"
-                      title="Nhấp để xem và thay đổi cấu hình chu kỳ đo"
-                    >
-                      <Clock size={12} />
-                      <span>Chu kỳ đo: {activePreset.telemetry_interval_seconds}s ({activePreset.name.split(" ")[0]})</span>
-                    </a>
                     <select
                       aria-label="Số mẫu telemetry"
                       value={sampleLimit}
