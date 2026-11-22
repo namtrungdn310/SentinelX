@@ -158,7 +158,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
       case "DETECTED":
         return (
           <span className="status-badge crit">
-            <i /> {handlingTab === "auto" ? "Đang chờ Agent xử lý" : "Đang diễn ra"}
+            <i /> {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
           </span>
         );
       default:
@@ -202,7 +202,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           <div className="kpi-value" style={{ color: "var(--status-crit)" }}>
             {countDetected}
           </div>
-          <span className="kpi-footnote">Chờ Agent thực thi hoặc xử lý thủ công</span>
+          <span className="kpi-footnote">Chờ Agent tải lệnh hoặc xử lý thủ công</span>
         </div>
 
         <div className="panel kpi-card">
@@ -277,7 +277,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           >
             <option value="all">Tất cả trạng thái</option>
             <option value="DETECTED">
-              {handlingTab === "auto" ? "Đang chờ Agent xử lý" : "Đang diễn ra"}
+              {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
             </option>
             {handlingTab === "auto" && (
               <option value="MITIGATING">Đang ngăn chặn</option>

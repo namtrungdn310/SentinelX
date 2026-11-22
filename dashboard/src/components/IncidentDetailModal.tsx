@@ -125,7 +125,7 @@ export function IncidentDetailModal({
         ? "Đang ngăn chặn"
         : incident.status === "DETECTED"
           ? handling.mode === "auto"
-            ? "Đang chờ Agent xử lý"
+            ? "Đang chờ Agent tải lệnh"
             : "Đang diễn ra"
           : incident.status;
 
