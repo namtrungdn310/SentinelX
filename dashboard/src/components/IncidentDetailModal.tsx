@@ -153,9 +153,7 @@ export function IncidentDetailModal({
         ? handling.mode === "auto"
           ? "Xử lý tự động · Đã hoàn tất"
           : "Xử lý thủ công · Đã đóng"
-        : handling.mode === "auto"
-          ? null
-          : handling.reason;
+        : null;
 
   return (
     <Modal onClose={onClose} labelledBy={`${id}-title`} className="incident-modal">

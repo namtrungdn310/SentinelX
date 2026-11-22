@@ -383,7 +383,9 @@ try {
             isDemoMode: true,
         }));
         assert.ok(html.includes("Xử lý tự động"));
-        assert.ok(html.includes("Cần xử lý thủ công"));
+        assert.ok(html.includes("Xử lý thủ công"));
+        assert.ok(!html.includes("Cần xử lý thủ công"));
+        assert.ok(!html.includes('<option value="MEDIUM">'));
         assert.ok(html.includes("Đang chờ Agent tải lệnh"));
         assert.ok(!html.includes("incident-section-header"));
         assert.ok(html.includes("inc-syn-401"));
@@ -414,6 +416,17 @@ try {
         }));
         assert.ok(memModalHtml.includes("Đang chờ Agent tải lệnh"));
         assert.ok(!memModalHtml.includes("Tự động · Tự động tối ưu"));
+
+        const cpuModalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: cpu,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(cpuModalHtml.includes("Đang diễn ra"));
+        assert.ok(!cpuModalHtml.includes("Chính sách tự động đang tắt"));
     });
     const originalFetch = globalThis.fetch;
     try {

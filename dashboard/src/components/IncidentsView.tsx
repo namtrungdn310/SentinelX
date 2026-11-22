@@ -251,7 +251,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
               if (statusFilter === "MITIGATING") setStatusFilter("all");
             }}
           >
-            <span>Cần xử lý thủ công</span>
+            <span>Xử lý thủ công</span>
             <span className="count-pill">{manualIncidents.length}</span>
           </button>
         </div>
@@ -293,7 +293,6 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             <option value="all">Tất cả mức độ</option>
             <option value="CRITICAL">{SEVERITY_LABELS.CRITICAL}</option>
             <option value="HIGH">{SEVERITY_LABELS.HIGH}</option>
-            <option value="MEDIUM">{SEVERITY_LABELS.MEDIUM}</option>
           </select>
 
           <button
@@ -325,7 +324,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
             aria-label={
               handlingTab === "auto"
                 ? "Danh sách sự cố có xử lý tự động"
-                : "Danh sách sự cố cần xử lý thủ công"
+                : "Danh sách sự cố xử lý thủ công"
             }
           >
             <thead>
@@ -352,7 +351,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
                             ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
                             : handlingTab === "auto"
                               ? "Không có sự cố nào thuộc nhóm xử lý tự động."
-                              : "Không có sự cố nào cần xử lý thủ công."}
+                              : "Không có sự cố nào thuộc nhóm xử lý thủ công."}
                         </p>
                       </div>
                     </div>
