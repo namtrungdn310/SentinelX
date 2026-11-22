@@ -482,6 +482,30 @@ try {
         assert.ok(memMitigatingModal.includes("Đang kích hoạt"));
         assert.ok(!memMitigatingModal.includes("Kích hoạt khởi động lại dịch vụ nginx"));
         assert.ok(memMitigatingModal.includes("\nservice: RESTART nginx"));
+        assert.ok(memMitigatingModal.includes("Đánh dấu đã giải quyết"));
+        assert.ok(!synResolvedModal.includes("Đánh dấu đã giải quyết"));
+
+        const scanModalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: scan,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(scanModalHtml.includes("Đang chờ Agent tải lệnh"));
+        assert.ok(scanModalHtml.includes("Đánh dấu đã giải quyết"));
+
+        const falsePositiveModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: { ...scan, status: "FALSE_POSITIVE" },
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(falsePositiveModal.includes("Báo động giả"));
+        assert.ok(!falsePositiveModal.includes("Đánh dấu đã giải quyết"));
     });
     const originalFetch = globalThis.fetch;
     try {

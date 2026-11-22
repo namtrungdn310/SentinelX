@@ -26,14 +26,16 @@ import {
   SEVERITY_LABELS,
 } from "../presentation";
 import { IncidentDetailModal } from "./IncidentDetailModal";
+import type { SecurityToastPayload } from "./SecurityToast";
 
 interface Props {
   selectedProjectId: string | null;
   nodes?: Node[];
   isDemoMode: boolean;
+  onNotify?: (toast: SecurityToastPayload) => void;
 }
 
-export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
+export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }: Props) {
   const [incidents, setIncidents] = useState<Incident[]>(() => {
     if (isDemoMode) {
       return selectedProjectId
@@ -138,6 +140,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
   const handleIncidentUpdated = (updated: Incident) => {
     setIncidents((prev) =>
       prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+    );
+    setSelectedIncident((prev) =>
+      prev && prev.id === updated.id ? { ...prev, ...updated } : prev
     );
   };
 
@@ -438,6 +443,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
           isOpen={Boolean(selectedIncident)}
           onClose={() => setSelectedIncident(null)}
           onIncidentUpdated={handleIncidentUpdated}
+          onNotify={onNotify}
           isDemoMode={isDemoMode}
         />
       )}

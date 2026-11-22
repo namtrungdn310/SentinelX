@@ -653,6 +653,7 @@ export function App() {
               selectedProjectId={selectedProjectId}
               nodes={nodes}
               isDemoMode={isDemoMode}
+              onNotify={pushSecurityToast}
             />
           )}
           {effectiveView === "defense" && (

@@ -11,7 +11,13 @@ import {
   X,
 } from "lucide-react";
 import type { DefensePolicy, Incident, IncidentDetail, Node } from "../types";
-import { fetchIncidentDetail, updateIncident } from "../api";
+import {
+  cancelDefenseAction,
+  fetchDefenseActions,
+  fetchIncidentDetail,
+  revertDefenseAction,
+  updateIncident,
+} from "../api";
 import { MOCK_INCIDENT_DETAILS, MOCK_POLICIES } from "../mockData";
 import {
   classifyIncidentHandling,
@@ -20,12 +26,14 @@ import {
   severityLabel,
 } from "../presentation";
 import { Modal } from "./Modal";
+import type { SecurityToastPayload } from "./SecurityToast";
 
 interface Props {
   incident: Incident | null;
   isOpen: boolean;
   onClose: () => void;
   onIncidentUpdated?: (updated: Incident) => void;
+  onNotify?: (toast: SecurityToastPayload) => void;
   isDemoMode: boolean;
   nodes?: Node[];
   policies?: DefensePolicy[];
@@ -36,6 +44,7 @@ export function IncidentDetailModal({
   isOpen,
   onClose,
   onIncidentUpdated,
+  onNotify,
   isDemoMode,
   nodes,
   policies,
@@ -78,9 +87,9 @@ export function IncidentDetailModal({
   if (!isOpen || !incident) return null;
 
   const handleResolve = async () => {
-    if (!detail) return;
     try {
       setResolving(true);
+      setError(null);
       if (isDemoMode) {
         const updated: Incident = {
           ...incident,
@@ -89,13 +98,63 @@ export function IncidentDetailModal({
         };
         setDetail((prev) => (prev ? { ...prev, ...updated } : null));
         onIncidentUpdated?.(updated);
+        onNotify?.({
+          id: `incident-resolve-${incident.id}-${Date.now()}`,
+          type: "recovery",
+          title: "Đã đánh dấu giải quyết sự cố",
+          message:
+            incident.status === "MITIGATING"
+              ? `${incident.title}: đã đóng sự cố và chuyển sang trạng thái giải quyết.`
+              : `${incident.title}: đã xác nhận giải quyết thủ công.`,
+          targetView: "incidents",
+        });
         return;
       }
+
+      const actions = await fetchDefenseActions({ incidentId: incident.id, limit: 100 });
+      const sentActions = actions.filter((a) => a.status === "SENT");
+      if (sentActions.length > 0) {
+        setError(
+          "Đang có lệnh phòng thủ đã gửi tới Agent chờ phản hồi (SENT). Vui lòng đợi Agent xác nhận xong trước khi đánh dấu đã giải quyết."
+        );
+        return;
+      }
+
+      const pendingActions = actions.filter((a) => a.status === "PENDING");
+      if (pendingActions.length > 0) {
+        await Promise.all(pendingActions.map((a) => cancelDefenseAction(a.id)));
+      }
+
+      const appliedBlocks = actions.filter(
+        (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES"
+      );
+      if (appliedBlocks.length > 0) {
+        await Promise.all(appliedBlocks.map((a) => revertDefenseAction(a.id)));
+      }
+
       const updated = await updateIncident(incident.id, {
         status: "RESOLVED",
       });
       setDetail((prev) => (prev ? { ...prev, ...updated } : null));
       onIncidentUpdated?.(updated);
+
+      const details: string[] = [];
+      if (pendingActions.length > 0) {
+        details.push(`đã hủy ${pendingActions.length} lệnh chờ Agent tải`);
+      }
+      if (appliedBlocks.length > 0) {
+        details.push(`đã tạo ${appliedBlocks.length} lệnh gỡ chặn nftables`);
+      }
+      onNotify?.({
+        id: `incident-resolve-${incident.id}-${Date.now()}`,
+        type: "recovery",
+        title: "Đã đánh dấu giải quyết sự cố",
+        message:
+          details.length > 0
+            ? `${incident.title}: ${details.join(", ")}.`
+            : `${incident.title}: đã chuyển sang trạng thái Đã giải quyết.`,
+        targetView: "incidents",
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Lỗi giải quyết sự cố");
     } finally {
@@ -416,7 +475,7 @@ export function IncidentDetailModal({
         >
           Đóng
         </button>
-        {incident.status !== "RESOLVED" && (
+        {(incident.status === "DETECTED" || incident.status === "MITIGATING") && (
           <button
             type="button"
             className="btn btn-primary"

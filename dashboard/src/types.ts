@@ -105,7 +105,16 @@ export interface IncidentDetail extends Incident {
   events: DetectionEventResponse[];
 }
 
-export type DefenseActionStatus = 'PENDING' | 'SENT' | 'APPLIED' | 'FAILED' | 'REVERTED';
+export type DefenseActionStatus =
+  | 'PENDING'
+  | 'SENT'
+  | 'APPLIED'
+  | 'FAILED'
+  | 'REVERTED'
+  | 'SIMULATED'
+  | 'SKIPPED'
+  | 'EXPIRED'
+  | 'CANCELLED';
 
 export interface DefenseAction {
   id: string;

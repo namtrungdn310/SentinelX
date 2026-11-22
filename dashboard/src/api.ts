@@ -233,6 +233,14 @@ export async function revertDefenseAction(actionId: string): Promise<void> {
   if (!res.ok) throw new Error(`Lỗi gỡ bỏ lệnh chặn IP: ${res.statusText}`);
 }
 
+export async function cancelDefenseAction(actionId: string): Promise<DefenseAction> {
+  const res = await fetch(`${API_BASE}/defense/actions/${actionId}/cancel`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`Lỗi hủy lệnh phòng thủ chờ gửi: ${res.statusText}`);
+  return res.json();
+}
+
 // ----------------------------------------------------
 // Policies & Whitelist API (M5)
 // ----------------------------------------------------
