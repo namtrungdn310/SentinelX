@@ -460,6 +460,12 @@ try {
 
         const scan = MOCK_INCIDENTS.find((i) => i.id === "inc-scan-402");
         assert.equal(scan.summary, "IP: 198.51.100.42 · 48 cổng / 10s (>= 15)");
+
+        const memResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-389");
+        const cpuResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-cpu-382");
+        assert.equal(classifyIncidentHandling(memResolved, MOCK_POLICIES).mode, "auto");
+        assert.equal(classifyIncidentHandling(cpuResolved, MOCK_POLICIES).mode, "manual");
+        assert.ok(html.includes("inc-mem-389"));
     });
     const originalFetch = globalThis.fetch;
     try {
