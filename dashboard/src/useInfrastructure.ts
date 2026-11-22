@@ -445,7 +445,7 @@ export function useInfrastructure() {
         setChartRequest({
           nodeId,
           loading: false,
-          error: "Không tải được lịch sử telemetry. Vui lòng thử lại.",
+          error: "Không tải được lịch sử mẫu dữ liệu. Vui lòng thử lại.",
         });
     }
   }, []);

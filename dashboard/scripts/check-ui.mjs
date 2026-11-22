@@ -73,7 +73,7 @@ try {
     for (const [route, expected] of Object.entries({
         overview: "Tổng quan hạ tầng",
         hosts: "Danh sách máy chủ",
-        metrics: "Telemetry tài nguyên",
+        metrics: "Mẫu dữ liệu tài nguyên",
         events: "Nhật ký hệ thống",
     })) {
         window.location.hash = "#" + route;
@@ -102,7 +102,7 @@ try {
                     assert.ok(
                         !html.includes('aria-label="Biểu đồ tài nguyên"'),
                     );
-                    assert.ok(!html.includes('aria-label="Số mẫu telemetry"'));
+                    assert.ok(!html.includes('aria-label="Số mẫu dữ liệu"'));
                     assert.ok(!html.includes('id="host-fleet"'));
                     assert.ok(!html.includes('aria-label="Lọc sự kiện"'));
                 },
@@ -111,7 +111,7 @@ try {
             check("Telemetry is a single-host analysis view", () => {
                 assert.ok(html.includes('id="telemetry-host"'));
                 assert.ok(html.includes('aria-label="Biểu đồ tài nguyên"'));
-                assert.ok(html.includes('aria-label="Số mẫu telemetry"'));
+                assert.ok(html.includes('aria-label="Số mẫu dữ liệu"'));
                 assert.ok(!html.includes('aria-label="Tổng quan toàn cụm"'));
                 assert.ok(!html.includes('aria-label="Chỉ số tổng quan"'));
             });
@@ -151,7 +151,7 @@ try {
                 isLoading: false,
             }),
         );
-        assert.ok(html.includes("Chưa có mẫu telemetry"));
+        assert.ok(html.includes("Chưa có mẫu dữ liệu"));
     });
     check("Failed telemetry offers retry", () => {
         const html = renderToStaticMarkup(
@@ -238,7 +238,7 @@ try {
         assert.ok(html.includes('aria-pressed="true">Tất cả'));
         assert.ok(html.includes(">Cảnh báo<"));
         assert.ok(html.includes(">Thao tác<"));
-        assert.ok(html.includes(">Trạng thái kết nối<"));
+        assert.ok(html.includes(">Kết nối<"));
         assert.ok(html.includes(">Mẫu dữ liệu<"));
         assert.ok(html.includes("Sự kiện khác"));
         assert.ok(html.includes("future_event"));

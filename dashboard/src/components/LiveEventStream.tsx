@@ -7,7 +7,7 @@ const categories: { value: EventCategory; label: string }[] = [
   { value: "all", label: "Tất cả" },
   { value: "alert", label: "Cảnh báo" },
   { value: "security", label: "Thao tác" },
-  { value: "status", label: "Trạng thái kết nối" },
+  { value: "status", label: "Kết nối" },
   { value: "telemetry", label: "Mẫu dữ liệu" },
 ];
 

@@ -133,7 +133,7 @@ export function InfrastructureOverview({
                   className="ranked-host"
                   key={node.id}
                   onClick={() => onInspectNode(node)}
-                  aria-label={`Phân tích telemetry ${node.hostname}`}
+                  aria-label={`Phân tích mẫu dữ liệu ${node.hostname}`}
                 >
                   <span className="rank-number">{index + 1}</span>
                   <span className="ranked-host-data">

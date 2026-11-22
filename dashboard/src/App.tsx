@@ -223,7 +223,7 @@ export function App() {
     projects: "Dự án hạ tầng",
     overview: "Tổng quan hạ tầng",
     hosts: "Danh sách máy chủ",
-    metrics: "Telemetry tài nguyên",
+    metrics: "Mẫu dữ liệu tài nguyên",
     events: "Nhật ký hệ thống",
     incidents: "Sự cố an ninh",
     defense: "Tường lửa nftables",
@@ -328,7 +328,7 @@ export function App() {
               {[
                 { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
                 { id: "hosts", label: "Máy chủ", Icon: Server, count: projectNodes.length },
-                { id: "metrics", label: "Telemetry", Icon: Activity },
+                { id: "metrics", label: "Mẫu dữ liệu", Icon: Activity },
                 { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
               ].map(({ id, label, Icon, count }) => (
                 <a
@@ -587,7 +587,7 @@ export function App() {
                   </h2>
                   <div className="telemetry-controls-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <select
-                      aria-label="Số mẫu telemetry"
+                      aria-label="Số mẫu dữ liệu"
                       value={sampleLimit}
                       onChange={(event) =>
                         setSampleLimit(Number(event.target.value))

@@ -146,7 +146,7 @@ export function TelemetryChart({
       ) : !count ? (
         <div className="panel-empty">
           <Activity size={28} />
-          <strong>Chưa có mẫu telemetry</strong>
+          <strong>Chưa có mẫu dữ liệu</strong>
           <p>Biểu đồ sẽ xuất hiện khi Agent gửi dữ liệu.</p>
         </div>
       ) : (
