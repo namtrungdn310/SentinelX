@@ -251,7 +251,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 180 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 150 * 60000).toISOString(),
     summary:
-      "Ổ đĩa /tmp: 91.2% (>= 85.0%)\nThủ công: Đã giải quyết",
+      "Ổ đĩa /tmp: 91.2% (>= 85.0%)",
     event_count: 2,
     targeted_service: "Phân vùng lưu trữ /tmp",
   },

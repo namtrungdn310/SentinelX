@@ -446,6 +446,17 @@ try {
         }));
         assert.ok(!synResolvedModal.includes("Xử lý tự động · Đã hoàn tất"));
         assert.ok(!synResolvedModal.includes("Xử lý thủ công · Đã đóng"));
+
+        const diskResolvedModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: diskResolved,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(diskResolvedModal.includes("Ổ đĩa /tmp: 91.2% (&gt;= 85.0%)"));
+        assert.ok(!diskResolvedModal.includes("Thủ công: Đã giải quyết"));
     });
     const originalFetch = globalThis.fetch;
     try {
