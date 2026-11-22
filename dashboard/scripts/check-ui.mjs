@@ -401,7 +401,19 @@ try {
             onClose: noop,
         }));
         assert.ok(!modalHtml.includes("Cơ chế xử lý"));
-        assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP qua nftables (203.0.113.195)"));
+        assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP 203.0.113.195"));
+
+        const mem = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-408");
+        const memModalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
+            incident: mem,
+            nodes: MOCK_NODES,
+            policies: MOCK_POLICIES,
+            isOpen: true,
+            isDemoMode: true,
+            onClose: noop,
+        }));
+        assert.ok(memModalHtml.includes("Đang chờ Agent tải lệnh"));
+        assert.ok(!memModalHtml.includes("Tự động · Tự động tối ưu"));
     });
     const originalFetch = globalThis.fetch;
     try {

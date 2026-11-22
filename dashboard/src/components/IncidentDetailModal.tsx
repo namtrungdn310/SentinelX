@@ -147,16 +147,14 @@ export function IncidentDetailModal({
   const statusSubtext =
     incident.status === "MITIGATING"
       ? attackerIp
-        ? `Kích hoạt lệnh chặn IP qua nftables (${attackerIp})`
-        : "Kích hoạt lệnh bảo vệ qua nftables"
+        ? `Kích hoạt lệnh chặn IP ${attackerIp}`
+        : "Kích hoạt lệnh bảo vệ"
       : incident.status === "RESOLVED"
         ? handling.mode === "auto"
           ? "Xử lý tự động · Đã hoàn tất"
           : "Xử lý thủ công · Đã đóng"
         : handling.mode === "auto"
-          ? attackerIp
-            ? `${handling.label} (${attackerIp})`
-            : handling.label
+          ? null
           : handling.reason;
 
   return (
@@ -231,9 +229,11 @@ export function IncidentDetailModal({
               <i />
               {statusLabel}
             </span>
-            <small className="text-muted" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
-              {statusSubtext}
-            </small>
+            {statusSubtext && (
+              <small className="text-muted" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
+                {statusSubtext}
+              </small>
+            )}
           </div>
           <div className="meta-card">
             <span className="meta-label">Cổng sự cố</span>
