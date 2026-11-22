@@ -330,6 +330,7 @@ export function App() {
                 { id: "hosts", label: "Máy chủ", Icon: Server, count: projectNodes.length },
                 { id: "metrics", label: "Mẫu dữ liệu", Icon: Activity },
                 { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
+                { id: "settings", label: "Thiết lập cấu hình", Icon: Settings2 },
               ].map(({ id, label, Icon, count }) => (
                 <a
                   key={id}
@@ -368,26 +369,6 @@ export function App() {
                   {count !== undefined && count > 0 && (
                     <span className={`sidebar-badge badge-${tone || "crit"}`}>{count}</span>
                   )}
-                  {effectiveView === id && <span className="nav-active-dot" />}
-                </a>
-              ))}
-            </nav>
-            <span className="nav-label" style={{ marginTop: 16 }}>HỆ THỐNG &amp; CẤU HÌNH</span>
-            <nav aria-label="Điều hướng hệ thống và cấu hình">
-              {[
-                { id: "settings", label: "Thiết lập cấu hình", Icon: Settings2 },
-              ].map(({ id, label, Icon }) => (
-                <a
-                  key={id}
-                  className={`nav-item ${effectiveView === id ? "active" : ""}`}
-                  href={`#${id}`}
-                  onClick={() => {
-                    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-                  }}
-                  aria-current={effectiveView === id ? "page" : undefined}
-                >
-                  <Icon size={18} />
-                  <span>{label}</span>
                   {effectiveView === id && <span className="nav-active-dot" />}
                 </a>
               ))}
