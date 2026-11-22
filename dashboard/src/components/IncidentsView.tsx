@@ -152,7 +152,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
       case "MITIGATING":
         return (
           <span className="status-badge warn">
-            <i /> Đang ngăn chặn
+            <i /> Đang kích hoạt
           </span>
         );
       case "DETECTED":
@@ -207,7 +207,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
 
         <div className="panel kpi-card">
           <div className="kpi-head">
-            <span className="kpi-label">Đang ngăn chặn</span>
+            <span className="kpi-label">Đang kích hoạt</span>
             <ShieldX size={18} style={{ color: "var(--status-warn)" }} />
           </div>
           <div className="kpi-value" style={{ color: "var(--status-warn)" }}>
@@ -280,7 +280,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode }: Props) {
               {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
             </option>
             {handlingTab === "auto" && (
-              <option value="MITIGATING">Đang ngăn chặn</option>
+              <option value="MITIGATING">Đang kích hoạt</option>
             )}
             <option value="RESOLVED">Đã giải quyết</option>
           </select>

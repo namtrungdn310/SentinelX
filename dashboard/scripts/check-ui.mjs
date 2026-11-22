@@ -403,7 +403,8 @@ try {
             onClose: noop,
         }));
         assert.ok(!modalHtml.includes("Cơ chế xử lý"));
-        assert.ok(modalHtml.includes("Kích hoạt lệnh chặn IP 203.0.113.195"));
+        assert.ok(!modalHtml.includes("Kích hoạt lệnh chặn IP 203.0.113.195"));
+        assert.ok(modalHtml.includes("Đang kích hoạt"));
         assert.ok(modalHtml.includes("\nnftables: DROP 203.0.113.195 (thời hạn: 30 phút)"));
 
         const mem = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-408");
@@ -478,8 +479,8 @@ try {
             isDemoMode: true,
             onClose: noop,
         }));
-        assert.ok(memMitigatingModal.includes("Đang ngăn chặn"));
-        assert.ok(memMitigatingModal.includes("Kích hoạt khởi động lại dịch vụ nginx"));
+        assert.ok(memMitigatingModal.includes("Đang kích hoạt"));
+        assert.ok(!memMitigatingModal.includes("Kích hoạt khởi động lại dịch vụ nginx"));
         assert.ok(memMitigatingModal.includes("\nservice: RESTART nginx"));
     });
     const originalFetch = globalThis.fetch;

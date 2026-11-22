@@ -121,7 +121,7 @@ export function IncidentDetailModal({
     incident.status === "RESOLVED"
       ? "Đã giải quyết"
       : incident.status === "MITIGATING"
-        ? "Đang ngăn chặn"
+        ? "Đang kích hoạt"
         : incident.status === "DETECTED"
           ? handling.mode === "auto"
             ? "Đang chờ Agent tải lệnh"
@@ -142,18 +142,6 @@ export function IncidentDetailModal({
     (Array.isArray(firstEvent?.details?.targeted_ports)
       ? (firstEvent.details.targeted_ports as number[])
       : undefined);
-  const attackerIp = incident.attacker_ip || firstEvent?.attacker_ip || null;
-  const serviceMatch = incident.summary?.match(/service:\s*RESTART\s+(\S+)/i);
-  const statusSubtext =
-    incident.status === "MITIGATING"
-      ? attackerIp
-        ? `Kích hoạt lệnh chặn IP ${attackerIp}`
-        : serviceMatch
-          ? `Kích hoạt khởi động lại dịch vụ ${serviceMatch[1]}`
-          : incident.summary?.includes("os-cache: CLEAR")
-            ? "Kích hoạt giải phóng bộ nhớ đệm"
-            : "Kích hoạt lệnh bảo vệ"
-      : null;
 
   return (
     <Modal onClose={onClose} labelledBy={`${id}-title`} className="incident-modal">
@@ -227,11 +215,6 @@ export function IncidentDetailModal({
               <i />
               {statusLabel}
             </span>
-            {statusSubtext && (
-              <small className="text-muted" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
-                {statusSubtext}
-              </small>
-            )}
           </div>
           <div className="meta-card">
             <span className="meta-label">Cổng sự cố</span>
