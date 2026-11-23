@@ -365,15 +365,11 @@ body,
     background: var(--status-neutral-bg);
     border-color: var(--status-neutral-border);
 }
-.status-badge.info {
-    color: var(--brand-indigo);
-    background: var(--brand-indigo-subtle);
-    border-color: #c7d5f5;
-}
+.status-badge.info,
 .status-badge.pending {
-    color: #5b46b5;
-    background: #f3f1fc;
-    border-color: #d6cef5;
+    color: #2f353d;
+    background: #f2f4f7;
+    border-color: #d4d8df;
 }
 .health-dot.ok {
     color: var(--status-ok);
