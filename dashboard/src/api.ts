@@ -329,7 +329,11 @@ export async function fetchWhitelist(projectId: string): Promise<IPWhitelist[]> 
   });
   if (!res.ok) throw new Error(`Lỗi tải danh sách an toàn: ${res.statusText}`);
   const data = await res.json();
-  return data.items || [];
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.map((item: IPWhitelist & { ip_or_cidr?: string }) => ({
+    ...item,
+    cidr: String(item.cidr ?? item.ip_or_cidr ?? ""),
+  }));
 }
 
 export async function createWhitelist(

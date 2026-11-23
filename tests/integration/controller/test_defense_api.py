@@ -202,3 +202,25 @@ async def test_service_recovery_executor_ack_transitions_incident_to_mitigating(
         inc = (await h.client.get(f"/api/v1/incidents/{incident_id}")).json()
         assert inc["status"] == "MITIGATING"
         assert "service: RESTART nginx" in inc["summary"]
+
+
+@pytest.mark.asyncio
+async def test_manual_block_rejects_project_whitelisted_ip() -> None:
+    async with core_harness() as h:
+        wl_resp = await h.client.post(
+            f"/api/v1/projects/{h.project}/ip-whitelist",
+            json={"ip_or_cidr": "203.0.113.0/24", "description": "Admin subnet"},
+        )
+        assert wl_resp.status_code == 201, wl_resp.text
+
+        block_resp = await h.client.post(
+            "/api/v1/defense/actions",
+            json={
+                "node_id": h.node,
+                "action_type": "BLOCK_IP_NFTABLES",
+                "target_ip": "203.0.113.42",
+                "command_payload": {"duration_seconds": 300},
+            },
+        )
+        assert block_resp.status_code == 422
+        assert "whitelist" in block_resp.json()["detail"].lower()

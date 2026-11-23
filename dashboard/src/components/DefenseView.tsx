@@ -780,6 +780,7 @@ export function DefenseView({
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
         nodes={nodes}
+        existingActions={scopedActions}
         onActionCreated={handleActionCreated}
         isDemoMode={isDemoMode}
       />

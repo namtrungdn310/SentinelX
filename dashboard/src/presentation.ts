@@ -2,6 +2,7 @@ import type {
   DefenseAction,
   DefensePolicy,
   DetectionSeverity,
+  IPWhitelist,
   Incident,
   IncidentDefenseStatus,
   Node,
@@ -535,4 +536,237 @@ export function resolveIncidentDefenseFailure(
     }
   }
   return null;
+}
+
+interface ParsedIp {
+  family: 4 | 6;
+  parts: number[];
+}
+
+function parseIPv4(raw: string): ParsedIp | null {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(raw);
+  if (!match) return null;
+  const octets: number[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const seg = match[i];
+    if (seg.length > 1 && seg.startsWith("0")) return null;
+    const val = Number(seg);
+    if (!Number.isInteger(val) || val < 0 || val > 255) return null;
+    octets.push(val);
+  }
+  return { family: 4, parts: octets };
+}
+
+function parseIPv6(raw: string): ParsedIp | null {
+  if (!raw.includes(":") || raw.includes("%")) return null;
+  const doubleColonParts = raw.split("::");
+  if (doubleColonParts.length > 2) return null;
+
+  const parseSide = (side: string, allowIpv4Tail: boolean): number[] | null => {
+    if (!side) return [];
+    const tokens = side.split(":");
+    const out: number[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i];
+      if (!tok) return null;
+      if (tok.includes(".")) {
+        if (!allowIpv4Tail || i !== tokens.length - 1) return null;
+        const v4 = parseIPv4(tok);
+        if (!v4) return null;
+        out.push((v4.parts[0] << 8) | v4.parts[1], (v4.parts[2] << 8) | v4.parts[3]);
+      } else {
+        if (!/^[0-9a-fA-F]{1,4}$/.test(tok)) return null;
+        out.push(Number.parseInt(tok, 16));
+      }
+    }
+    return out;
+  };
+
+  if (doubleColonParts.length === 1) {
+    const groups = parseSide(raw, true);
+    if (!groups || groups.length !== 8) return null;
+    return { family: 6, parts: groups };
+  }
+
+  const head = parseSide(doubleColonParts[0], false);
+  const tail = parseSide(doubleColonParts[1], true);
+  if (!head || !tail) return null;
+  const missing = 8 - head.length - tail.length;
+  if (missing < 1) return null;
+  return { family: 6, parts: [...head, ...Array<number>(missing).fill(0), ...tail] };
+}
+
+function parseIp(raw: string): ParsedIp | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return parseIPv4(trimmed) ?? parseIPv6(trimmed);
+}
+
+function sameParsedIp(a: ParsedIp, b: ParsedIp): boolean {
+  return a.family === b.family && a.parts.every((val, idx) => val === b.parts[idx]);
+}
+
+function ipMatchesCidr(ip: ParsedIp, cidrRaw: string): boolean {
+  const trimmed = cidrRaw.trim();
+  const slashIdx = trimmed.indexOf("/");
+  const baseStr = slashIdx >= 0 ? trimmed.slice(0, slashIdx) : trimmed;
+  const network = parseIp(baseStr);
+  if (!network || network.family !== ip.family) return false;
+
+  const bitsPerPart = ip.family === 4 ? 8 : 16;
+  const maxPrefix = ip.family === 4 ? 32 : 128;
+  const prefix = slashIdx >= 0 ? Number(trimmed.slice(slashIdx + 1)) : maxPrefix;
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > maxPrefix) return false;
+
+  let remaining = prefix;
+  for (let i = 0; i < ip.parts.length && remaining > 0; i++) {
+    const bits = Math.min(bitsPerPart, remaining);
+    const shift = bitsPerPart - bits;
+    if (ip.parts[i] >> shift !== network.parts[i] >> shift) {
+      return false;
+    }
+    remaining -= bits;
+  }
+  return true;
+}
+
+export interface ManualIpCheckResult {
+  status: "empty" | "valid" | "invalid";
+  valid: boolean;
+  message: string;
+}
+
+export function validateManualBlockIp(
+  rawIp: string,
+  node: Node | undefined,
+  whitelist: IPWhitelist[],
+  existingActions: DefenseAction[],
+): ManualIpCheckResult {
+  const trimmed = rawIp.trim();
+  if (!trimmed) {
+    return {
+      status: "empty",
+      valid: false,
+      message: "Nhập địa chỉ IPv4 hoặc IPv6; hệ thống tự kiểm tra hợp lệ trước khi kích hoạt.",
+    };
+  }
+
+  const parsed = parseIp(trimmed);
+  if (!parsed) {
+    return {
+      status: "invalid",
+      valid: false,
+      message: "Định dạng IP không hợp lệ (ví dụ: 203.0.113.195 hoặc 2001:db8::1).",
+    };
+  }
+
+  if (parsed.family === 4) {
+    const [o0, o1] = parsed.parts;
+    if (o0 === 127) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ loopback nội bộ (127.0.0.0/8).",
+      };
+    }
+    if (o0 === 0) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ không xác định (0.0.0.0/8).",
+      };
+    }
+    if (o0 === 169 && o1 === 254) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ link-local nội bộ (169.254.0.0/16).",
+      };
+    }
+    if (o0 >= 224) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn dải IP multicast hoặc dải dành riêng.",
+      };
+    }
+  } else {
+    const isAllZero = parsed.parts.every((p) => p === 0);
+    const isLoopback6 = parsed.parts.slice(0, 7).every((p) => p === 0) && parsed.parts[7] === 1;
+    if (isLoopback6) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ loopback IPv6 (::1).",
+      };
+    }
+    if (isAllZero) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ không xác định IPv6 (::).",
+      };
+    }
+    if ((parsed.parts[0] & 0xffc0) === 0xfe80) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ link-local IPv6 (fe80::/10).",
+      };
+    }
+    if ((parsed.parts[0] & 0xff00) === 0xff00) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: "Từ chối: Không thể chặn địa chỉ multicast IPv6 (ff00::/8).",
+      };
+    }
+  }
+
+  if (node?.ip_address) {
+    const nodeParsed = parseIp(node.ip_address);
+    if (nodeParsed && sameParsedIp(parsed, nodeParsed)) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: `Từ chối: Trùng địa chỉ IP của chính máy chủ đang chọn (${node.ip_address}).`,
+      };
+    }
+  }
+
+  for (const entry of whitelist) {
+    if (entry.cidr && ipMatchesCidr(parsed, entry.cidr)) {
+      return {
+        status: "invalid",
+        valid: false,
+        message: `Từ chối: IP thuộc Danh sách an toàn (${entry.cidr})${
+          entry.description ? ` — ${entry.description}` : ""
+        }.`,
+      };
+    }
+  }
+
+  const activeDup = existingActions.find((act) => {
+    if (node && act.node_id !== node.id) return false;
+    if (act.action_type !== "BLOCK_IP_NFTABLES") return false;
+    if (act.status !== "PENDING" && act.status !== "SENT" && act.status !== "APPLIED") return false;
+    if (!act.target_ip) return false;
+    const actParsed = parseIp(act.target_ip);
+    return actParsed ? sameParsedIp(parsed, actParsed) : false;
+  });
+  if (activeDup) {
+    return {
+      status: "invalid",
+      valid: false,
+      message: "IP này đang bị chặn hoặc đang chờ áp dụng trên máy chủ đã chọn.",
+    };
+  }
+
+  return {
+    status: "valid",
+    valid: true,
+    message: node
+      ? `IP hợp lệ — sẵn sàng chặn trên ${node.hostname}.`
+      : "IP hợp lệ — sẵn sàng chặn.",
+  };
 }

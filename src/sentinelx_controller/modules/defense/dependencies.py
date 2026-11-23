@@ -15,6 +15,8 @@ from sentinelx_controller.modules.incidents.router import get_incident_service
 from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.dependencies import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.policy.router import get_policy_service
+from sentinelx_controller.modules.policy.service import PolicyService
 
 
 def get_defense_core(
@@ -24,6 +26,7 @@ def get_defense_core(
     hub: Annotated[RealtimeHub, Depends(get_realtime_hub)],
     nodes: Annotated[NodeService, Depends(get_node_service)],
     incidents: Annotated[IncidentService, Depends(get_incident_service)],
+    policy: Annotated[PolicyService, Depends(get_policy_service)],
 ) -> DefenseService:
     return DefenseService(
         DefenseRepository(session),
@@ -31,5 +34,6 @@ def get_defense_core(
         CommittedPublisher(background_tasks, hub),
         incident_service=incidents,
         node_service=nodes,
+        policy_service=policy,
         safety=request.app.state.settings.safety,
     )

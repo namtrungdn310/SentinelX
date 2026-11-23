@@ -1,13 +1,16 @@
-import { useId, useState } from "react";
-import { Flame, ShieldAlert, X } from "lucide-react";
-import type { Node, DefenseAction } from "../types";
-import { createManualDefenseAction } from "../api";
+import { useEffect, useId, useMemo, useState } from "react";
+import { CheckCircle2, Flame, ShieldAlert, X } from "lucide-react";
+import type { DefenseAction, IPWhitelist, Node } from "../types";
+import { createManualDefenseAction, fetchWhitelist } from "../api";
+import { MOCK_WHITELIST } from "../mockData";
+import { validateManualBlockIp } from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   nodes: Node[];
+  existingActions?: DefenseAction[];
   onActionCreated: (action: DefenseAction) => void;
   isDemoMode: boolean;
 }
@@ -16,6 +19,7 @@ export function ManualBlockModal({
   isOpen,
   onClose,
   nodes,
+  existingActions = [],
   onActionCreated,
   isDemoMode,
 }: Props) {
@@ -25,19 +29,54 @@ export function ManualBlockModal({
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveWhitelist, setLiveWhitelist] = useState<IPWhitelist[]>([]);
+
+  const effectiveNodeId = nodes.some((n) => n.id === nodeId) ? nodeId : nodes[0]?.id || "";
+  const selectedNode = useMemo(
+    () => nodes.find((n) => n.id === effectiveNodeId),
+    [nodes, effectiveNodeId],
+  );
+  const projectId = selectedNode?.project_id ?? nodes[0]?.project_id ?? null;
+
+  useEffect(() => {
+    if (!isOpen || isDemoMode || !projectId) return;
+    let cancelled = false;
+    void fetchWhitelist(projectId)
+      .then((items) => {
+        if (!cancelled) setLiveWhitelist(items);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveWhitelist([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isDemoMode, projectId]);
+
+  const effectiveWhitelist = useMemo(() => {
+    if (isDemoMode) {
+      return projectId
+        ? MOCK_WHITELIST.filter((w) => w.project_id === projectId)
+        : MOCK_WHITELIST;
+    }
+    return liveWhitelist;
+  }, [isDemoMode, projectId, liveWhitelist]);
+
+  const ipCheck = useMemo(
+    () => validateManualBlockIp(targetIp, selectedNode, effectiveWhitelist, existingActions),
+    [targetIp, selectedNode, effectiveWhitelist, existingActions],
+  );
 
   if (!isOpen) return null;
 
-  const effectiveNodeId = nodes.some((n) => n.id === nodeId) ? nodeId : nodes[0]?.id || "";
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetIp.trim()) {
-      setError("Vui lòng nhập địa chỉ IP cần chặn");
-      return;
-    }
     if (!effectiveNodeId) {
       setError("Vui lòng chọn máy chủ áp dụng");
+      return;
+    }
+    if (!ipCheck.valid) {
+      setError(ipCheck.message);
       return;
     }
 
@@ -121,13 +160,27 @@ export function ManualBlockModal({
               className="font-mono"
               placeholder="ví dụ: 203.0.113.195 hoặc 2001:db8::1"
               value={targetIp}
-              onChange={(e) => setTargetIp(e.target.value)}
+              onChange={(e) => {
+                setTargetIp(e.target.value);
+                if (error) setError(null);
+              }}
+              aria-invalid={ipCheck.status === "invalid"}
               disabled={loading}
               data-autofocus
             />
-            <small className="form-hint">
-              Hệ thống sẽ từ chối nếu IP là loopback (127.0.0.1), IP máy chủ hoặc nằm trong danh sách an toàn.
-            </small>
+            {ipCheck.status === "empty" ? (
+              <small className="field-hint">{ipCheck.message}</small>
+            ) : (
+              <div
+                className={`ip-check-feedback ${
+                  ipCheck.valid ? "is-valid" : "is-invalid"
+                }`}
+                role={ipCheck.valid ? "status" : "alert"}
+              >
+                {ipCheck.valid ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />}
+                <span>{ipCheck.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -174,7 +227,11 @@ export function ManualBlockModal({
           >
             Hủy bỏ
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || !effectiveNodeId || !ipCheck.valid}
+          >
             <Flame size={16} />
             {loading ? "Đang gửi lệnh..." : "Kích hoạt lệnh chặn ngay"}
           </button>

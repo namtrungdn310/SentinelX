@@ -63,7 +63,7 @@ try {
         "/src/components/KPICards.tsx",
     );
     const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
-    const { classifyIncidentHandling, nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
+    const { classifyIncidentHandling, nodeHealth, nodeHealthLabel, validateManualBlockIp } = await server.ssrLoadModule("/src/presentation.ts");
     const { filterEvents, eventLabel, eventMatchesCategory, formatRealtimeMessage, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
@@ -72,7 +72,7 @@ try {
     const { ManualBlockModal } = await server.ssrLoadModule("/src/components/ManualBlockModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
-    const { MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
+    const { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS, MOCK_WHITELIST } = await server.ssrLoadModule("/src/mockData.ts");
     const node = MOCK_NODES[0];
     const noop = () => {};
 
@@ -604,6 +604,17 @@ try {
         assert.ok(!modalHtml.includes('value="0"'));
         assert.ok(modalHtml.includes('value="1440"'));
         assert.ok(modalHtml.includes("Thời gian chặn IP"));
+
+        const targetNode = defaultProjectNodes.find((n) => n.id === "node-api-02") ?? defaultProjectNodes[0];
+        const prodWhitelist = MOCK_WHITELIST.filter((w) => w.project_id === MOCK_PROJECTS[0].id);
+        assert.equal(validateManualBlockIp("203.0.113.250", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, true);
+        assert.equal(validateManualBlockIp("2001:db8::99", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, true);
+        assert.equal(validateManualBlockIp("not-an-ip", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
+        assert.equal(validateManualBlockIp("127.0.0.1", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
+        assert.equal(validateManualBlockIp("::1", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
+        assert.equal(validateManualBlockIp(targetNode.ip_address, targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
+        assert.equal(validateManualBlockIp("192.168.1.55", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
+        assert.equal(validateManualBlockIp("203.0.113.195", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
     });
     const originalFetch = globalThis.fetch;
     try {

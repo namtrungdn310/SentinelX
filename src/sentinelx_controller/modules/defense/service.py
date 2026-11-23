@@ -6,7 +6,7 @@ import secrets
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, status
 
@@ -30,6 +30,9 @@ from sentinelx_controller.modules.defense.repository import DefenseRepository
 from sentinelx_controller.modules.incidents.service import IncidentService
 from sentinelx_controller.modules.nodes.service import NodeService
 
+if TYPE_CHECKING:
+    from sentinelx_controller.modules.policy.service import PolicyService
+
 logger = logging.getLogger("sentinelx_controller.defense.service")
 
 
@@ -47,6 +50,7 @@ class DefenseService:
         incident_service: IncidentService | None = None,
         recovery_ack_handler: RecoveryAckHandler | None = None,
         node_service: NodeService | None = None,
+        policy_service: "PolicyService | None" = None,
         safety: CoreSafetySettings | None = None,
     ) -> None:
         self._repo = defense_repo
@@ -55,6 +59,7 @@ class DefenseService:
         self._incidents = incident_service
         self._recovery_ack_handler = recovery_ack_handler
         self._nodes = node_service
+        self._policy_service = policy_service
         self._safety = safety or CoreSafetySettings()
 
     def attach_recovery_handler(self, handler: RecoveryAckHandler) -> None:
@@ -104,6 +109,20 @@ class DefenseService:
                 node = await self._nodes.get_node(str(node_id))
                 if ip == ipaddress.ip_address(node.ip_address):
                     raise HTTPException(422, "Cannot block the node's own address")
+                if self._policy_service is not None:
+                    whitelist = await self._policy_service.list_whitelist(str(node.project_id))
+                    for entry in whitelist.items:
+                        try:
+                            if ip in ipaddress.ip_network(entry.ip_or_cidr, strict=False):
+                                raise HTTPException(
+                                    422,
+                                    f"Target belongs to project IP whitelist ({entry.ip_or_cidr})",
+                                )
+                        except ValueError as err:
+                            raise HTTPException(
+                                422,
+                                "Invalid project IP whitelist configuration",
+                            ) from err
         elif self._nodes is not None:
             await self._nodes.get_node(str(node_id))
         return target, parameters

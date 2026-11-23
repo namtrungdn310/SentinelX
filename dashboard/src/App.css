@@ -2893,6 +2893,35 @@ body:has(.event-full) .event-full {
     color: var(--status-crit);
 }
 
+.ip-check-feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-xs);
+    font-size: 12.5px;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+.ip-check-feedback svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.ip-check-feedback.is-valid {
+    background: var(--status-ok-bg);
+    border: 1px solid var(--status-ok-border);
+    color: var(--status-ok);
+}
+
+.ip-check-feedback.is-invalid {
+    background: var(--status-crit-bg);
+    border: 1px solid var(--status-crit-border);
+    color: var(--status-crit);
+}
+
 .feedback-banner .icon-button {
     margin-left: auto;
     font-size: 18px;
