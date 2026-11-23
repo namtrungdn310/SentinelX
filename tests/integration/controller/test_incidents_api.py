@@ -88,7 +88,11 @@ async def test_incidents_crud_flow(
         assert detail["id"] == str(incident_id)
         assert "events" in detail
 
-        # 4. Patch incident status to RESOLVED
+        # 4. Cannot delete an active DETECTED incident
+        active_del_res = await client.delete(f"/api/v1/incidents/{incident_id}")
+        assert active_del_res.status_code == 409
+
+        # 5. Patch incident status to RESOLVED
         patch_res = await client.patch(
             f"/api/v1/incidents/{incident_id}",
             json={"status": "RESOLVED", "summary": "Mitigation applied successfully"},
@@ -99,10 +103,16 @@ async def test_incidents_crud_flow(
         assert updated["resolved_at"] is not None
         assert updated["summary"] == "Mitigation applied successfully"
 
-        # 5. Invalid UUID format returns 422
+        # 6. Resolved incident can be deleted, then subsequent GET returns 404
+        del_res = await client.delete(f"/api/v1/incidents/{incident_id}")
+        assert del_res.status_code == 204
+        after_del_res = await client.get(f"/api/v1/incidents/{incident_id}")
+        assert after_del_res.status_code == 404
+
+        # 7. Invalid UUID format returns 422
         bad_res = await client.get("/api/v1/incidents/not-a-valid-uuid")
         assert bad_res.status_code == 422
 
-        # 6. Not found returns 404
+        # 8. Not found returns 404
         missing_res = await client.get(f"/api/v1/incidents/{uuid.uuid4()}")
         assert missing_res.status_code == 404

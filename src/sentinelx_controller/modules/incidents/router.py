@@ -105,3 +105,16 @@ async def update_incident(
 ) -> IncidentResponse:
     """Update incident status (e.g. resolve or mark as false positive)."""
     return await service.update_incident(incident_id, request)
+
+
+@router.delete(
+    "/{incident_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a resolved or closed incident",
+)
+async def delete_incident(
+    incident_id: str,
+    service: Annotated[IncidentService, Depends(get_incident_service)],
+) -> None:
+    """Delete an incident that has already been resolved or closed."""
+    await service.delete_incident(incident_id)

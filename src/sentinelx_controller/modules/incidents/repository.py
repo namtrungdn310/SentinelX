@@ -30,6 +30,11 @@ class IncidentRepository:
         await self._session.flush()
         return incident
 
+    async def delete(self, incident: IncidentModel) -> None:
+        """Xóa bản ghi sự cố khỏi database."""
+        await self._session.delete(incident)
+        await self._session.flush()
+
     async def get_by_id(self, incident_id: uuid.UUID) -> IncidentModel | None:
         """Tìm sự cố theo UUID."""
         stmt = select(IncidentModel).where(IncidentModel.id == incident_id)

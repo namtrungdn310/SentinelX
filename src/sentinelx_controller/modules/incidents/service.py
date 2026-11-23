@@ -635,3 +635,29 @@ class IncidentService:
             defense_status=_extract_defense_status(model.summary, model.status),
             event_count=count,
         )
+
+    async def delete_incident(self, incident_id_str: str) -> None:
+        """Xóa vĩnh viễn một sự cố đã giải quyết / đã đóng khỏi danh sách theo dõi."""
+        try:
+            incident_uuid = uuid.UUID(incident_id_str)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid incident UUID format",
+            ) from err
+
+        model = await self._repo.get_by_id(incident_uuid)
+        if model is None:
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND,
+                detail="Incident not found",
+            )
+        if model.status not in (
+            IncidentStatus.RESOLVED.value,
+            IncidentStatus.FALSE_POSITIVE.value,
+        ):
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail="Only resolved or closed incidents can be deleted",
+            )
+        await self._repo.delete(model)

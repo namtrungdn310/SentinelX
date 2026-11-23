@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  Trash2,
 } from "lucide-react";
 import type {
   DefenseAction,
@@ -17,7 +18,7 @@ import type {
   Incident,
   Node,
 } from "../types";
-import { fetchDefenseActions, fetchIncidents, fetchPolicies } from "../api";
+import { deleteIncident, fetchDefenseActions, fetchIncidents, fetchPolicies } from "../api";
 import { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_POLICIES } from "../mockData";
 import {
   classifyIncidentHandling,
@@ -29,14 +30,23 @@ import {
 import { IncidentDetailModal } from "./IncidentDetailModal";
 import type { SecurityToastPayload } from "./SecurityToast";
 
+type IncidentsTab = IncidentHandlingMode | "resolved";
+
 interface Props {
   selectedProjectId: string | null;
   nodes?: Node[];
   isDemoMode: boolean;
   onNotify?: (toast: SecurityToastPayload) => void;
+  initialTab?: IncidentsTab;
 }
 
-export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }: Props) {
+export function IncidentsView({
+  selectedProjectId,
+  nodes,
+  isDemoMode,
+  onNotify,
+  initialTab = "auto",
+}: Props) {
   const [incidents, setIncidents] = useState<Incident[]>(() => {
     if (isDemoMode) {
       return selectedProjectId
@@ -56,8 +66,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
-  const [handlingTab, setHandlingTab] = useState<IncidentHandlingMode>("auto");
+  const [handlingTab, setHandlingTab] = useState<IncidentsTab>(initialTab);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadIncidents = useCallback(async () => {
     setIsLoading(true);
@@ -125,10 +136,15 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
     });
   }, [incidents, statusFilter, severityFilter, searchQuery, defenseActions, handlingTab]);
 
-  const { autoIncidents, manualIncidents } = useMemo(() => {
+  const { autoIncidents, manualIncidents, resolvedIncidents } = useMemo(() => {
     const auto: Incident[] = [];
     const manual: Incident[] = [];
+    const resolved: Incident[] = [];
     for (const incident of filteredIncidents) {
+      if (incident.status === "RESOLVED" || incident.status === "FALSE_POSITIVE") {
+        resolved.push(incident);
+        continue;
+      }
       const info = classifyIncidentHandling(incident, policies);
       if (info.mode === "auto") {
         auto.push(incident);
@@ -136,10 +152,47 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
         manual.push(incident);
       }
     }
-    return { autoIncidents: auto, manualIncidents: manual };
+    return {
+      autoIncidents: auto,
+      manualIncidents: manual,
+      resolvedIncidents: resolved,
+    };
   }, [filteredIncidents, policies]);
 
-  const activeIncidents = handlingTab === "auto" ? autoIncidents : manualIncidents;
+  const activeIncidents =
+    handlingTab === "auto"
+      ? autoIncidents
+      : handlingTab === "manual"
+        ? manualIncidents
+        : resolvedIncidents;
+
+  const switchHandlingTab = (nextTab: IncidentsTab) => {
+    setHandlingTab(nextTab);
+    setStatusFilter("all");
+  };
+
+  const handleDeleteIncident = async (inc: Incident) => {
+    try {
+      setDeletingId(inc.id);
+      setError(null);
+      if (!isDemoMode) {
+        await deleteIncident(inc.id);
+      }
+      setIncidents((prev) => prev.filter((item) => item.id !== inc.id));
+      setSelectedIncident((prev) => (prev && prev.id === inc.id ? null : prev));
+      onNotify?.({
+        id: `incident-delete-${inc.id}`,
+        type: "settings",
+        title: "Đã xóa sự cố khỏi danh sách",
+        message: `${inc.title} (${inc.id}) đã được gỡ khỏi mục đã giải quyết.`,
+        targetView: "incidents",
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Lỗi xóa sự cố");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Metric counts
   const countDetected = useMemo(
@@ -297,7 +350,7 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             role="tab"
             aria-selected={handlingTab === "auto"}
             className={`segmented-tab ${handlingTab === "auto" ? "active" : ""}`}
-            onClick={() => setHandlingTab("auto")}
+            onClick={() => switchHandlingTab("auto")}
           >
             <span>Xử lý tự động</span>
             <span className="count-pill">{autoIncidents.length}</span>
@@ -307,19 +360,20 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             role="tab"
             aria-selected={handlingTab === "manual"}
             className={`segmented-tab ${handlingTab === "manual" ? "active" : ""}`}
-            onClick={() => {
-              setHandlingTab("manual");
-              if (
-                statusFilter === "MITIGATING" ||
-                statusFilter === "DELIVERY_FAILED" ||
-                statusFilter === "EXECUTION_FAILED"
-              ) {
-                setStatusFilter("all");
-              }
-            }}
+            onClick={() => switchHandlingTab("manual")}
           >
             <span>Xử lý thủ công</span>
             <span className="count-pill">{manualIncidents.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={handlingTab === "resolved"}
+            className={`segmented-tab ${handlingTab === "resolved" ? "active" : ""}`}
+            onClick={() => switchHandlingTab("resolved")}
+          >
+            <span>Đã giải quyết</span>
+            <span className="count-pill">{resolvedIncidents.length}</span>
           </button>
         </div>
       </div>
@@ -343,17 +397,23 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             aria-label="Lọc theo trạng thái sự cố"
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="DETECTED">
-              {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
-            </option>
             {handlingTab === "auto" && (
               <>
+                <option value="DETECTED">Đang chờ Agent tải lệnh</option>
                 <option value="MITIGATING">Đang kích hoạt</option>
                 <option value="DELIVERY_FAILED">Tải lệnh bị lỗi</option>
                 <option value="EXECUTION_FAILED">Kích hoạt bị lỗi</option>
               </>
             )}
-            <option value="RESOLVED">Đã giải quyết</option>
+            {handlingTab === "manual" && (
+              <option value="DETECTED">Đang diễn ra</option>
+            )}
+            {handlingTab === "resolved" && (
+              <>
+                <option value="RESOLVED">Đã giải quyết</option>
+                <option value="FALSE_POSITIVE">Báo động giả</option>
+              </>
+            )}
           </select>
 
           <select
@@ -395,7 +455,9 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
             aria-label={
               handlingTab === "auto"
                 ? "Danh sách sự cố có xử lý tự động"
-                : "Danh sách sự cố xử lý thủ công"
+                : handlingTab === "manual"
+                  ? "Danh sách sự cố xử lý thủ công"
+                  : "Danh sách sự cố đã giải quyết"
             }
           >
             <thead>
@@ -407,22 +469,34 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
                 <th>Trạng thái</th>
                 <th>Số sự kiện</th>
                 <th>Thời điểm phát hiện</th>
+                {handlingTab === "resolved" && (
+                  <th style={{ textAlign: "right" }}>Thao tác</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {activeIncidents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "48px 20px" }}>
+                  <td
+                    colSpan={handlingTab === "resolved" ? 8 : 7}
+                    style={{ textAlign: "center", padding: "48px 20px" }}
+                  >
                     <div className="attention-empty" style={{ justifyContent: "center" }}>
                       <ShieldCheck size={28} style={{ color: "var(--status-ok)" }} />
                       <div>
-                        <strong>Hạ tầng an toàn</strong>
+                        <strong>
+                          {handlingTab === "resolved"
+                            ? "Chưa có sự cố đã giải quyết"
+                            : "Hạ tầng an toàn"}
+                        </strong>
                         <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
                           {searchQuery || statusFilter !== "all" || severityFilter !== "all"
                             ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
                             : handlingTab === "auto"
-                              ? "Không có sự cố nào thuộc nhóm xử lý tự động."
-                              : "Không có sự cố nào thuộc nhóm xử lý thủ công."}
+                              ? "Không có sự cố đang mở nào thuộc nhóm xử lý tự động."
+                              : handlingTab === "manual"
+                                ? "Không có sự cố đang mở nào thuộc nhóm xử lý thủ công."
+                                : "Không còn sự cố nào trong lịch sử đã giải quyết."}
                         </p>
                       </div>
                     </div>
@@ -484,6 +558,23 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
                           {new Date(inc.started_at).toLocaleTimeString("vi-VN")} · {new Date(inc.started_at).toLocaleDateString("vi-VN")}
                         </span>
                       </td>
+                      {handlingTab === "resolved" && (
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button
+                            type="button"
+                            className="icon-button danger-icon-button"
+                            aria-label={`Xóa sự cố ${inc.id}`}
+                            title="Xóa sự cố đã giải quyết"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDeleteIncident(inc);
+                            }}
+                            disabled={deletingId === inc.id}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })

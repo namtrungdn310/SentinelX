@@ -384,6 +384,7 @@ try {
         }));
         assert.ok(html.includes("Xử lý tự động"));
         assert.ok(html.includes("Xử lý thủ công"));
+        assert.ok(html.includes("Đã giải quyết"));
         assert.ok(html.includes("severity-guide-bar"));
         assert.ok(html.includes("Vượt ngưỡng cảnh báo ban đầu"));
         assert.ok(html.includes("Duy trì vượt ngưỡng ≥ 60 giây (hoặc đạt ≥ 95% / tấn công lớn)"));
@@ -394,8 +395,23 @@ try {
         assert.ok(html.includes("inc-syn-401"));
         assert.ok(!html.includes("inc-cpu-385"));
         assert.ok(!html.includes("inc-disk-409"));
+        assert.ok(!html.includes("inc-syn-390"));
+        assert.ok(!html.includes("inc-mem-389"));
         assert.ok(html.includes('<span class="severity-badge crit">Khẩn cấp</span>'));
         assert.ok(html.includes('<span class="severity-badge warn">Cao</span>'));
+
+        const resolvedTabHtml = renderToStaticMarkup(createElement(IncidentsView, {
+            selectedProjectId: MOCK_PROJECTS[0].id,
+            nodes: MOCK_NODES,
+            isDemoMode: true,
+            initialTab: "resolved",
+        }));
+        assert.ok(resolvedTabHtml.includes("inc-syn-390"));
+        assert.ok(resolvedTabHtml.includes("inc-mem-389"));
+        assert.ok(resolvedTabHtml.includes("inc-disk-391"));
+        assert.ok(resolvedTabHtml.includes("inc-cpu-382"));
+        assert.ok(resolvedTabHtml.includes("danger-icon-button"));
+        assert.ok(!resolvedTabHtml.includes("inc-syn-401"));
 
         const modalHtml = renderToStaticMarkup(createElement(IncidentDetailModal, {
             incident: syn,
@@ -437,8 +453,8 @@ try {
         const diskResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-disk-391");
         assert.equal(classifyIncidentHandling(synResolved, MOCK_POLICIES).mode, "auto");
         assert.equal(classifyIncidentHandling(diskResolved, MOCK_POLICIES).mode, "manual");
-        assert.ok(html.includes("inc-syn-390"));
-        assert.ok(html.includes("Đã giải quyết"));
+        assert.ok(resolvedTabHtml.includes("inc-syn-390"));
+        assert.ok(resolvedTabHtml.includes("Đã giải quyết"));
 
         const synResolvedModal = renderToStaticMarkup(createElement(IncidentDetailModal, {
             incident: synResolved,
@@ -471,7 +487,7 @@ try {
         assert.equal(classifyIncidentHandling(memResolved, MOCK_POLICIES).mode, "auto");
         assert.equal(classifyIncidentHandling(cpuResolved, MOCK_POLICIES).mode, "manual");
         assert.equal(classifyIncidentHandling(memMitigating, MOCK_POLICIES).mode, "auto");
-        assert.ok(html.includes("inc-mem-389"));
+        assert.ok(resolvedTabHtml.includes("inc-mem-389"));
         assert.ok(memResolved.summary.includes("\nservice: RESTART java"));
 
         const memMitigatingModal = renderToStaticMarkup(createElement(IncidentDetailModal, {

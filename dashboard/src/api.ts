@@ -184,6 +184,13 @@ export async function updateIncident(
   return res.json();
 }
 
+export async function deleteIncident(incidentId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/incidents/${incidentId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Lỗi xóa sự cố: ${res.statusText}`);
+}
+
 // ----------------------------------------------------
 // Defense Actions API (M6, M7, M8)
 // ----------------------------------------------------
