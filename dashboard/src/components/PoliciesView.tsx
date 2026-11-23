@@ -25,6 +25,7 @@ import {
   deleteWhitelist,
 } from "../api";
 import { MOCK_POLICIES, MOCK_WHITELIST } from "../mockData";
+import { formatPolicyDuration } from "../presentation";
 import { AddWhitelistModal } from "./AddWhitelistModal";
 import { EditPolicyModal } from "./EditPolicyModal";
 
@@ -73,6 +74,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
   const [isPoliciesLoading, setIsPoliciesLoading] = useState(false);
   const [togglingPolicyId, setTogglingPolicyId] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<DefensePolicy | null>(null);
+  const [isCreatePolicyOpen, setIsCreatePolicyOpen] = useState(false);
 
   // Common UI State
   const [error, setError] = useState<string | null>(null);
@@ -231,6 +233,14 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
     setFeedback({
       type: "success",
       text: `Đã cập nhật chính sách "${updated.name}" thành công!`,
+    });
+  };
+
+  const handlePolicyCreated = (created: DefensePolicy) => {
+    setPolicies((prev) => [created, ...prev]);
+    setFeedback({
+      type: "success",
+      text: `Đã tạo chính sách bảo vệ "${created.name}" thành công!`,
     });
   };
 
@@ -426,10 +436,37 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                 <RefreshCw size={15} className={isPoliciesLoading ? "spin" : ""} />
                 Làm mới chính sách
               </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsCreatePolicyOpen(true)}
+                disabled={!effectiveProjectId}
+              >
+                <Plus size={16} />
+                Thêm chính sách
+              </button>
             </div>
           </div>
 
-          <div className="policies-grid-2x2">
+          {policies.length === 0 ? (
+            <div className="panel empty-state-card">
+              <Sliders size={36} style={{ color: "var(--brand-indigo)" }} />
+              <h3>Chưa có chính sách tự động nào</h3>
+              <p>
+                Tạo quy tắc ứng phó tự động để hệ thống phản ứng khi Detector phát hiện tấn công mạng hoặc quá tải tài nguyên.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsCreatePolicyOpen(true)}
+                disabled={!effectiveProjectId}
+              >
+                <Plus size={15} /> Tạo chính sách đầu tiên
+              </button>
+            </div>
+          ) : (
+            <div className="policies-grid-2x2">
             {policies.map((policy) => {
               const isToggling = togglingPolicyId === policy.id;
 
@@ -497,7 +534,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                   <div className="policy-meta-grid">
                     <div className="policy-meta-item">
                       <span className="meta-label">Hành động</span>
-                      <strong className="meta-value font-mono">
+                      <strong className="meta-value">
                         {policy.action_type === "ADAPTIVE"
                           ? "Tự động tối ưu"
                           : policy.action_type === "BLOCK_IP_NFTABLES"
@@ -531,9 +568,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                           ? "Chỉ ghi nhận"
                           : policy.action_type === "RESTART_SERVICE" || policy.action_type === "CLEAR_OS_CACHE"
                           ? "Tức thời"
-                          : policy.block_duration_seconds === 0
-                          ? "Vĩnh viễn"
-                          : `${Math.floor(policy.block_duration_seconds / 60)} phút`}
+                          : formatPolicyDuration(policy.block_duration_seconds)}
                       </strong>
                     </div>
 
@@ -541,9 +576,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                       <span className="meta-label">Thời gian nghỉ</span>
                       <strong className="meta-value">
                         <Clock size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-                        {policy.cooldown_seconds >= 60
-                          ? `${Math.floor(policy.cooldown_seconds / 60)} phút`
-                          : `${policy.cooldown_seconds} giây`}
+                        {formatPolicyDuration(policy.cooldown_seconds)}
                       </strong>
                     </div>
                   </div>
@@ -576,7 +609,8 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                 </article>
               );
             })}
-          </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -585,16 +619,22 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         isOpen={isWhitelistModalOpen}
         onClose={() => setIsWhitelistModalOpen(false)}
         projectId={effectiveProjectId}
+        existingWhitelist={whitelist}
         onWhitelistCreated={handleWhitelistCreated}
         isDemoMode={isDemoMode}
       />
 
-      {/* Edit Policy Modal */}
+      {/* Create / Edit Policy Modal */}
       <EditPolicyModal
-        isOpen={Boolean(editingPolicy)}
-        onClose={() => setEditingPolicy(null)}
+        isOpen={Boolean(editingPolicy) || isCreatePolicyOpen}
+        onClose={() => {
+          setEditingPolicy(null);
+          setIsCreatePolicyOpen(false);
+        }}
         policy={editingPolicy}
+        projectId={effectiveProjectId}
         onPolicyUpdated={handlePolicyUpdated}
+        onPolicyCreated={handlePolicyCreated}
         isDemoMode={isDemoMode}
       />
     </div>

@@ -137,6 +137,7 @@ export interface DefenseAction {
 
 export interface DefensePolicy {
   id: string;
+  project_id?: string;
   name: string;
   event_type: string;
   action_type: string;
@@ -145,7 +146,8 @@ export interface DefensePolicy {
   block_duration_seconds: number;
   is_auto_execute: boolean;
   is_active: boolean;
-  created_at: string;
+  priority?: number;
+  created_at?: string;
 }
 
 export interface IPWhitelist {

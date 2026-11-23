@@ -264,14 +264,39 @@ export async function cancelDefenseAction(actionId: string): Promise<DefenseActi
 // Policies & Whitelist API (M5)
 // ----------------------------------------------------
 
+async function extractApiError(res: Response, fallback: string): Promise<string> {
+  let detail = res.statusText || fallback;
+  try {
+    const errBody = await res.json();
+    if (typeof errBody?.detail === "string") {
+      detail = errBody.detail;
+    }
+  } catch {
+    // ignore non-JSON body
+  }
+  return `${fallback}: ${detail}`;
+}
+
+function normalizePolicyResponse(
+  raw: DefensePolicy & { enabled?: boolean },
+): DefensePolicy {
+  return {
+    ...raw,
+    is_active: Boolean(raw.is_active ?? raw.enabled),
+  };
+}
+
 export async function fetchPolicies(projectId?: string): Promise<DefensePolicy[]> {
   const url = projectId
     ? `${API_BASE}/defense-policies?project_id=${projectId}`
     : `${API_BASE}/defense-policies`;
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Lỗi tải danh mục chính sách: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải danh mục chính sách"));
   const data = await res.json();
-  return data.items || [];
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.map((item: DefensePolicy & { enabled?: boolean }) =>
+    normalizePolicyResponse(item),
+  );
 }
 
 export async function createPolicy(
@@ -290,10 +315,19 @@ export async function createPolicy(
   const res = await fetch(`${API_BASE}/projects/${projectId}/defense-policies`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(policy),
+    body: JSON.stringify({
+      name: policy.name,
+      event_type: policy.event_type,
+      action_type: policy.action_type,
+      target_params: policy.target_params ?? {},
+      cooldown_seconds: policy.cooldown_seconds ?? 300,
+      block_duration_seconds: policy.block_duration_seconds ?? 1800,
+      is_auto_execute: policy.is_auto_execute ?? true,
+      enabled: policy.is_active ?? true,
+    }),
   });
-  if (!res.ok) throw new Error(`Lỗi tạo chính sách phòng thủ: ${res.statusText}`);
-  return res.json();
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tạo chính sách phòng thủ"));
+  return normalizePolicyResponse(await res.json());
 }
 
 export async function updatePolicy(
@@ -301,33 +335,45 @@ export async function updatePolicy(
   update: {
     name?: string;
     action_type?: string;
+    target_params?: Record<string, unknown>;
     is_active?: boolean;
     is_auto_execute?: boolean;
     cooldown_seconds?: number;
     block_duration_seconds?: number;
   },
 ): Promise<DefensePolicy> {
+  const body: Record<string, unknown> = {};
+  if (update.name !== undefined) body.name = update.name;
+  if (update.action_type !== undefined) body.action_type = update.action_type;
+  if (update.target_params !== undefined) body.target_params = update.target_params;
+  if (update.is_active !== undefined) body.enabled = update.is_active;
+  if (update.is_auto_execute !== undefined) body.is_auto_execute = update.is_auto_execute;
+  if (update.cooldown_seconds !== undefined) body.cooldown_seconds = update.cooldown_seconds;
+  if (update.block_duration_seconds !== undefined) {
+    body.block_duration_seconds = update.block_duration_seconds;
+  }
+
   const res = await fetch(`${API_BASE}/defense-policies/${policyId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(update),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Lỗi cập nhật chính sách: ${res.statusText}`);
-  return res.json();
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi cập nhật chính sách"));
+  return normalizePolicyResponse(await res.json());
 }
 
 export async function deletePolicy(policyId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/defense-policies/${policyId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Lỗi xóa chính sách: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi xóa chính sách"));
 }
 
 export async function fetchWhitelist(projectId: string): Promise<IPWhitelist[]> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/ip-whitelist`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`Lỗi tải danh sách an toàn: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải danh sách an toàn"));
   const data = await res.json();
   const items = Array.isArray(data.items) ? data.items : [];
   return items.map((item: IPWhitelist & { ip_or_cidr?: string }) => ({
@@ -338,26 +384,30 @@ export async function fetchWhitelist(projectId: string): Promise<IPWhitelist[]> 
 
 export async function createWhitelist(
   projectId: string,
-  cidr: string,
+  ipOrCidr: string,
   description?: string,
 ): Promise<IPWhitelist> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/ip-whitelist`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      cidr,
+      ip_or_cidr: ipOrCidr,
       description,
     }),
   });
-  if (!res.ok) throw new Error(`Lỗi thêm IP an toàn: ${res.statusText}`);
-  return res.json();
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi thêm IP an toàn"));
+  const item = (await res.json()) as IPWhitelist & { ip_or_cidr?: string };
+  return {
+    ...item,
+    cidr: String(item.cidr ?? item.ip_or_cidr ?? ipOrCidr),
+  };
 }
 
 export async function deleteWhitelist(whitelistId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/ip-whitelist/${whitelistId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Lỗi xóa IP an toàn: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi xóa IP an toàn"));
 }
 
 // ----------------------------------------------------

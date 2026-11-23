@@ -770,3 +770,92 @@ export function validateManualBlockIp(
       : "IP hợp lệ — sẵn sàng chặn.",
   };
 }
+
+export interface WhitelistCheckResult {
+  status: "empty" | "valid" | "invalid";
+  valid: boolean;
+  normalized: string;
+  message: string;
+}
+
+export function validateWhitelistCidr(
+  rawInput: string,
+  existingWhitelist: IPWhitelist[] = [],
+): WhitelistCheckResult {
+  const trimmed = rawInput.trim();
+  if (!trimmed) {
+    return {
+      status: "empty",
+      valid: false,
+      normalized: "",
+      message: "Nhập IP lẻ hoặc dải CIDR (ví dụ: 192.168.1.0/24 hoặc 2001:db8::/48).",
+    };
+  }
+
+  const slashIdx = trimmed.indexOf("/");
+  const baseStr = slashIdx >= 0 ? trimmed.slice(0, slashIdx).trim() : trimmed;
+  const parsedBase = parseIp(baseStr);
+  if (!parsedBase || !baseStr) {
+    return {
+      status: "invalid",
+      valid: false,
+      normalized: trimmed,
+      message: "Định dạng IP hoặc CIDR không hợp lệ (ví dụ: 192.168.1.0/24 hoặc 10.0.0.5).",
+    };
+  }
+
+  if (slashIdx >= 0) {
+    const prefixStr = trimmed.slice(slashIdx + 1).trim();
+    const maxPrefix = parsedBase.family === 4 ? 32 : 128;
+    if (!/^\d{1,3}$/.test(prefixStr)) {
+      return {
+        status: "invalid",
+        valid: false,
+        normalized: trimmed,
+        message: `Độ dài tiền tố CIDR không hợp lệ (cần từ 0 đến ${maxPrefix}).`,
+      };
+    }
+    const prefix = Number(prefixStr);
+    if (!Number.isInteger(prefix) || prefix < 0 || prefix > maxPrefix) {
+      return {
+        status: "invalid",
+        valid: false,
+        normalized: trimmed,
+        message: `Tiền tố CIDR phải nằm trong khoảng 0..${maxPrefix}.`,
+      };
+    }
+  }
+
+  const normalized = trimmed;
+  const dup = existingWhitelist.find((entry) => entry.cidr.trim().toLowerCase() === normalized.toLowerCase());
+  if (dup) {
+    return {
+      status: "invalid",
+      valid: false,
+      normalized,
+      message: `Mục ${dup.cidr} đã tồn tại trong Danh sách an toàn.`,
+    };
+  }
+
+  return {
+    status: "valid",
+    valid: true,
+    normalized,
+    message: slashIdx >= 0 ? "Dải mạng CIDR hợp lệ — sẵn sàng bảo vệ." : "Địa chỉ IP hợp lệ — sẵn sàng bảo vệ.",
+  };
+}
+
+export function formatPolicyDuration(seconds: number): string {
+  if (seconds <= 0) return "Theo chính sách";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return remMins > 0 ? `${hours} giờ ${remMins} phút` : `${hours} giờ`;
+  }
+  if (mins > 0) {
+    return secs > 0 ? `${mins} phút ${secs} giây` : `${mins} phút`;
+  }
+  return `${secs} giây`;
+}

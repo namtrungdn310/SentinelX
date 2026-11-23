@@ -1,13 +1,15 @@
-import { useId, useState } from "react";
-import { ShieldCheck, ShieldAlert, X } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { CheckCircle2, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import type { IPWhitelist } from "../types";
 import { createWhitelist } from "../api";
+import { validateWhitelistCidr } from "../presentation";
 import { Modal } from "./Modal";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
+  existingWhitelist?: IPWhitelist[];
   onWhitelistCreated: (item: IPWhitelist) => void;
   isDemoMode: boolean;
 }
@@ -16,6 +18,7 @@ export function AddWhitelistModal({
   isOpen,
   onClose,
   projectId,
+  existingWhitelist = [],
   onWhitelistCreated,
   isDemoMode,
 }: Props) {
@@ -25,21 +28,24 @@ export function AddWhitelistModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const cidrCheck = useMemo(
+    () => validateWhitelistCidr(cidr, existingWhitelist),
+    [cidr, existingWhitelist],
+  );
+
   if (!isOpen) return null;
+
+  const resetAndClose = () => {
+    setCidr("");
+    setDescription("");
+    setError(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedCidr = cidr.trim();
-    if (!trimmedCidr) {
-      setError("Vui lòng nhập IP hoặc định dạng CIDR");
-      return;
-    }
-
-    // Basic CIDR / IP validation
-    const cidrRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))?$/;
-    const isIpv6 = trimmedCidr.includes(":");
-    if (!isIpv6 && !cidrRegex.test(trimmedCidr)) {
-      setError("Định dạng CIDR không hợp lệ (ví dụ: 192.168.1.0/24 hoặc 10.0.0.1/32)");
+    if (!cidrCheck.valid) {
+      setError(cidrCheck.message);
       return;
     }
 
@@ -50,22 +56,22 @@ export function AddWhitelistModal({
         const mockItem: IPWhitelist = {
           id: `wl-${Date.now()}`,
           project_id: projectId,
-          cidr: trimmedCidr.includes("/") ? trimmedCidr : `${trimmedCidr}/32`,
+          cidr: cidrCheck.normalized,
           description: description.trim() || null,
           created_at: new Date().toISOString(),
         };
         onWhitelistCreated(mockItem);
-        onClose();
+        resetAndClose();
         return;
       }
 
       const res = await createWhitelist(
         projectId,
-        trimmedCidr.includes("/") ? trimmedCidr : `${trimmedCidr}/32`,
-        description.trim() || undefined
+        cidrCheck.normalized,
+        description.trim() || undefined,
       );
       onWhitelistCreated(res);
-      onClose();
+      resetAndClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Lỗi thêm IP an toàn");
     } finally {
@@ -74,7 +80,7 @@ export function AddWhitelistModal({
   };
 
   return (
-    <Modal onClose={onClose} labelledBy={`${id}-title`} className="whitelist-modal">
+    <Modal onClose={resetAndClose} labelledBy={`${id}-title`} className="whitelist-modal">
       <div className="modal-header">
         <div>
           <span className="modal-eyebrow">
@@ -85,7 +91,7 @@ export function AddWhitelistModal({
         <button
           className="icon-button"
           aria-label="Đóng biểu mẫu thêm IP an toàn"
-          onClick={onClose}
+          onClick={resetAndClose}
           disabled={loading}
         >
           <X size={18} />
@@ -107,15 +113,29 @@ export function AddWhitelistModal({
               id={`${id}-cidr`}
               type="text"
               className="font-mono"
-              placeholder="ví dụ: 192.168.1.0/24 hoặc 10.0.0.5/32"
+              placeholder="ví dụ: 192.168.1.0/24 hoặc 10.0.0.5"
               value={cidr}
-              onChange={(e) => setCidr(e.target.value)}
+              onChange={(e) => {
+                setCidr(e.target.value);
+                if (error) setError(null);
+              }}
+              aria-invalid={cidrCheck.status === "invalid"}
               disabled={loading}
               data-autofocus
             />
-            <small className="form-hint">
-              Các địa chỉ IP này sẽ được bảo vệ tuyệt đối — hệ thống sẽ không bao giờ kích hoạt khóa tại tường lửa.
-            </small>
+            {cidrCheck.status === "empty" ? (
+              <small className="field-hint">
+                Các địa chỉ IP này được bảo vệ tuyệt đối — hệ thống sẽ không bao giờ chặn qua tường lửa.
+              </small>
+            ) : (
+              <div
+                className={`ip-check-feedback ${cidrCheck.valid ? "is-valid" : "is-invalid"}`}
+                role={cidrCheck.valid ? "status" : "alert"}
+              >
+                {cidrCheck.valid ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />}
+                <span>{cidrCheck.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -135,12 +155,16 @@ export function AddWhitelistModal({
           <button
             type="button"
             className="btn btn-outline"
-            onClick={onClose}
+            onClick={resetAndClose}
             disabled={loading}
           >
             Hủy bỏ
           </button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || !projectId || !cidrCheck.valid}
+          >
             <ShieldCheck size={16} />
             {loading ? "Đang lưu..." : "Thêm vào danh sách an toàn"}
           </button>

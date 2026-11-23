@@ -63,13 +63,16 @@ try {
         "/src/components/KPICards.tsx",
     );
     const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
-    const { classifyIncidentHandling, nodeHealth, nodeHealthLabel, validateManualBlockIp } = await server.ssrLoadModule("/src/presentation.ts");
+    const { classifyIncidentHandling, nodeHealth, nodeHealthLabel, validateManualBlockIp, validateWhitelistCidr } = await server.ssrLoadModule("/src/presentation.ts");
     const { filterEvents, eventLabel, eventMatchesCategory, formatRealtimeMessage, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
     const { IncidentDetailModal } = await server.ssrLoadModule("/src/components/IncidentDetailModal.tsx");
     const { DefenseView } = await server.ssrLoadModule("/src/components/DefenseView.tsx");
     const { ManualBlockModal } = await server.ssrLoadModule("/src/components/ManualBlockModal.tsx");
+    const { PoliciesView } = await server.ssrLoadModule("/src/components/PoliciesView.tsx");
+    const { EditPolicyModal } = await server.ssrLoadModule("/src/components/EditPolicyModal.tsx");
+    const { AddWhitelistModal } = await server.ssrLoadModule("/src/components/AddWhitelistModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
     const { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS, MOCK_WHITELIST } = await server.ssrLoadModule("/src/mockData.ts");
@@ -616,6 +619,54 @@ try {
         assert.equal(validateManualBlockIp("192.168.1.55", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
         assert.equal(validateManualBlockIp("203.0.113.195", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
     });
+    check("PoliciesView and modals validate CIDRs, omit permanent block, and map policy contracts", async () => {
+        const policiesHtml = renderToStaticMarkup(createElement(PoliciesView, {
+            selectedProjectId: MOCK_PROJECTS[0].id,
+            projects: MOCK_PROJECTS,
+            isDemoMode: true,
+        }));
+        assert.ok(policiesHtml.includes("192.168.1.0/24"));
+        assert.ok(policiesHtml.includes("Danh sách an toàn"));
+        assert.ok(policiesHtml.includes("Chính sách bảo vệ tự động"));
+
+        const editHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+            isOpen: true,
+            onClose: noop,
+            policy: MOCK_POLICIES[0],
+            onPolicyUpdated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(!editHtml.includes('value="0"'));
+        assert.ok(editHtml.includes('value="1440"'));
+
+        const createHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+            isOpen: true,
+            onClose: noop,
+            policy: null,
+            projectId: MOCK_PROJECTS[0].id,
+            onPolicyUpdated: noop,
+            onPolicyCreated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(createHtml.includes("Tạo chính sách bảo vệ mới"));
+        assert.ok(createHtml.includes("syn_flood_detector"));
+
+        const whitelistHtml = renderToStaticMarkup(createElement(AddWhitelistModal, {
+            isOpen: true,
+            onClose: noop,
+            projectId: MOCK_PROJECTS[0].id,
+            onWhitelistCreated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(whitelistHtml.includes("Thêm IP an toàn"));
+
+        const prodWhitelist = MOCK_WHITELIST.filter((w) => w.project_id === MOCK_PROJECTS[0].id);
+        assert.equal(validateWhitelistCidr("203.0.113.10", prodWhitelist).valid, true);
+        assert.equal(validateWhitelistCidr("2001:db8::/48", prodWhitelist).valid, true);
+        assert.equal(validateWhitelistCidr("999.1.2.3", prodWhitelist).valid, false);
+        assert.equal(validateWhitelistCidr("bad:ip", prodWhitelist).valid, false);
+        assert.equal(validateWhitelistCidr("192.168.1.0/24", prodWhitelist).valid, false);
+    });
     const originalFetch = globalThis.fetch;
     try {
         globalThis.fetch = async () =>
@@ -633,6 +684,47 @@ try {
         check("Controller project_id maps to dashboard ID", () =>
             assert.equal(projects[0].id, "project-uuid"),
         );
+
+        let sentWhitelistBody = null;
+        globalThis.fetch = async (_url, init) => {
+            sentWhitelistBody = JSON.parse(String(init?.body ?? "{}"));
+            return new Response(JSON.stringify({
+                id: "wl-live-1",
+                project_id: "project-uuid",
+                ip_or_cidr: "203.0.113.0/24",
+                description: "Office",
+                created_at: "2026-10-16T00:00:00Z",
+            }));
+        };
+        const createdWl = await api.createWhitelist("project-uuid", "203.0.113.0/24", "Office");
+        check("createWhitelist sends ip_or_cidr and normalizes cidr response", () => {
+            assert.equal(sentWhitelistBody.ip_or_cidr, "203.0.113.0/24");
+            assert.equal(sentWhitelistBody.cidr, undefined);
+            assert.equal(createdWl.cidr, "203.0.113.0/24");
+        });
+
+        let sentPolicyPatchBody = null;
+        globalThis.fetch = async (_url, init) => {
+            sentPolicyPatchBody = JSON.parse(String(init?.body ?? "{}"));
+            return new Response(JSON.stringify({
+                id: "pol-live-1",
+                project_id: "project-uuid",
+                name: "SYN Block",
+                event_type: "syn_flood_detector",
+                action_type: "BLOCK_IP_NFTABLES",
+                target_params: {},
+                is_auto_execute: true,
+                cooldown_seconds: 60,
+                block_duration_seconds: 1800,
+                enabled: false,
+            }));
+        };
+        const updatedPol = await api.updatePolicy("pol-live-1", { is_active: false });
+        check("updatePolicy maps is_active to enabled wire field", () => {
+            assert.equal(sentPolicyPatchBody.enabled, false);
+            assert.equal(sentPolicyPatchBody.is_active, undefined);
+            assert.equal(updatedPol.is_active, false);
+        });
     } finally {
         globalThis.fetch = originalFetch;
     }
