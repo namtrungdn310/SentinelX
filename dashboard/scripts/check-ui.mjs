@@ -689,6 +689,7 @@ try {
         assert.ok(editMemHtml.includes('-action"'));
         assert.ok(editMemHtml.includes("CLEAR_OS_CACHE"));
         assert.ok(editMemHtml.includes("RESTART_SERVICE"));
+        assert.ok(!editMemHtml.includes("hoặc tiến trình"));
         assert.ok(!editMemHtml.includes("ALERT_ONLY"));
 
         const whitelistHtml = renderToStaticMarkup(createElement(AddWhitelistModal, {

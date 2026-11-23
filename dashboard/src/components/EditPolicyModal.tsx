@@ -179,12 +179,12 @@ function EditPolicyModalForm({
               >
                 <option value="ADAPTIVE">Tự động thích ứng</option>
                 <option value="CLEAR_OS_CACHE">Giải phóng bộ nhớ đệm hệ điều hành</option>
-                <option value="RESTART_SERVICE">Khởi động lại dịch vụ hoặc tiến trình</option>
+                <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
               </select>
               <small className="field-hint">
-                {actionType === "ADAPTIVE" && "Hệ thống tự chẩn đoán: nếu do bộ nhớ đệm đĩa thì dọn đệm an toàn; nếu do tiến trình rò rỉ RAM thì khởi động lại tiến trình đó."}
+                {actionType === "ADAPTIVE" && "Hệ thống tự chẩn đoán: nếu do bộ nhớ đệm đĩa thì dọn đệm an toàn; nếu do rò rỉ RAM thì khởi động lại dịch vụ tương ứng."}
                 {actionType === "CLEAR_OS_CACHE" && "Chạy sync và giải phóng bộ nhớ đệm đĩa (Page Cache) mà không làm gián đoạn dịch vụ."}
-                {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây cạn kiệt RAM khi vượt ngưỡng."}
+                {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây cạn kiệt RAM qua systemd khi vượt ngưỡng."}
               </small>
             </div>
           )}
@@ -198,7 +198,7 @@ function EditPolicyModalForm({
                 className="font-mono"
                 value={serviceName}
                 onChange={(e) => setServiceName(e.target.value)}
-                placeholder="Để trống để tự nhận diện theo tiến trình quá tải (vd: nginx)"
+                placeholder="Để trống để tự xác định dịch vụ tương ứng (vd: nginx)"
                 disabled={loading}
               />
             </div>
