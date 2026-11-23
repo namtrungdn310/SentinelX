@@ -196,14 +196,27 @@ try {
         assert.equal(nodeHealthLabel({ ...node, status: "unenrolled", latestCpu: 99 }), "Chờ đăng ký");
         assert.equal(nodeHealthLabel({ ...node, status: "offline", latestCpu: 99 }), "Mất kết nối");
     });
-    check("Pending enrollment needs action but is not a resource warning", () => {
-        const html = renderToStaticMarkup(createElement(KPICards, { nodes: [{ ...node, status: "unenrolled" }], isLoading: false }));
-        assert.ok(html.includes("Cần xử lý"));
-        assert.ok(html.includes("1 chờ đăng ký"));
-        assert.ok(html.includes("0 cảnh báo"));
-        assert.ok(!html.includes("stat-attention"));
-        const warning = renderToStaticMarkup(createElement(KPICards, { nodes: [{ ...node, status: "offline" }], isLoading: false }));
-        assert.ok(warning.includes("stat-attention"));
+    check("Overview KPI separates host connectivity from active security incidents", () => {
+        const htmlNoIncidents = renderToStaticMarkup(createElement(KPICards, {
+            nodes: [{ ...node, status: "unenrolled" }],
+            incidents: [],
+            isLoading: false,
+        }));
+        assert.ok(htmlNoIncidents.includes("Máy chủ trực tuyến"));
+        assert.ok(htmlNoIncidents.includes("1 chờ đăng ký"));
+        assert.ok(htmlNoIncidents.includes("Sự cố đang mở"));
+        assert.ok(!htmlNoIncidents.includes("Cần xử lý"));
+        assert.ok(!htmlNoIncidents.includes("stat-attention"));
+
+        const activeProdIncidents = MOCK_INCIDENTS.filter((i) => i.project_id === MOCK_PROJECTS[0].id);
+        const withIncidents = renderToStaticMarkup(createElement(KPICards, {
+            nodes: [node],
+            incidents: activeProdIncidents,
+            isLoading: false,
+        }));
+        assert.ok(withIncidents.includes("stat-attention"));
+        assert.ok(withIncidents.includes("khẩn cấp"));
+        assert.ok(withIncidents.includes("cao"));
     });
     const detection = { event: "detection_alert", timestamp: "2026-11-06T10:00:00Z", data: {
         id: "detection-1", node_id: node.id, severity: "CRITICAL", detector_name: "cpu_threshold_detector",

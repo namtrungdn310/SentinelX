@@ -97,14 +97,20 @@ export function App() {
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
   const effectiveSelectedProjectId = selectedProject?.id ?? null;
-  const activeIncidentsCount = useMemo(
+  const projectIncidents = useMemo(
     () =>
       incidents.filter(
         (item) =>
-          (!effectiveSelectedProjectId || item.project_id === effectiveSelectedProjectId) &&
-          (item.status === "DETECTED" || item.status === "MITIGATING"),
-      ).length,
+          !effectiveSelectedProjectId || item.project_id === effectiveSelectedProjectId,
+      ),
     [incidents, effectiveSelectedProjectId],
+  );
+  const activeIncidentsCount = useMemo(
+    () =>
+      projectIncidents.filter(
+        (item) => item.status === "DETECTED" || item.status === "MITIGATING",
+      ).length,
+    [projectIncidents],
   );
   const handleIncidentsSynced = useCallback(
     (items: typeof incidents) => {
@@ -525,11 +531,15 @@ export function App() {
 
           {effectiveView === "overview" && (
             <>
-              <KPICards nodes={displayedNodes} isLoading={isLoading} />
+              <KPICards
+                nodes={displayedNodes}
+                incidents={projectIncidents}
+                isLoading={isLoading}
+              />
               <InfrastructureOverview
                 nodes={displayedNodes}
                 projects={projects}
-                selectedProjectId={selectedProjectId}
+                selectedProjectId={effectiveSelectedProjectId}
                 onStatusSelect={(status) => {
                   setStatusFacet(status);
                   navigate("hosts");

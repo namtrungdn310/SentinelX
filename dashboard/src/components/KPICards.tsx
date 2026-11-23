@@ -3,16 +3,18 @@ import {
   Cpu,
   MemoryStick,
   ArrowDownUp,
-  TriangleAlert,
+  ShieldAlert,
 } from "lucide-react";
-import type { Node } from "../types";
-import { formatBytes, getNodeHardware, nodeHealth, validMetric } from "../presentation";
+import type { Incident, Node } from "../types";
+import { formatBytes, getNodeHardware, validMetric } from "../presentation";
 
 export function KPICards({
   nodes,
+  incidents = [],
   isLoading,
 }: {
   nodes: Node[];
+  incidents?: Incident[];
   isLoading: boolean;
 }) {
   const online = nodes.filter(
@@ -40,10 +42,13 @@ export function KPICards({
   const txNodes = online.filter((node) => validMetric(node.latestTxBytes));
   const rx = rxNodes.reduce((sum, node) => sum + node.latestRxBytes!, 0);
   const tx = txNodes.reduce((sum, node) => sum + node.latestTxBytes!, 0);
-  const warning = nodes.filter((node) => nodeHealth(node) === "warn").length;
   const offline = nodes.filter((node) => node.status === "offline").length;
   const waiting = nodes.filter((node) => node.status === "unenrolled").length;
-  const attention = warning + offline + waiting;
+  const activeIncidents = incidents.filter(
+    (item) => item.status === "DETECTED" || item.status === "MITIGATING",
+  );
+  const criticalIncidents = activeIncidents.filter((item) => item.severity === "CRITICAL").length;
+  const highIncidents = activeIncidents.filter((item) => item.severity === "HIGH").length;
 
   return (
     <section
@@ -65,17 +70,17 @@ export function KPICards({
           <span>{waiting} chờ đăng ký</span>
         </div>
       </article>
-      <article className={`stat-card ${warning + offline > 0 ? "stat-attention" : ""}`}>
+      <article className={`stat-card ${activeIncidents.length > 0 ? "stat-attention" : ""}`}>
         <div className="stat-top">
-          <TriangleAlert size={14} />
-          <span>Cần xử lý</span>
+          <ShieldAlert size={14} />
+          <span>Sự cố đang mở</span>
         </div>
         <div className="stat-value">
-          {attention}
+          {activeIncidents.length}
         </div>
         <div className="stat-bottom">
-          <span>{warning} cảnh báo{offline > 0 ? ` · ${offline} mất kết nối` : ""}</span>
-          <span>{waiting} chờ đăng ký</span>
+          <span>{criticalIncidents} khẩn cấp</span>
+          <span>{highIncidents} cao</span>
         </div>
       </article>
       <article className="stat-card stat-cpu">
