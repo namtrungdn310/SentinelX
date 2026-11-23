@@ -592,6 +592,7 @@ try {
         assert.ok(defenseHtml.includes("Cấu hình 15 phút"));
         assert.ok(defenseHtml.includes("30 phút"));
         assert.ok(!defenseHtml.includes("15m 00s"));
+        assert.match(appCss, /\.defense-view\s*>\s*\.kpi-grid[\s\S]*?margin-bottom:\s*0/);
 
         const modalHtml = renderToStaticMarkup(createElement(ManualBlockModal, {
             isOpen: true,

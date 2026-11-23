@@ -2861,8 +2861,13 @@ body:has(.event-full) .event-full {
 .policies-view {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--space-card);
     padding-bottom: 32px;
+}
+
+.defense-view > .kpi-grid,
+.policies-view > .kpi-grid {
+    margin-bottom: 0;
 }
 
 .feedback-banner {
