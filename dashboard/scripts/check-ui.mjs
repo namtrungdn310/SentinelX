@@ -589,6 +589,9 @@ try {
         assert.ok(defenseHtml.includes("Gỡ chặn"));
         assert.ok(!defenseHtml.includes("Vĩnh viễn"));
         assert.ok(defenseHtml.includes("Thời gian chặn IP"));
+        assert.ok(defenseHtml.includes("Cấu hình 15 phút"));
+        assert.ok(defenseHtml.includes("30 phút"));
+        assert.ok(!defenseHtml.includes("15m 00s"));
 
         const modalHtml = renderToStaticMarkup(createElement(ManualBlockModal, {
             isOpen: true,

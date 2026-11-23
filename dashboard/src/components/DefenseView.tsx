@@ -57,18 +57,18 @@ function getFailureSummary(action: DefenseAction): string {
 }
 
 function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "0s";
+  if (seconds <= 0) return "0 giây";
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   if (mins >= 60) {
     const hours = Math.floor(mins / 60);
     const remMins = mins % 60;
-    return `${hours}h ${remMins}m`;
+    return remMins > 0 ? `${hours} giờ ${remMins} phút` : `${hours} giờ`;
   }
   if (mins > 0) {
-    return `${mins}m ${secs < 10 ? "0" : ""}${secs}s`;
+    return secs > 0 ? `${mins} phút ${secs} giây` : `${mins} phút`;
   }
-  return `${secs}s`;
+  return `${secs} giây`;
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -667,7 +667,7 @@ export function DefenseView({
                           </span>
                         ) : isReverted ? (
                           <span className="text-muted" style={{ fontSize: 13 }}>
-                            {durationSec > 0 ? `${Math.round(durationSec / 60)} phút` : "—"}
+                            {durationSec > 0 ? formatDuration(durationSec) : "—"}
                           </span>
                         ) : (
                           <span className="text-muted" style={{ fontSize: 13 }}>—</span>
