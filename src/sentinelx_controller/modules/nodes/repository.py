@@ -109,6 +109,10 @@ class NodeRepository:
         await self._session.flush()
         return node
 
+    async def save(self, node: NodeModel) -> None:
+        """Persist updated node attributes."""
+        await self._session.flush()
+
 
 class AgentEnrollmentRepository:
     """Handle database operations for Agent enrollment tokens."""

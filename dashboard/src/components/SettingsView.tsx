@@ -17,7 +17,7 @@ import type {
 } from "../types";
 import type { SecurityToastPayload } from "./SecurityToast";
 import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "../mockData";
-import { updateProjectSettings } from "../api";
+import { updateNodeSettings, updateProjectSettings } from "../api";
 
 interface Props {
   selectedProjectId: string | null;
@@ -25,6 +25,7 @@ interface Props {
   nodes: Node[];
   isDemoMode: boolean;
   onProfileApplied?: (newProfile: PresetProfileType) => void;
+  onSettingsPersisted?: (nodeIds: string[], profile: PresetProfileType, updatedAt: string) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
 }
 
@@ -32,8 +33,22 @@ function resolveNodeConfig(
   node: Node,
   projectId: string
 ): { profile: PresetProfileType; updatedAt: string } {
+  const capSettings = (
+    node.agent_capabilities as
+      | { settings?: { active_profile?: string; updated_at?: string } }
+      | undefined
+  )?.settings;
+  if (
+    capSettings?.active_profile &&
+    Object.hasOwn(TELEMETRY_PRESETS, capSettings.active_profile)
+  ) {
+    return {
+      profile: capSettings.active_profile as PresetProfileType,
+      updatedAt: capSettings.updated_at || node.last_seen || node.created_at,
+    };
+  }
   try {
-    // 1. Try node-specific setting
+    // 1. Try node-specific local setting
     const nodeSaved = localStorage.getItem(`sentinelx_node_settings_${node.id}`);
     if (nodeSaved) {
       const parsed = JSON.parse(nodeSaved);
@@ -44,7 +59,7 @@ function resolveNodeConfig(
         };
       }
     }
-    // 2. Try project setting
+    // 2. Try project local setting
     const projSaved = localStorage.getItem(`sentinelx_settings_${node.project_id || projectId}`);
     if (projSaved) {
       const parsed = JSON.parse(projSaved);
@@ -73,7 +88,9 @@ export function SettingsView({
   selectedProjectId,
   projects,
   nodes,
+  isDemoMode,
   onProfileApplied,
+  onSettingsPersisted,
   onNotify,
 }: Props) {
   const effectiveProjectId = selectedProjectId || projects[0]?.id || "";
@@ -142,6 +159,7 @@ export function SettingsView({
   }
 
   const [applyingProfile, setApplyingProfile] = useState<PresetProfileType | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const activePreset = useMemo(() => {
     return TELEMETRY_PRESETS[activeProfile] || TELEMETRY_PRESETS.balanced;
@@ -151,9 +169,32 @@ export function SettingsView({
     if (!selectedNode || applyingProfile) return;
     try {
       setApplyingProfile(profileId);
-      const now = new Date().toISOString();
+      setSettingsError(null);
+      let now = new Date().toISOString();
+      const targetProjectId = selectedNode.project_id || effectiveProjectId;
 
-      // 1. Save node setting
+      if (!isDemoMode) {
+        if (applyToAllInProject) {
+          const saved = await updateProjectSettings(
+            targetProjectId,
+            profileId,
+            "admin@sentinelx.com",
+            true,
+          );
+          now = saved.updated_at || now;
+        } else {
+          const saved = await updateNodeSettings(
+            selectedNode.id,
+            profileId,
+            "admin@sentinelx.com",
+          );
+          now = saved.updated_at || now;
+        }
+      } else if (applyToAllInProject) {
+        void updateProjectSettings(targetProjectId, profileId);
+      }
+
+      // 1. Save local node setting
       localStorage.setItem(
         `sentinelx_node_settings_${selectedNode.id}`,
         JSON.stringify({
@@ -165,6 +206,9 @@ export function SettingsView({
       );
 
       // 2. If apply to all or updating project level
+      const updatedNodeIds = applyToAllInProject
+        ? availableNodes.map((n) => n.id)
+        : [selectedNode.id];
       if (applyToAllInProject) {
         availableNodes.forEach((n) => {
           localStorage.setItem(
@@ -178,15 +222,14 @@ export function SettingsView({
           );
         });
         localStorage.setItem(
-          `sentinelx_settings_${selectedNode.project_id}`,
+          `sentinelx_settings_${targetProjectId}`,
           JSON.stringify({
-            project_id: selectedNode.project_id,
+            project_id: targetProjectId,
             active_profile: profileId,
             updated_at: now,
             updated_by: "admin@sentinelx.com",
           })
         );
-        void updateProjectSettings(selectedNode.project_id, profileId);
         setApplyToAllInProject(true);
       } else {
         // Updated only selectedNode: recheck if all nodes now share the same profile
@@ -197,21 +240,24 @@ export function SettingsView({
         setApplyToAllInProject(allSame);
       }
 
+      onSettingsPersisted?.(updatedNodeIds, profileId, now);
       setActiveProfile(profileId);
       setLastUpdated(now);
       onProfileApplied?.(profileId);
 
       const targetPreset = TELEMETRY_PRESETS[profileId];
       onNotify?.({
-        id: `toast-settings-${Date.now()}-${profileId}`,
+        id: `toast-settings-${profileId}`,
         type: "settings",
         title: "Cập nhật cấu hình thành công",
         message: applyToAllInProject
           ? `Đã áp dụng cấu hình [${targetPreset.name}] cho toàn bộ ${availableNodes.length} máy chủ trong ${currentProject?.name || "dự án"}.`
           : `Đã áp dụng cấu hình [${targetPreset.name}] cho máy chủ ${selectedNode.hostname}.`,
       });
-    } catch {
-      // fallback
+    } catch (err: unknown) {
+      setSettingsError(
+        err instanceof Error ? err.message : "Không lưu được cấu hình xuống Controller"
+      );
     } finally {
       setApplyingProfile(null);
     }
@@ -219,6 +265,11 @@ export function SettingsView({
 
   return (
     <div className="settings-simple-container">
+      {settingsError && (
+        <div className="connection-error" role="alert">
+          <span>{settingsError}</span>
+        </div>
+      )}
       {/* 1. Server Selector Toolbar (Identical to Telemetry view) */}
       <div className="telemetry-host-toolbar">
         <select

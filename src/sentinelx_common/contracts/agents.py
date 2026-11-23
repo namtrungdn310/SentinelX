@@ -181,6 +181,12 @@ class HeartbeatResponse(SentinelXBaseModel):
         le=3600,
         description="Next heartbeat interval in seconds",
     )
+    telemetry_interval_seconds: float | None = Field(
+        default=None,
+        ge=1.0,
+        le=3600.0,
+        description="Configured telemetry collection interval pushed from Controller profile",
+    )
     commands: list[AgentCommandContract] = Field(
         default_factory=list,
         description="Pending defense commands to be executed by this agent",

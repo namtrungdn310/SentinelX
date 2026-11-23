@@ -19,6 +19,7 @@ export interface Node {
   status: NodeStatus;
   last_seen: string | null;
   created_at: string;
+  agent_capabilities?: Record<string, unknown>;
   // Dynamic fields populated from telemetry
   latestCpu?: number;
   latestMemory?: number;

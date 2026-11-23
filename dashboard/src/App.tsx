@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronRight,
@@ -81,7 +81,10 @@ export function App() {
     toggleDemo,
     addNode,
     createProject,
-    activeIncidentsCount,
+    incidents,
+    incidentRevision,
+    syncProjectIncidents,
+    syncNodeSettings,
     activeBlocksCount,
     securityToasts,
     pushSecurityToast,
@@ -89,6 +92,21 @@ export function App() {
   } = useInfrastructure();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => getSavedProjectId() ?? projects[0]?.id ?? null,
+  );
+  const activeIncidentsCount = useMemo(
+    () =>
+      incidents.filter(
+        (item) =>
+          (!selectedProjectId || item.project_id === selectedProjectId) &&
+          (item.status === "DETECTED" || item.status === "MITIGATING"),
+      ).length,
+    [incidents, selectedProjectId],
+  );
+  const handleIncidentsSynced = useCallback(
+    (items: typeof incidents) => {
+      syncProjectIncidents(selectedProjectId, items);
+    },
+    [syncProjectIncidents, selectedProjectId],
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
@@ -653,6 +671,8 @@ export function App() {
               selectedProjectId={selectedProjectId}
               nodes={nodes}
               isDemoMode={isDemoMode}
+              incidentRevision={incidentRevision}
+              onIncidentsSynced={handleIncidentsSynced}
               onNotify={pushSecurityToast}
             />
           )}
@@ -675,6 +695,7 @@ export function App() {
               projects={projects}
               nodes={nodes}
               isDemoMode={isDemoMode}
+              onSettingsPersisted={syncNodeSettings}
               onNotify={pushSecurityToast}
             />
           )}

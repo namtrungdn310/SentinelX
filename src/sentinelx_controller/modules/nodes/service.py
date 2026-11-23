@@ -3,6 +3,7 @@
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from fastapi import HTTPException, status
 
@@ -17,6 +18,11 @@ from sentinelx_common.contracts.agents import (
 )
 from sentinelx_common.contracts.defense import AgentCommandContract
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse, NodeStatus
+from sentinelx_common.contracts.projects import (
+    ProjectSettingsResponse,
+    ProjectSettingsUpdateRequest,
+    TelemetryProfileType,
+)
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.modules.nodes.models import AgentEnrollmentModel, NodeModel
 from sentinelx_controller.modules.nodes.repository import (
@@ -24,6 +30,13 @@ from sentinelx_controller.modules.nodes.repository import (
     NodeRepository,
 )
 from sentinelx_controller.modules.projects.service import ProjectService
+
+_PROFILE_CADENCE: dict[str, tuple[int, float]] = {
+    "balanced": (7, 5.0),
+    "high_sensitivity": (3, 2.0),
+    "resource_saving": (10, 10.0),
+}
+_VALID_PROFILES: set[str] = set(_PROFILE_CADENCE)
 
 
 class NodeService:
@@ -290,17 +303,143 @@ class NodeService:
 
         now = datetime.now(UTC)
         await self._node_repo.record_heartbeat(node_id=n_uuid, last_seen_at=now)
-        node.agent_capabilities = {
+        existing_caps = dict(node.agent_capabilities or {})
+        new_caps: dict[str, Any] = {
             "protocol_version": request.command_protocol_version,
             "executor_mode": request.executor_mode,
             "supported_actions": request.supported_actions,
         }
+        saved_settings = existing_caps.get("settings")
+        if isinstance(saved_settings, dict):
+            new_caps["settings"] = saved_settings
+        node.agent_capabilities = new_caps
+        await self._node_repo.save(node)
+
+        profile = saved_settings.get("active_profile") if isinstance(saved_settings, dict) else None
+        next_hb, telemetry_iv = _PROFILE_CADENCE.get(str(profile), (7, None))
 
         return HeartbeatResponse(
             status="ok",
             received_at=now,
-            next_interval_seconds=7,
+            next_interval_seconds=next_hb,
+            telemetry_interval_seconds=telemetry_iv,
             commands=commands or [],
+        )
+
+    @staticmethod
+    def _build_node_settings_dict(
+        profile: TelemetryProfileType,
+        updated_at: datetime,
+        updated_by: str,
+    ) -> dict[str, str]:
+        return {
+            "active_profile": profile,
+            "updated_at": updated_at.isoformat(),
+            "updated_by": updated_by,
+        }
+
+    async def get_project_settings(self, project_id_str: str) -> ProjectSettingsResponse:
+        """Read persisted telemetry profile settings for a project from its nodes."""
+        await self._project_service.get_project(project_id_str)
+        p_uuid = uuid.UUID(project_id_str)
+        nodes = await self._node_repo.list_by_project(p_uuid)
+        best_profile: TelemetryProfileType = "balanced"
+        best_updated_at: datetime | None = None
+        best_updated_by = "system"
+
+        for node in nodes:
+            caps = node.agent_capabilities or {}
+            settings = caps.get("settings") if isinstance(caps, dict) else None
+            if not isinstance(settings, dict):
+                continue
+            prof = settings.get("active_profile")
+            if prof not in _VALID_PROFILES:
+                continue
+            raw_ts = settings.get("updated_at")
+            try:
+                ts = (
+                    ensure_utc(datetime.fromisoformat(raw_ts))
+                    if isinstance(raw_ts, str)
+                    else ensure_utc(node.created_at)
+                )
+            except ValueError:
+                ts = ensure_utc(node.created_at)
+            if best_updated_at is None or ts >= best_updated_at:
+                best_updated_at = ts
+                best_profile = cast(TelemetryProfileType, prof)
+                best_updated_by = str(settings.get("updated_by") or "admin@sentinelx.com")
+
+        return ProjectSettingsResponse(
+            project_id=project_id_str,
+            active_profile=best_profile,
+            updated_at=best_updated_at or datetime.now(UTC),
+            updated_by=best_updated_by,
+        )
+
+    async def update_project_settings(
+        self,
+        project_id_str: str,
+        request: ProjectSettingsUpdateRequest,
+    ) -> ProjectSettingsResponse:
+        """Persist telemetry profile settings across all nodes in a project."""
+        await self._project_service.get_project(project_id_str)
+        p_uuid = uuid.UUID(project_id_str)
+        now = datetime.now(UTC)
+        settings_dict = self._build_node_settings_dict(
+            request.active_profile,
+            now,
+            request.updated_by,
+        )
+        nodes = await self._node_repo.list_by_project(p_uuid)
+        for node in nodes:
+            caps = dict(node.agent_capabilities or {})
+            caps["settings"] = settings_dict
+            node.agent_capabilities = caps
+            await self._node_repo.save(node)
+
+        return ProjectSettingsResponse(
+            project_id=project_id_str,
+            active_profile=request.active_profile,
+            updated_at=now,
+            updated_by=request.updated_by,
+        )
+
+    async def update_node_settings(
+        self,
+        node_id_str: str,
+        request: ProjectSettingsUpdateRequest,
+    ) -> ProjectSettingsResponse:
+        """Persist telemetry profile settings for a single node."""
+        try:
+            n_uuid = uuid.UUID(node_id_str)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid node UUID format",
+            ) from err
+
+        node = await self._node_repo.get_by_id(n_uuid)
+        if node is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Node '{node_id_str}' not found",
+            )
+        now = datetime.now(UTC)
+        caps = dict(node.agent_capabilities or {})
+        caps["settings"] = self._build_node_settings_dict(
+            request.active_profile,
+            now,
+            request.updated_by,
+        )
+        node.agent_capabilities = caps
+        await self._node_repo.save(node)
+
+        return ProjectSettingsResponse(
+            project_id=str(node.project_id),
+            node_id=str(node.id),
+            active_profile=request.active_profile,
+            updated_at=now,
+            updated_by=request.updated_by,
         )
 
     async def verify_agent(self, node_id_str: str, agent_id_str: str) -> bool:

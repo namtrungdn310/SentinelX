@@ -64,7 +64,7 @@ try {
     );
     const { NodeDetailModal } = await server.ssrLoadModule("/src/components/NodeDetailModal.tsx");
     const { classifyIncidentHandling, nodeHealth, nodeHealthLabel } = await server.ssrLoadModule("/src/presentation.ts");
-    const { filterEvents, eventLabel, eventMatchesCategory, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
+    const { filterEvents, eventLabel, eventMatchesCategory, formatRealtimeMessage, mergeEvents } = await server.ssrLoadModule("/src/events.ts");
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
     const { IncidentDetailModal } = await server.ssrLoadModule("/src/components/IncidentDetailModal.tsx");
@@ -547,6 +547,26 @@ try {
         }));
         assert.ok(executionFailedModal.includes("Kích hoạt bị lỗi"));
         assert.ok(executionFailedModal.includes("Đánh dấu đã giải quyết"));
+
+        const resolvedMsg = formatRealtimeMessage({
+            event: "incident_update",
+            timestamp: "2026-11-23T10:00:00Z",
+            data: { id: "inc-1", title: "Tấn công SYN Flood", status: "RESOLVED" },
+        });
+        assert.ok(resolvedMsg.includes("Đã giải quyết"));
+        assert.ok(!resolvedMsg.includes("RESOLVED"));
+
+        const execErrMsg = formatRealtimeMessage({
+            event: "incident_update",
+            timestamp: "2026-11-23T10:00:00Z",
+            data: {
+                id: "inc-2",
+                title: "Cạn kiệt RAM",
+                status: "DETECTED",
+                defense_status: "EXECUTION_FAILED",
+            },
+        });
+        assert.ok(execErrMsg.includes("Kích hoạt bị lỗi"));
     });
     const originalFetch = globalThis.fetch;
     try {

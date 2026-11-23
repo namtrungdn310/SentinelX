@@ -36,6 +36,8 @@ interface Props {
   selectedProjectId: string | null;
   nodes?: Node[];
   isDemoMode: boolean;
+  incidentRevision?: number;
+  onIncidentsSynced?: (items: Incident[]) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
   initialTab?: IncidentsTab;
 }
@@ -44,6 +46,8 @@ export function IncidentsView({
   selectedProjectId,
   nodes,
   isDemoMode,
+  incidentRevision = 0,
+  onIncidentsSynced,
   onNotify,
   initialTab = "auto",
 }: Props) {
@@ -70,8 +74,8 @@ export function IncidentsView({
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadIncidents = useCallback(async () => {
-    setIsLoading(true);
+  const loadIncidents = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
     setError(null);
     try {
       if (isDemoMode) {
@@ -95,12 +99,15 @@ export function IncidentsView({
       setIncidents(incidentList);
       setPolicies(policyList);
       setDefenseActions(actionList);
+      onIncidentsSynced?.(incidentList);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Lỗi tải danh sách sự cố");
+      if (!quiet) {
+        setError(err instanceof Error ? err.message : "Lỗi tải danh sách sự cố");
+      }
     } finally {
-      setIsLoading(false);
+      if (!quiet) setIsLoading(false);
     }
-  }, [selectedProjectId, isDemoMode]);
+  }, [selectedProjectId, isDemoMode, onIncidentsSynced]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -108,6 +115,14 @@ export function IncidentsView({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadIncidents]);
+
+  useEffect(() => {
+    if (isDemoMode || incidentRevision <= 0) return;
+    const timer = window.setTimeout(() => {
+      void loadIncidents(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [incidentRevision, isDemoMode, loadIncidents]);
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter((inc) => {
@@ -178,7 +193,9 @@ export function IncidentsView({
       if (!isDemoMode) {
         await deleteIncident(inc.id);
       }
-      setIncidents((prev) => prev.filter((item) => item.id !== inc.id));
+      const next = incidents.filter((item) => item.id !== inc.id);
+      setIncidents(next);
+      onIncidentsSynced?.(next);
       setSelectedIncident((prev) => (prev && prev.id === inc.id ? null : prev));
       onNotify?.({
         id: `incident-delete-${inc.id}`,
@@ -209,9 +226,11 @@ export function IncidentsView({
   );
 
   const handleIncidentUpdated = (updated: Incident) => {
-    setIncidents((prev) =>
-      prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item))
+    const next = incidents.map((item) =>
+      item.id === updated.id ? { ...item, ...updated } : item
     );
+    setIncidents(next);
+    onIncidentsSynced?.(next);
     setSelectedIncident((prev) =>
       prev && prev.id === updated.id ? { ...prev, ...updated } : prev
     );
@@ -428,7 +447,7 @@ export function IncidentsView({
 
           <button
             className="btn btn-outline"
-            onClick={loadIncidents}
+            onClick={() => void loadIncidents()}
             disabled={isLoading}
             title="Tải lại danh sách sự cố"
           >
@@ -443,7 +462,7 @@ export function IncidentsView({
         {error && (
           <div className="connection-error" role="alert">
             <span>{error}</span>
-            <button className="text-button" onClick={loadIncidents}>
+            <button className="text-button" onClick={() => void loadIncidents()}>
               Thử lại
             </button>
           </div>

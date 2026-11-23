@@ -80,6 +80,7 @@ export async function fetchNodes(projectId?: string): Promise<Node[]> {
     status: n.status,
     last_seen: n.last_seen || n.last_seen_at || null,
     created_at: n.created_at,
+    agent_capabilities: (n.agent_capabilities as Record<string, unknown> | undefined) ?? undefined,
   }));
 }
 
@@ -351,13 +352,6 @@ export async function deleteWhitelist(whitelistId: string): Promise<void> {
 export async function fetchProjectSettings(projectId: string): Promise<ProjectSettings> {
   const localKey = `sentinelx_settings_${projectId}`;
   try {
-    const saved = localStorage.getItem(localKey);
-    if (saved) return JSON.parse(saved);
-  } catch {
-    // storage fallback
-  }
-
-  try {
     const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
       signal: AbortSignal.timeout(5000),
     });
@@ -371,7 +365,14 @@ export async function fetchProjectSettings(projectId: string): Promise<ProjectSe
       return data;
     }
   } catch {
-    // fallback to mock
+    // fallback to local storage or mock
+  }
+
+  try {
+    const saved = localStorage.getItem(localKey);
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // storage fallback
   }
 
   return (
@@ -388,6 +389,7 @@ export async function updateProjectSettings(
   projectId: string,
   profile: PresetProfileType,
   updatedBy = "admin@sentinelx.com",
+  strict = false,
 ): Promise<ProjectSettings> {
   const localKey = `sentinelx_settings_${projectId}`;
   const updated: ProjectSettings = {
@@ -396,6 +398,22 @@ export async function updateProjectSettings(
     updated_at: new Date().toISOString(),
     updated_by: updatedBy,
   };
+
+  if (strict) {
+    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
+    });
+    if (!res.ok) throw new Error(`Lỗi lưu cấu hình dự án: ${res.statusText}`);
+    const saved: ProjectSettings = await res.json();
+    try {
+      localStorage.setItem(localKey, JSON.stringify(saved));
+    } catch {
+      // storage fallback
+    }
+    return saved;
+  }
 
   try {
     localStorage.setItem(localKey, JSON.stringify(updated));
@@ -407,7 +425,7 @@ export async function updateProjectSettings(
     const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
     });
     if (res.ok) {
       return await res.json();
@@ -417,4 +435,18 @@ export async function updateProjectSettings(
   }
 
   return updated;
+}
+
+export async function updateNodeSettings(
+  nodeId: string,
+  profile: PresetProfileType,
+  updatedBy = "admin@sentinelx.com",
+): Promise<ProjectSettings> {
+  const res = await fetch(`${API_BASE}/nodes/${nodeId}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
+  });
+  if (!res.ok) throw new Error(`Lỗi lưu cấu hình máy chủ: ${res.statusText}`);
+  return res.json();
 }

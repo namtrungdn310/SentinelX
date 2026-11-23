@@ -14,6 +14,10 @@ from sentinelx_common.contracts.agents import (
     HeartbeatResponse,
 )
 from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
+from sentinelx_common.contracts.projects import (
+    ProjectSettingsResponse,
+    ProjectSettingsUpdateRequest,
+)
 from sentinelx_controller.modules.defense.router import get_defense_service
 from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.nodes.dependencies import get_node_service
@@ -22,6 +26,7 @@ from sentinelx_controller.modules.recovery.router import get_recovery_service
 from sentinelx_controller.modules.recovery.service import RecoveryService
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
+settings_router = APIRouter(tags=["settings"])
 
 
 @router.post(
@@ -140,3 +145,41 @@ async def revoke_enrollment_token(
     service: Annotated[NodeService, Depends(get_node_service)],
 ) -> EnrollmentTokenResponse:
     return await service.revoke_enrollment_token(node_id, token_id)
+
+
+@settings_router.get(
+    "/projects/{project_id}/settings",
+    response_model=ProjectSettingsResponse,
+    summary="Get telemetry profile settings for a project",
+)
+async def get_project_settings(
+    project_id: str,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> ProjectSettingsResponse:
+    return await service.get_project_settings(project_id)
+
+
+@settings_router.put(
+    "/projects/{project_id}/settings",
+    response_model=ProjectSettingsResponse,
+    summary="Update telemetry profile settings for all nodes in a project",
+)
+async def update_project_settings(
+    project_id: str,
+    request: ProjectSettingsUpdateRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> ProjectSettingsResponse:
+    return await service.update_project_settings(project_id, request)
+
+
+@settings_router.put(
+    "/nodes/{node_id}/settings",
+    response_model=ProjectSettingsResponse,
+    summary="Update telemetry profile settings for a specific node",
+)
+async def update_node_settings(
+    node_id: str,
+    request: ProjectSettingsUpdateRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+) -> ProjectSettingsResponse:
+    return await service.update_node_settings(node_id, request)

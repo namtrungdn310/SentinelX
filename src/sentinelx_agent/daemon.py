@@ -52,6 +52,7 @@ class AgentDaemon:
         self._identity: AgentIdentity | None = None
         self._stop_event = asyncio.Event()
         self._telemetry_sequence: int = 1
+        self._runtime_telemetry_interval: float = float(settings.telemetry_interval_seconds)
 
     @property
     def identity(self) -> AgentIdentity | None:
@@ -201,6 +202,8 @@ class AgentDaemon:
                 sequence += 1
                 current_delay = self.settings.retry_initial_delay_seconds
                 next_interval = float(resp.next_interval_seconds)
+                if resp.telemetry_interval_seconds is not None:
+                    self._runtime_telemetry_interval = float(resp.telemetry_interval_seconds)
                 logger.debug(
                     "Heartbeat acknowledged (seq=%d, next_interval=%.1fs, commands=%d)",
                     sequence - 1,
@@ -246,7 +249,10 @@ class AgentDaemon:
 
         while not self._stop_event.is_set():
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+                await asyncio.wait_for(
+                    self._stop_event.wait(),
+                    timeout=self._runtime_telemetry_interval,
+                )
             except TimeoutError:
                 pass
 

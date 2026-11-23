@@ -98,3 +98,69 @@ async def test_projects_and_nodes_flow(test_app: FastAPI) -> None:
         list_n_res = await client.get(f"/api/v1/nodes?project_id={project_id}")
         assert list_n_res.status_code == 200
         assert len(list_n_res.json()) == 1
+
+        # 6. Persist project & node settings and push telemetry cadence on heartbeat
+        default_settings = await client.get(f"/api/v1/projects/{project_id}/settings")
+        assert default_settings.status_code == 200
+        assert default_settings.json()["active_profile"] == "balanced"
+
+        update_proj = await client.put(
+            f"/api/v1/projects/{project_id}/settings",
+            json={"active_profile": "high_sensitivity", "updated_by": "admin@sentinelx.com"},
+        )
+        assert update_proj.status_code == 200
+        assert update_proj.json()["active_profile"] == "high_sensitivity"
+
+        get_proj_settings = await client.get(f"/api/v1/projects/{project_id}/settings")
+        assert get_proj_settings.status_code == 200
+        assert get_proj_settings.json()["active_profile"] == "high_sensitivity"
+
+        token_res = await client.post(
+            f"/api/v1/nodes/{node_id}/enrollment-tokens",
+            json={"expires_in_hours": 1},
+        )
+        assert token_res.status_code == 201
+        enroll_res = await client.post(
+            "/api/v1/nodes/enroll",
+            json={
+                "node_id": node_id,
+                "enrollment_token": token_res.json()["enrollment_token"],
+                "agent_version": "0.1.0",
+                "hostname": "srv-prod-01",
+            },
+        )
+        assert enroll_res.status_code == 200
+        agent_id = enroll_res.json()["agent_id"]
+
+        hb1 = await client.post(
+            "/api/v1/nodes/heartbeat",
+            json={
+                "node_id": node_id,
+                "agent_id": agent_id,
+                "sequence": 1,
+                "sent_at": "2026-11-23T10:00:00Z",
+                "command_protocol_version": 2,
+            },
+        )
+        assert hb1.status_code == 200
+        assert hb1.json()["next_interval_seconds"] == 3
+        assert hb1.json()["telemetry_interval_seconds"] == 2.0
+
+        node_override = await client.put(
+            f"/api/v1/nodes/{node_id}/settings",
+            json={"active_profile": "resource_saving"},
+        )
+        assert node_override.status_code == 200
+        hb2 = await client.post(
+            "/api/v1/nodes/heartbeat",
+            json={
+                "node_id": node_id,
+                "agent_id": agent_id,
+                "sequence": 2,
+                "sent_at": "2026-11-23T10:00:10Z",
+                "command_protocol_version": 2,
+            },
+        )
+        assert hb2.status_code == 200
+        assert hb2.json()["next_interval_seconds"] == 10
+        assert hb2.json()["telemetry_interval_seconds"] == 10.0

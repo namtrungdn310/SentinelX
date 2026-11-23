@@ -81,8 +81,24 @@ export function formatRealtimeMessage(event: RealtimeMessage): string {
     return `Phát hiện sự cố an ninh${attacker}`;
   }
   if (event.event === "incident_update") {
-    const status = event.data.status ? ` → ${event.data.status}` : "";
-    return `Cập nhật sự cố ${event.data.id ?? ""}${status}`;
+    const statusLabels: Record<string, string> = {
+      DETECTED: "Đang xử lý",
+      MITIGATING: "Đang kích hoạt",
+      RESOLVED: "Đã giải quyết",
+      FALSE_POSITIVE: "Báo động giả",
+    };
+    const defenseLabels: Record<string, string> = {
+      DELIVERY_FAILED: "Tải lệnh bị lỗi",
+      EXECUTION_FAILED: "Kích hoạt bị lỗi",
+    };
+    const defLabel =
+      typeof event.data.defense_status === "string"
+        ? defenseLabels[event.data.defense_status]
+        : undefined;
+    const rawStatus = typeof event.data.status === "string" ? event.data.status : "";
+    const readable = defLabel ?? statusLabels[rawStatus] ?? rawStatus;
+    const title = event.data.title ? `${event.data.title}` : `sự cố ${event.data.id ?? ""}`;
+    return `Cập nhật ${title}${readable ? ` → ${readable}` : ""}`;
   }
   if (event.event === "defense_action_created") {
     const target = event.data.target_ip ? `địa chỉ IP ${event.data.target_ip}` : "mục tiêu";

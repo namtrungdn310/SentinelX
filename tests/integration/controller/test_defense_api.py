@@ -151,3 +151,54 @@ async def test_incident_tracks_delivery_and_execution_failures() -> None:
         assert inc_exec["status"] == "DETECTED"
         assert inc_exec["defense_status"] == "EXECUTION_FAILED"
         assert "lỗi kích hoạt: nftables rule rejected" in inc_exec["summary"]
+
+
+@pytest.mark.asyncio
+async def test_service_recovery_executor_ack_transitions_incident_to_mitigating() -> None:
+    from sentinelx_controller.modules.incidents.models import IncidentModel
+
+    async with core_harness() as h:
+        incident_id = uuid4()
+        async with h.sessions() as db:
+            db.add(
+                IncidentModel(
+                    id=incident_id,
+                    project_id=UUID(h.project),
+                    node_id=UUID(h.node),
+                    title="Cạn kiệt RAM",
+                    status="DETECTED",
+                    severity="CRITICAL",
+                    started_at=datetime.now(UTC),
+                    summary="RAM: 96.4% (>= 85.0%) · 3 mẫu · nginx (PID 5104): 44.5%",
+                    correlation_key="resource",
+                )
+            )
+            await db.commit()
+
+        action = await h.post(
+            "/defense/actions",
+            {
+                "node_id": h.node,
+                "incident_id": str(incident_id),
+                "action_type": "RESTART_SERVICE",
+                "command_payload": {"service_name": "nginx"},
+            },
+        )
+        command = (await h.heartbeat())[0]
+        assert command["id"] == action["id"]
+
+        bad_ack = await h.ack(command, execution_metadata={"executor": "nftables"})
+        assert bad_ack.status_code == 422
+
+        good_ack = await h.ack(
+            command,
+            execution_metadata={
+                "executor": "service_recovery",
+                "action": "restart_service",
+                "service_name": "nginx",
+            },
+        )
+        assert good_ack.status_code == 200
+        inc = (await h.client.get(f"/api/v1/incidents/{incident_id}")).json()
+        assert inc["status"] == "MITIGATING"
+        assert "service: RESTART nginx" in inc["summary"]

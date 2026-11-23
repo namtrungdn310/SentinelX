@@ -463,7 +463,12 @@ class DefenseService:
         if request.status == DefenseActionStatus.APPLIED:
             if executed > ensure_utc(action.expires_at):
                 raise HTTPException(409, "Command was executed after expiry")
-            if request.execution_metadata.get("executor") != "nftables":
+            expected_executors = (
+                {"service_recovery"}
+                if action.action_type in {"RESTART_SERVICE", "CLEAR_OS_CACHE"}
+                else {"nftables"}
+            )
+            if request.execution_metadata.get("executor") not in expected_executors:
                 raise HTTPException(422, "APPLIED requires a real executor outcome")
             if request.execution_metadata.get("simulated") or request.execution_metadata.get(
                 "noop"

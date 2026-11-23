@@ -17,7 +17,14 @@ import {
   MOCK_NODES,
   MOCK_PROJECTS,
 } from "./mockData";
-import type { MetricSample, Node, Project, RealtimeMessage } from "./types";
+import type {
+  Incident,
+  MetricSample,
+  Node,
+  PresetProfileType,
+  Project,
+  RealtimeMessage,
+} from "./types";
 import { useWebSocket } from "./useWebSocket";
 import { mergeSamples } from "./telemetry";
 import type { SecurityToastPayload } from "./components/SecurityToast";
@@ -58,9 +65,8 @@ export function useInfrastructure() {
     loading: boolean;
     error: string | null;
   } | null>(null);
-  const [activeIncidentsCount, setActiveIncidentsCount] = useState<number>(() => {
-    return MOCK_INCIDENTS.filter((i) => i.status !== "RESOLVED").length;
-  });
+  const [incidents, setIncidents] = useState<Incident[]>(() => MOCK_INCIDENTS);
+  const [incidentRevision, setIncidentRevision] = useState(0);
   const [activeBlocksCount, setActiveBlocksCount] = useState<number>(() => {
     return MOCK_DEFENSE_ACTIONS.filter(
       (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
@@ -98,7 +104,7 @@ export function useInfrastructure() {
     // In live mode, handle security events
     if (!modeRef.current) {
       if (message.event === "incident_alert") {
-        setActiveIncidentsCount((c) => c + 1);
+        setIncidentRevision((r) => r + 1);
         pushSecurityToast({
           id: `toast-inc-${Date.now()}`,
           type: "incident",
@@ -109,11 +115,41 @@ export function useInfrastructure() {
           targetView: "incidents",
         });
       } else if (message.event === "incident_update") {
-        if (message.data.status === "RESOLVED") {
-          setActiveIncidentsCount((c) => Math.max(0, c - 1));
+        setIncidentRevision((r) => r + 1);
+        const updatedId = typeof message.data.id === "string" ? message.data.id : null;
+        if (updatedId) {
+          setIncidents((prev) =>
+            prev.map((item) =>
+              item.id === updatedId
+                ? {
+                    ...item,
+                    status:
+                      typeof message.data.status === "string"
+                        ? (message.data.status as Incident["status"])
+                        : item.status,
+                    severity:
+                      typeof message.data.severity === "string"
+                        ? (message.data.severity as Incident["severity"])
+                        : item.severity,
+                    summary:
+                      typeof message.data.summary === "string"
+                        ? message.data.summary
+                        : item.summary,
+                    defense_status:
+                      message.data.defense_status === "DELIVERY_FAILED" ||
+                      message.data.defense_status === "EXECUTION_FAILED"
+                        ? message.data.defense_status
+                        : message.data.status && message.data.status !== "DETECTED"
+                          ? null
+                          : item.defense_status,
+                  }
+                : item
+            )
+          );
         }
       } else if (message.event === "defense_action_created") {
         setActiveBlocksCount((c) => c + 1);
+        setIncidentRevision((r) => r + 1);
         pushSecurityToast({
           id: `toast-def-${Date.now()}`,
           type: "defense",
@@ -122,11 +158,14 @@ export function useInfrastructure() {
           attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
           targetView: "defense",
         });
+      } else if (message.event === "defense_action_updated") {
+        setIncidentRevision((r) => r + 1);
       } else if (
         message.event === "defense_action_reverted" ||
         message.event === "recovery_completed"
       ) {
         setActiveBlocksCount((c) => Math.max(0, c - 1));
+        setIncidentRevision((r) => r + 1);
       }
     }
 
@@ -194,7 +233,7 @@ export function useInfrastructure() {
         fetchNodes(),
       ]);
       if (ticket !== requestId.current) return;
-      const [metrics, detections, incidents, defenseActions] = await Promise.all([
+      const [metrics, detections, loadedIncidents, defenseActions] = await Promise.all([
         Promise.allSettled(nodes.map((node) => fetchNodeMetrics(node.id, 1))),
         fetchDetectionEvents().catch(() => null),
         fetchIncidents({ limit: 100 }).catch(() => []),
@@ -202,7 +241,7 @@ export function useInfrastructure() {
       ]);
       if (ticket !== requestId.current) return;
 
-      setActiveIncidentsCount(incidents.filter((i) => i.status !== "RESOLVED").length);
+      setIncidents(loadedIncidents);
       setActiveBlocksCount(
         defenseActions.filter(
           (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
@@ -477,13 +516,49 @@ export function useInfrastructure() {
     setConnectionError(null);
     setChartRequest(null);
     setSnapshot(demoSnapshot());
-    setActiveIncidentsCount(MOCK_INCIDENTS.filter((i) => i.status !== "RESOLVED").length);
+    setIncidents(MOCK_INCIDENTS);
     setActiveBlocksCount(
       MOCK_DEFENSE_ACTIONS.filter(
         (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
       ).length,
     );
   };
+
+  const syncProjectIncidents = useCallback(
+    (projectId: string | null, items: Incident[]) => {
+      setIncidents((prev) => {
+        if (!projectId) return items;
+        const others = prev.filter((inc) => inc.project_id !== projectId);
+        return [...items, ...others];
+      });
+    },
+    [],
+  );
+
+  const syncNodeSettings = useCallback(
+    (nodeIds: string[], profile: PresetProfileType, updatedAt: string) => {
+      const idSet = new Set(nodeIds);
+      setSnapshot((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          idSet.has(n.id)
+            ? {
+                ...n,
+                agent_capabilities: {
+                  ...(n.agent_capabilities ?? {}),
+                  settings: {
+                    active_profile: profile,
+                    updated_at: updatedAt,
+                    updated_by: "admin@sentinelx.com",
+                  },
+                },
+              }
+            : n,
+        ),
+      }));
+    },
+    [],
+  );
 
   const addNode = (node: Node) =>
     setSnapshot((previous) => ({
@@ -520,7 +595,8 @@ export function useInfrastructure() {
     chartRequest,
     isConnected,
     latencyMs,
-    activeIncidentsCount,
+    incidents,
+    incidentRevision,
     activeBlocksCount,
     securityToasts,
     pushSecurityToast,
@@ -530,5 +606,7 @@ export function useInfrastructure() {
     toggleDemo,
     addNode,
     createProject,
+    syncProjectIncidents,
+    syncNodeSettings,
   };
 }

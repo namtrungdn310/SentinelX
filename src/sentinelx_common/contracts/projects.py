@@ -3,10 +3,13 @@ Data models to create and view projects.
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
 from sentinelx_common.contracts.base import SentinelXBaseModel
+
+TelemetryProfileType = Literal["balanced", "high_sensitivity", "resource_saving"]
 
 
 class ProjectCreateRequest(SentinelXBaseModel):
@@ -41,3 +44,24 @@ class ProjectResponse(SentinelXBaseModel):
     description: str | None = Field(default=None, description="Project description")
 
     created_at: datetime = Field(..., description="Creation time in UTC")
+
+
+class ProjectSettingsUpdateRequest(SentinelXBaseModel):
+    """Request payload to update telemetry preset profile for a project or node."""
+
+    active_profile: TelemetryProfileType = Field(..., description="Preset profile ID")
+    updated_by: str = Field(
+        default="admin@sentinelx.com",
+        max_length=120,
+        description="Operator identifier",
+    )
+
+
+class ProjectSettingsResponse(SentinelXBaseModel):
+    """Persisted telemetry profile settings returned by Controller."""
+
+    project_id: str = Field(..., min_length=36, max_length=36)
+    node_id: str | None = Field(default=None, min_length=36, max_length=36)
+    active_profile: TelemetryProfileType = Field(default="balanced")
+    updated_at: datetime
+    updated_by: str = Field(default="system")
