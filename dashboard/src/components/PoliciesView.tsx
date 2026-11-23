@@ -522,7 +522,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                           ? "Tác động"
                           : policy.action_type === "RATE_LIMIT"
                           ? "Thời gian áp dụng"
-                          : "Thời gian khóa"}
+                          : "Thời gian chặn IP"}
                       </span>
                       <strong className="meta-value">
                         {policy.action_type === "ADAPTIVE"

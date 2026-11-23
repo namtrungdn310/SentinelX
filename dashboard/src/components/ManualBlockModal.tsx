@@ -148,7 +148,7 @@ export function ManualBlockModal({
           </div>
 
           <div className="form-group">
-            <label htmlFor={`${id}-duration`}>Thời gian khóa tường lửa</label>
+            <label htmlFor={`${id}-duration`}>Thời gian chặn IP</label>
             <select
               id={`${id}-duration`}
               value={durationMinutes}

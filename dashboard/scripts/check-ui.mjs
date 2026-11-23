@@ -587,6 +587,7 @@ try {
         assert.ok(defenseHtml.includes("Hủy lệnh"));
         assert.ok(defenseHtml.includes("Gỡ chặn"));
         assert.ok(!defenseHtml.includes("Vĩnh viễn"));
+        assert.ok(defenseHtml.includes("Thời gian chặn IP"));
 
         const modalHtml = renderToStaticMarkup(createElement(ManualBlockModal, {
             isOpen: true,
@@ -597,6 +598,7 @@ try {
         }));
         assert.ok(!modalHtml.includes('value="0"'));
         assert.ok(modalHtml.includes('value="1440"'));
+        assert.ok(modalHtml.includes("Thời gian chặn IP"));
     });
     const originalFetch = globalThis.fetch;
     try {

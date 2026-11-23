@@ -537,7 +537,7 @@ export function DefenseView({
                   <th scope="col">Đối tượng xử lý</th>
                   <th scope="col">Máy chủ áp dụng</th>
                   <th scope="col">Nguồn kích hoạt</th>
-                  <th scope="col">Thời gian khóa</th>
+                  <th scope="col">Thời gian chặn IP</th>
                   <th scope="col">Trạng thái</th>
                   <th scope="col" style={{ textAlign: "right" }}>Thao tác</th>
                 </tr>
