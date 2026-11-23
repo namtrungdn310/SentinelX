@@ -279,14 +279,12 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
       <div className="panel severity-guide-bar" aria-label="Điều kiện phân loại mức độ sự cố">
         <div className="severity-guide-item">
           <span className="severity-badge warn">{SEVERITY_LABELS.HIGH}</span>
-          <span className="severity-guide-text">
-            Vượt ngưỡng cảnh báo ban đầu (tài nguyên hoặc lưu lượng mạng lần đầu vượt mức chuẩn)
-          </span>
+          <span className="severity-guide-text">Mới vượt ngưỡng cảnh báo ban đầu</span>
         </div>
         <div className="severity-guide-item">
           <span className="severity-badge crit">{SEVERITY_LABELS.CRITICAL}</span>
           <span className="severity-guide-text">
-            Kéo dài ≥ 60 giây hoặc lặp lại ≥ 3 cửa sổ liên tiếp chưa hạ nhiệt (hoặc chạm ngưỡng tới hạn ≥ 95% / tấn công lớn)
+            Duy trì vượt ngưỡng ≥ 60 giây chưa dứt (hoặc đạt mức nguy kịch ≥ 95% / tấn công lớn)
           </span>
         </div>
       </div>

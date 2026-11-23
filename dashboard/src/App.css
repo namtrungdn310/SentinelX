@@ -2462,7 +2462,7 @@ body:has(.event-full) .event-full {
 
 .severity-guide-bar {
     display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+    grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.55fr);
     gap: 10px 20px;
     padding: 10px 16px;
     background: var(--bg-panel);

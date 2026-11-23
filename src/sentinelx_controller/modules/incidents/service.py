@@ -57,7 +57,6 @@ _DELIVERY_FAILED_MARKER = "lỗi tải lệnh:"
 _EXECUTION_FAILED_MARKER = "lỗi kích hoạt:"
 _CLOSED_SUPPRESSION_WINDOW = timedelta(seconds=60)
 _CRITICAL_ESCALATION_WINDOW = timedelta(seconds=60)
-_CRITICAL_ESCALATION_EVENTS = 3
 
 
 def _strip_error_lines(summary: str | None) -> str:
@@ -264,10 +263,7 @@ class IncidentService:
             )
             initial_severity = (
                 DetectionSeverity.CRITICAL.value
-                if (
-                    len(events) >= _CRITICAL_ESCALATION_EVENTS
-                    or batch_span >= _CRITICAL_ESCALATION_WINDOW
-                )
+                if batch_span >= _CRITICAL_ESCALATION_WINDOW
                 else peak_event.severity.value
             )
             active_incident = IncidentModel(
@@ -292,13 +288,12 @@ class IncidentService:
                         active_incident.severity = k
                         break
             latest_event = max(events, key=lambda e: e.detected_at)
-            existing_count = await self._event_count(active_incident.id)
             sustained_duration = ensure_utc(latest_event.detected_at) - ensure_utc(
                 active_incident.started_at
             )
-            if active_incident.severity != DetectionSeverity.CRITICAL.value and (
-                existing_count + len(events) >= _CRITICAL_ESCALATION_EVENTS
-                or sustained_duration >= _CRITICAL_ESCALATION_WINDOW
+            if (
+                active_incident.severity != DetectionSeverity.CRITICAL.value
+                and sustained_duration >= _CRITICAL_ESCALATION_WINDOW
             ):
                 active_incident.severity = DetectionSeverity.CRITICAL.value
             new_summary = _format_event_summary(latest_event)
