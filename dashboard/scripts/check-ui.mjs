@@ -637,8 +637,11 @@ try {
             isDemoMode: true,
             initialTab: "policies",
         }));
-        assert.ok(fixedPoliciesTabHtml.includes("Chặn tấn công SYN Flood"));
-        assert.ok(fixedPoliciesTabHtml.includes("Tự phục hồi thích ứng khi cạn kiệt RAM"));
+        assert.ok(fixedPoliciesTabHtml.includes("TCP Flood / SYN Flood"));
+        assert.ok(fixedPoliciesTabHtml.includes("Chặn các IP quét cổng"));
+        assert.ok(fixedPoliciesTabHtml.includes("UDP Flood / Traffic Spike"));
+        assert.ok(fixedPoliciesTabHtml.includes("Quá tải CPU"));
+        assert.ok(fixedPoliciesTabHtml.includes("Quá tải RAM"));
         assert.ok(fixedPoliciesTabHtml.includes('role="switch"'));
         assert.ok(!fixedPoliciesTabHtml.includes("Làm mới chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Quy tắc tự động ứng phó"));

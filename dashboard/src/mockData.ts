@@ -823,7 +823,7 @@ export const MOCK_DEFENSE_ACTIONS: DefenseAction[] = [
 export const MOCK_POLICIES: DefensePolicy[] = [
   {
     id: "pol-01",
-    name: "Chặn tấn công SYN Flood",
+    name: "TCP Flood / SYN Flood",
     event_type: "syn_flood_detector",
     action_type: "BLOCK_IP_NFTABLES",
     target_params: { flags: "timeout" },
@@ -835,7 +835,7 @@ export const MOCK_POLICIES: DefensePolicy[] = [
   },
   {
     id: "pol-02",
-    name: "Chặn IP quét cổng",
+    name: "Chặn các IP quét cổng",
     event_type: "port_scan_detector",
     action_type: "BLOCK_IP_NFTABLES",
     target_params: { flags: "timeout" },
@@ -847,7 +847,7 @@ export const MOCK_POLICIES: DefensePolicy[] = [
   },
   {
     id: "pol-03",
-    name: "Chặn tấn công UDP Flood",
+    name: "UDP Flood / Traffic Spike",
     event_type: "traffic_spike_detector",
     action_type: "BLOCK_IP_NFTABLES",
     target_params: { flags: "timeout" },
@@ -859,7 +859,7 @@ export const MOCK_POLICIES: DefensePolicy[] = [
   },
   {
     id: "pol-04",
-    name: "Khởi động lại dịch vụ khi quá tải CPU",
+    name: "Quá tải CPU",
     event_type: "cpu_threshold_detector",
     action_type: "RESTART_SERVICE",
     target_params: {},
@@ -871,7 +871,7 @@ export const MOCK_POLICIES: DefensePolicy[] = [
   },
   {
     id: "pol-05",
-    name: "Tự phục hồi thích ứng khi cạn kiệt RAM",
+    name: "Quá tải RAM",
     event_type: "memory_exhaustion_detector",
     action_type: "ADAPTIVE",
     target_params: {},

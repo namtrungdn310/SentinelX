@@ -159,11 +159,19 @@ export function PoliciesView({
         const orderIndex = new Map(
           MOCK_POLICIES.map((p, idx) => [p.event_type, idx]),
         );
-        const sorted = [...result].sort((a, b) => {
-          const idxA = orderIndex.get(a.event_type) ?? 999;
-          const idxB = orderIndex.get(b.event_type) ?? 999;
-          return idxA - idxB;
-        });
+        const canonicalNames = new Map(
+          MOCK_POLICIES.map((p) => [p.event_type, p.name]),
+        );
+        const sorted = [...result]
+          .map((item) => ({
+            ...item,
+            name: canonicalNames.get(item.event_type) ?? item.name,
+          }))
+          .sort((a, b) => {
+            const idxA = orderIndex.get(a.event_type) ?? 999;
+            const idxB = orderIndex.get(b.event_type) ?? 999;
+            return idxA - idxB;
+          });
         setPolicies(sorted);
       } finally {
         seedingProjectRef.current.delete(effectiveProjectId);
