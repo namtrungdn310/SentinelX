@@ -2460,6 +2460,41 @@ body:has(.event-full) .event-full {
     }
 }
 
+.severity-guide-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 20px;
+    padding: 10px 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+}
+
+.severity-guide-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.severity-guide-item .sev-badge {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.severity-guide-text {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 1050px) {
+    .severity-guide-bar {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+}
+
 .table-toolbar {
     display: flex;
     flex-wrap: wrap;

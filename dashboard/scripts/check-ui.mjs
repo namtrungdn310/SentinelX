@@ -384,6 +384,9 @@ try {
         }));
         assert.ok(html.includes("Xử lý tự động"));
         assert.ok(html.includes("Xử lý thủ công"));
+        assert.ok(html.includes("severity-guide-bar"));
+        assert.ok(html.includes("CPU ≥ 80%, RAM ≥ 85% (3 mẫu)"));
+        assert.ok(html.includes("CPU / RAM ≥ 95% (3 mẫu)"));
         assert.ok(!html.includes("Cần xử lý thủ công"));
         assert.ok(!html.includes('<option value="MEDIUM">'));
         assert.ok(html.includes("Đang chờ Agent tải lệnh"));

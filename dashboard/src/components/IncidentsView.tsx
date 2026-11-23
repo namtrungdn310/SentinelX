@@ -275,6 +275,22 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
         </div>
       </div>
 
+      {/* Compact Severity Criteria Strip */}
+      <div className="panel severity-guide-bar" aria-label="Tiêu chí phân loại mức độ sự cố">
+        <div className="severity-guide-item">
+          <span className="sev-badge sev-high">{SEVERITY_LABELS.HIGH}</span>
+          <span className="severity-guide-text">
+            CPU ≥ 80%, RAM ≥ 85% (3 mẫu), Đĩa ≥ 85% · SYN ≥ 50 (SYN/ACK ≥ 3.0), quét ≥ 15 cổng hoặc UDP ≥ 300 pkt/10s
+          </span>
+        </div>
+        <div className="severity-guide-item">
+          <span className="sev-badge sev-crit">{SEVERITY_LABELS.CRITICAL}</span>
+          <span className="severity-guide-text">
+            CPU / RAM ≥ 95% (3 mẫu), Đĩa ≥ 95% · SYN ≥ 200 (hoặc ≥ 100 khi ACK = 0), quét ≥ 30 cổng hoặc ≥ 2.000 pkt / 10 MB/10s
+          </span>
+        </div>
+      </div>
+
       {/* 2. Segmented Classification Tabs & Filter Toolbar */}
       <div className="incidents-segmented-row">
         <div className="defense-segmented-group" role="tablist" aria-label="Phân loại cơ chế xử lý sự cố">
