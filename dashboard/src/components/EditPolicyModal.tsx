@@ -68,9 +68,7 @@ function EditPolicyModalForm({
   isDemoMode: boolean;
 }) {
   const id = useId();
-  const isNetworkDetector = isNetworkEventType(policy.event_type);
-  const isMemoryDetector = isMemoryEventType(policy.event_type);
-  const hasMultipleActions = isMemoryDetector;
+  const hasMultipleActions = isMemoryEventType(policy.event_type);
 
   const [actionType, setActionType] = useState(() => resolveInitialAction(policy));
   const [serviceName, setServiceName] = useState(
@@ -170,7 +168,7 @@ function EditPolicyModalForm({
             </div>
           </div>
 
-          {hasMultipleActions ? (
+          {hasMultipleActions && (
             <div className="form-group">
               <label htmlFor={`${id}-action`}>Hành động</label>
               <select
@@ -187,20 +185,6 @@ function EditPolicyModalForm({
                 {actionType === "ADAPTIVE" && "Hệ thống tự chẩn đoán: nếu do bộ nhớ đệm đĩa thì dọn đệm an toàn; nếu do tiến trình rò rỉ RAM thì khởi động lại tiến trình đó."}
                 {actionType === "CLEAR_OS_CACHE" && "Chạy sync và giải phóng bộ nhớ đệm đĩa (Page Cache) mà không làm gián đoạn dịch vụ."}
                 {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây cạn kiệt RAM khi vượt ngưỡng."}
-              </small>
-            </div>
-          ) : (
-            <div className="form-group">
-              <label>Hành động áp dụng khi bật</label>
-              <div style={{ padding: "8px 12px", background: "var(--bg-subtle)", borderRadius: "var(--radius-xs)", fontSize: 13, fontWeight: 500 }}>
-                {isNetworkDetector
-                  ? "Khóa địa chỉ IP nguồn qua tường lửa nftables"
-                  : "Khởi động lại dịch vụ hoặc tiến trình"}
-              </div>
-              <small className="field-hint">
-                {isNetworkDetector
-                  ? "Nếu chỉ muốn ghi nhận sự cố mà không tự động chặn IP, hãy gạt tắt công tắc ở thẻ chính sách bên ngoài."
-                  : "Nếu chỉ muốn ghi nhận cảnh báo mà không khởi động lại dịch vụ, hãy gạt tắt công tắc ở thẻ chính sách bên ngoài."}
               </small>
             </div>
           )}

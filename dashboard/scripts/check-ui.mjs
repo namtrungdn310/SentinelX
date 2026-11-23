@@ -662,6 +662,7 @@ try {
         assert.ok(!editNetHtml.includes('value="0"'));
         assert.ok(editNetHtml.includes('value="1440"'));
         assert.ok(!editNetHtml.includes('-action"'));
+        assert.ok(!editNetHtml.includes("Hành động áp dụng khi bật"));
         assert.ok(!editNetHtml.includes("ALERT_ONLY"));
         assert.ok(!editNetHtml.includes("CLEAR_OS_CACHE"));
 
