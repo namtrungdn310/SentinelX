@@ -12,12 +12,28 @@ interface Props {
   isDemoMode: boolean;
 }
 
+const MEMORY_ACTION_OPTIONS = new Set(["ADAPTIVE", "CLEAR_OS_CACHE", "RESTART_SERVICE"]);
+
 function isNetworkEventType(eventType: string): boolean {
   return (
     eventType.includes("flood") ||
     eventType.includes("scan") ||
     eventType.includes("traffic")
   );
+}
+
+function isMemoryEventType(eventType: string): boolean {
+  return eventType.includes("memory");
+}
+
+function resolveInitialAction(policy: DefensePolicy): string {
+  if (isNetworkEventType(policy.event_type)) {
+    return "BLOCK_IP_NFTABLES";
+  }
+  if (isMemoryEventType(policy.event_type)) {
+    return MEMORY_ACTION_OPTIONS.has(policy.action_type) ? policy.action_type : "ADAPTIVE";
+  }
+  return "RESTART_SERVICE";
 }
 
 export function EditPolicyModal({
@@ -52,7 +68,11 @@ function EditPolicyModalForm({
   isDemoMode: boolean;
 }) {
   const id = useId();
-  const [actionType, setActionType] = useState(policy.action_type);
+  const isNetworkDetector = isNetworkEventType(policy.event_type);
+  const isMemoryDetector = isMemoryEventType(policy.event_type);
+  const hasMultipleActions = isMemoryDetector;
+
+  const [actionType, setActionType] = useState(() => resolveInitialAction(policy));
   const [serviceName, setServiceName] = useState(
     String(policy.target_params?.service_name ?? policy.target_params?.target ?? ""),
   );
@@ -64,19 +84,7 @@ function EditPolicyModalForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isNetworkDetector = isNetworkEventType(policy.event_type);
-  const needsBlockDuration =
-    actionType === "BLOCK_IP_NFTABLES" || (actionType === "ADAPTIVE" && isNetworkDetector);
-
-  const handleActionTypeChange = (nextAction: string) => {
-    setActionType(nextAction);
-    if (
-      (nextAction === "BLOCK_IP_NFTABLES" || (nextAction === "ADAPTIVE" && isNetworkDetector)) &&
-      blockDurationMinutes <= 0
-    ) {
-      setBlockDurationMinutes(30);
-    }
-  };
+  const needsBlockDuration = actionType === "BLOCK_IP_NFTABLES";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +111,7 @@ function EditPolicyModalForm({
       target_params: nextTargetParams,
       cooldown_seconds: cooldownSeconds,
       block_duration_seconds: boundedDurationSeconds,
-      is_auto_execute: actionType !== "ALERT_ONLY",
+      is_auto_execute: true,
     };
 
     try {
@@ -162,37 +170,40 @@ function EditPolicyModalForm({
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor={`${id}-action`}>Hành động</label>
-            <select
-              id={`${id}-action`}
-              value={actionType}
-              onChange={(e) => handleActionTypeChange(e.target.value)}
-              disabled={loading}
-            >
-              {isNetworkDetector ? (
-                <>
-                  <option value="BLOCK_IP_NFTABLES">Khóa địa chỉ IP nguồn qua tường lửa</option>
-                  <option value="ADAPTIVE">Tự động thích ứng</option>
-                  <option value="ALERT_ONLY">Chỉ ghi nhận cảnh báo</option>
-                </>
-              ) : (
-                <>
-                  <option value="ADAPTIVE">Tự động thích ứng</option>
-                  <option value="RESTART_SERVICE">Khởi động lại dịch vụ hoặc tiến trình</option>
-                  <option value="CLEAR_OS_CACHE">Giải phóng bộ nhớ đệm hệ điều hành</option>
-                  <option value="ALERT_ONLY">Chỉ ghi nhận cảnh báo</option>
-                </>
-              )}
-            </select>
-            <small className="field-hint">
-              {actionType === "BLOCK_IP_NFTABLES" && "Tạo luật chặn tại tường lửa nftables nhằm ngắt gói tin từ IP nguồn tấn công (có thời hạn)."}
-              {actionType === "ADAPTIVE" && "Hệ thống tự chọn phương án tối ưu theo ngữ cảnh bất thường (chặn IP nếu tấn công mạng, giải phóng đệm hoặc khởi động lại tiến trình nếu quá tải tài nguyên)."}
-              {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây quá tải khi vượt ngưỡng."}
-              {actionType === "CLEAR_OS_CACHE" && "Đồng bộ và giải phóng bộ nhớ đệm của nhân hệ điều hành."}
-              {actionType === "ALERT_ONLY" && "Chỉ lưu nhật ký sự cố và thông báo cho quản trị viên, không can thiệp máy chủ."}
-            </small>
-          </div>
+          {hasMultipleActions ? (
+            <div className="form-group">
+              <label htmlFor={`${id}-action`}>Hành động</label>
+              <select
+                id={`${id}-action`}
+                value={actionType}
+                onChange={(e) => setActionType(e.target.value)}
+                disabled={loading}
+              >
+                <option value="ADAPTIVE">Tự động thích ứng</option>
+                <option value="CLEAR_OS_CACHE">Giải phóng bộ nhớ đệm hệ điều hành</option>
+                <option value="RESTART_SERVICE">Khởi động lại dịch vụ hoặc tiến trình</option>
+              </select>
+              <small className="field-hint">
+                {actionType === "ADAPTIVE" && "Hệ thống tự chẩn đoán: nếu do bộ nhớ đệm đĩa thì dọn đệm an toàn; nếu do tiến trình rò rỉ RAM thì khởi động lại tiến trình đó."}
+                {actionType === "CLEAR_OS_CACHE" && "Chạy sync và giải phóng bộ nhớ đệm đĩa (Page Cache) mà không làm gián đoạn dịch vụ."}
+                {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây cạn kiệt RAM khi vượt ngưỡng."}
+              </small>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label>Hành động áp dụng khi bật</label>
+              <div style={{ padding: "8px 12px", background: "var(--bg-subtle)", borderRadius: "var(--radius-xs)", fontSize: 13, fontWeight: 500 }}>
+                {isNetworkDetector
+                  ? "Khóa địa chỉ IP nguồn qua tường lửa nftables"
+                  : "Khởi động lại dịch vụ hoặc tiến trình"}
+              </div>
+              <small className="field-hint">
+                {isNetworkDetector
+                  ? "Nếu chỉ muốn ghi nhận sự cố mà không tự động chặn IP, hãy gạt tắt công tắc ở thẻ chính sách bên ngoài."
+                  : "Nếu chỉ muốn ghi nhận cảnh báo mà không khởi động lại dịch vụ, hãy gạt tắt công tắc ở thẻ chính sách bên ngoài."}
+              </small>
+            </div>
+          )}
 
           {actionType === "RESTART_SERVICE" && (
             <div className="form-group">

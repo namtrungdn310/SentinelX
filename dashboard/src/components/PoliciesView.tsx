@@ -549,9 +549,7 @@ export function PoliciesView({
                         <strong>{policy.is_active ? "Đang bật" : "Đang tắt"}</strong>
                         <small>
                           {!policy.is_active
-                            ? "Tạm thời vô hiệu hóa quy tắc này"
-                            : policy.action_type === "ALERT_ONLY"
-                            ? "Chỉ ghi nhận cảnh báo, không can thiệp máy chủ"
+                            ? "Chỉ ghi nhận sự cố — không tự động can thiệp máy chủ"
                             : "Tự động kích hoạt bảo vệ khi phát hiện sự cố"}
                         </small>
                       </div>

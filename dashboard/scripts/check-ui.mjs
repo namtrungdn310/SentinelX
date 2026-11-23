@@ -649,15 +649,43 @@ try {
         assert.ok(!fixedPoliciesTabHtml.includes("Xóa chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Vĩnh viễn"));
 
-        const editHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+        const editNetHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
             isOpen: true,
             onClose: noop,
             policy: MOCK_POLICIES[0],
             onPolicyUpdated: noop,
             isDemoMode: true,
         }));
-        assert.ok(!editHtml.includes('value="0"'));
-        assert.ok(editHtml.includes('value="1440"'));
+        assert.ok(!editNetHtml.includes('value="0"'));
+        assert.ok(editNetHtml.includes('value="1440"'));
+        assert.ok(!editNetHtml.includes('-action"'));
+        assert.ok(!editNetHtml.includes("ALERT_ONLY"));
+        assert.ok(!editNetHtml.includes("CLEAR_OS_CACHE"));
+
+        const cpuPol = MOCK_POLICIES.find((p) => p.event_type === "cpu_threshold_detector");
+        const editCpuHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+            isOpen: true,
+            onClose: noop,
+            policy: cpuPol,
+            onPolicyUpdated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(!editCpuHtml.includes('-action"'));
+        assert.ok(!editCpuHtml.includes("CLEAR_OS_CACHE"));
+        assert.ok(!editCpuHtml.includes("ALERT_ONLY"));
+
+        const memPol = MOCK_POLICIES.find((p) => p.event_type === "memory_exhaustion_detector");
+        const editMemHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+            isOpen: true,
+            onClose: noop,
+            policy: memPol,
+            onPolicyUpdated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(editMemHtml.includes('-action"'));
+        assert.ok(editMemHtml.includes("CLEAR_OS_CACHE"));
+        assert.ok(editMemHtml.includes("RESTART_SERVICE"));
+        assert.ok(!editMemHtml.includes("ALERT_ONLY"));
 
         const whitelistHtml = renderToStaticMarkup(createElement(AddWhitelistModal, {
             isOpen: true,
