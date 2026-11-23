@@ -18,6 +18,7 @@ import {
   MOCK_PROJECTS,
 } from "./mockData";
 import type {
+  DefenseAction,
   Incident,
   MetricSample,
   Node,
@@ -67,11 +68,10 @@ export function useInfrastructure() {
   } | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>(() => MOCK_INCIDENTS);
   const [incidentRevision, setIncidentRevision] = useState(0);
-  const [activeBlocksCount, setActiveBlocksCount] = useState<number>(() => {
-    return MOCK_DEFENSE_ACTIONS.filter(
-      (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
-    ).length;
-  });
+  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>(() => MOCK_DEFENSE_ACTIONS);
+  const activeBlocksCount = defenseActions.filter(
+    (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
+  ).length;
   const [securityToasts, setSecurityToasts] = useState<SecurityToastPayload[]>([]);
 
   const requestId = useRef(0);
@@ -148,8 +148,12 @@ export function useInfrastructure() {
           );
         }
       } else if (message.event === "defense_action_created") {
-        setActiveBlocksCount((c) => c + 1);
         setIncidentRevision((r) => r + 1);
+        if (!modeRef.current) {
+          void fetchDefenseActions({ limit: 100 })
+            .then((items) => setDefenseActions(items))
+            .catch(() => null);
+        }
         pushSecurityToast({
           id: `toast-def-${Date.now()}`,
           type: "defense",
@@ -160,12 +164,21 @@ export function useInfrastructure() {
         });
       } else if (message.event === "defense_action_updated") {
         setIncidentRevision((r) => r + 1);
+        if (!modeRef.current) {
+          void fetchDefenseActions({ limit: 100 })
+            .then((items) => setDefenseActions(items))
+            .catch(() => null);
+        }
       } else if (
         message.event === "defense_action_reverted" ||
         message.event === "recovery_completed"
       ) {
-        setActiveBlocksCount((c) => Math.max(0, c - 1));
         setIncidentRevision((r) => r + 1);
+        if (!modeRef.current) {
+          void fetchDefenseActions({ limit: 100 })
+            .then((items) => setDefenseActions(items))
+            .catch(() => null);
+        }
       }
     }
 
@@ -233,20 +246,16 @@ export function useInfrastructure() {
         fetchNodes(),
       ]);
       if (ticket !== requestId.current) return;
-      const [metrics, detections, loadedIncidents, defenseActions] = await Promise.all([
+      const [metrics, detections, loadedIncidents, loadedDefenseActions] = await Promise.all([
         Promise.allSettled(nodes.map((node) => fetchNodeMetrics(node.id, 1))),
         fetchDetectionEvents().catch(() => null),
         fetchIncidents({ limit: 100 }).catch(() => []),
-        fetchDefenseActions({ status: "APPLIED", limit: 100 }).catch(() => []),
+        fetchDefenseActions({ limit: 100 }).catch(() => []),
       ]);
       if (ticket !== requestId.current) return;
 
       setIncidents(loadedIncidents);
-      setActiveBlocksCount(
-        defenseActions.filter(
-          (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
-        ).length,
-      );
+      setDefenseActions(loadedDefenseActions);
 
       const histories: Record<string, MetricSample[]> = {};
       const hydratedNodes = nodes.map((node, index) => {
@@ -517,12 +526,19 @@ export function useInfrastructure() {
     setChartRequest(null);
     setSnapshot(demoSnapshot());
     setIncidents(MOCK_INCIDENTS);
-    setActiveBlocksCount(
-      MOCK_DEFENSE_ACTIONS.filter(
-        (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
-      ).length,
-    );
+    setDefenseActions(MOCK_DEFENSE_ACTIONS);
   };
+
+  const syncProjectDefenseActions = useCallback(
+    (nodeIds: string[], items: DefenseAction[]) => {
+      const idSet = new Set(nodeIds);
+      setDefenseActions((prev) => {
+        const others = prev.filter((act) => !idSet.has(act.node_id));
+        return [...items, ...others];
+      });
+    },
+    [],
+  );
 
   const syncProjectIncidents = useCallback(
     (projectId: string | null, items: Incident[]) => {
@@ -597,6 +613,7 @@ export function useInfrastructure() {
     latencyMs,
     incidents,
     incidentRevision,
+    defenseActions,
     activeBlocksCount,
     securityToasts,
     pushSecurityToast,
@@ -607,6 +624,7 @@ export function useInfrastructure() {
     addNode,
     createProject,
     syncProjectIncidents,
+    syncProjectDefenseActions,
     syncNodeSettings,
   };
 }

@@ -10,16 +10,50 @@ import {
   Search,
   Shield,
   ShieldCheck,
+  XCircle,
 } from "lucide-react";
 import type { Node, DefenseAction, DefenseActionStatus } from "../types";
-import { fetchDefenseActions, revertDefenseAction } from "../api";
+import { cancelDefenseAction, fetchDefenseActions, revertDefenseAction } from "../api";
 import { MOCK_DEFENSE_ACTIONS } from "../mockData";
 import { isDeliveryFailureMessage } from "../presentation";
 import { ManualBlockModal } from "./ManualBlockModal";
+import type { SecurityToastPayload } from "./SecurityToast";
 
 interface Props {
   nodes: Node[];
   isDemoMode: boolean;
+  defenseRevision?: number;
+  onActionsSynced?: (actions: DefenseAction[]) => void;
+  onNotify?: (toast: SecurityToastPayload) => void;
+}
+
+const FIREWALL_ACTION_TYPES = new Set([
+  "BLOCK_IP_NFTABLES",
+  "UNBLOCK_IP_NFTABLES",
+  "RATE_LIMIT",
+]);
+
+function getFailureSummary(action: DefenseAction): string {
+  const msg = (action.error_message ?? "").toLowerCase();
+  if (
+    msg.includes("loopback") ||
+    msg.includes("whitelist") ||
+    msg.includes("rào chắn") ||
+    msg.includes("protected") ||
+    msg.includes("controller") ||
+    msg.includes("nội bộ")
+  ) {
+    return "IP được bảo vệ";
+  }
+  if (action.status === "EXPIRED" || isDeliveryFailureMessage(action.error_message)) {
+    return "Quá hạn gửi lệnh";
+  }
+  if (action.error_message) {
+    return action.error_message.length > 36
+      ? `${action.error_message.slice(0, 36)}…`
+      : action.error_message;
+  }
+  return "Thực thi thất bại";
 }
 
 function formatDuration(seconds: number): string {
@@ -49,7 +83,13 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDay} ngày trước`;
 }
 
-export function DefenseView({ nodes, isDemoMode }: Props) {
+export function DefenseView({
+  nodes,
+  isDemoMode,
+  defenseRevision = 0,
+  onActionsSynced,
+  onNotify,
+}: Props) {
   const [actions, setActions] = useState<DefenseAction[]>(() => {
     return isDemoMode ? MOCK_DEFENSE_ACTIONS : [];
   });
@@ -60,8 +100,14 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [revertingId, setRevertingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const nodeIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
+  const effectiveNodeFilter =
+    nodeFilter === "all" || nodeIds.has(nodeFilter) ? nodeFilter : "all";
 
   // Keep live countdown updated every second
   useEffect(() => {
@@ -71,26 +117,36 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
     return () => window.clearInterval(interval);
   }, []);
 
-  const loadActions = useCallback(async () => {
-    setIsLoading(true);
+  const loadActions = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       if (isDemoMode) {
+        const scopedDemo = MOCK_DEFENSE_ACTIONS.filter(
+          (act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id),
+        );
         setActions(MOCK_DEFENSE_ACTIONS);
+        onActionsSynced?.(scopedDemo);
         return;
       }
-      const data = await fetchDefenseActions({
-        nodeId: nodeFilter !== "all" ? nodeFilter : undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-        limit: 100,
-      });
+      const data = await fetchDefenseActions({ limit: 100 });
+      const scopedLive = data.filter(
+        (act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id),
+      );
       setActions(data);
+      onActionsSynced?.(scopedLive);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Lỗi tải danh sách lệnh tường lửa");
+      if (!quiet) {
+        setError(err instanceof Error ? err.message : "Lỗi tải danh sách lệnh tường lửa");
+      }
     } finally {
-      setIsLoading(false);
+      if (!quiet) {
+        setIsLoading(false);
+      }
     }
-  }, [nodeFilter, statusFilter, isDemoMode]);
+  }, [isDemoMode, nodeIds, onActionsSynced]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -99,29 +155,53 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
     return () => window.clearTimeout(timer);
   }, [loadActions]);
 
+  useEffect(() => {
+    if (isDemoMode || defenseRevision === 0) return;
+    const timer = window.setTimeout(() => {
+      void loadActions(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [defenseRevision, isDemoMode, loadActions]);
+
   // Handle Unblocking
   const handleUnblock = async (action: DefenseAction) => {
-    if (!action.id) return;
+    if (!action.id || action.action_type !== "BLOCK_IP_NFTABLES") return;
     setRevertingId(action.id);
     setFeedbackMessage(null);
     try {
       if (isDemoMode) {
-        setActions((prev) =>
-          prev.map((a) => (a.id === action.id ? { ...a, status: "REVERTED" as DefenseActionStatus } : a))
-        );
-        setFeedbackMessage({
-          type: "success",
-          text: `Đã gỡ chặn thành công IP ${action.target_ip ?? "mục tiêu"} khỏi tường lửa nftables!`,
+        setActions((prev) => {
+          const next = prev.map((a) =>
+            a.id === action.id ? { ...a, status: "REVERTED" as DefenseActionStatus } : a,
+          );
+          onActionsSynced?.(
+            next.filter((act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id)),
+          );
+          return next;
+        });
+        const msg = `Đã gỡ chặn thành công IP ${action.target_ip ?? "mục tiêu"} khỏi tường lửa nftables!`;
+        setFeedbackMessage({ type: "success", text: msg });
+        onNotify?.({
+          id: `defense-unblock-${action.id}`,
+          type: "defense",
+          title: "Đã gỡ chặn tường lửa",
+          message: msg,
+          attackerIp: action.target_ip,
+          targetView: "defense",
         });
         return;
       }
       await revertDefenseAction(action.id);
-      setActions((prev) =>
-        prev.map((a) => (a.id === action.id ? { ...a, status: "REVERTED" as DefenseActionStatus } : a))
-      );
-      setFeedbackMessage({
-        type: "success",
-        text: `Đã gửi lệnh xóa IP ${action.target_ip} khỏi bảng chặn nftables.`,
+      await loadActions(true);
+      const msg = `Đã xếp hàng lệnh gỡ IP ${action.target_ip ?? "mục tiêu"} khỏi bảng chặn nftables.`;
+      setFeedbackMessage({ type: "success", text: msg });
+      onNotify?.({
+        id: `defense-unblock-${action.id}`,
+        type: "defense",
+        title: "Đã gửi lệnh gỡ chặn",
+        message: msg,
+        attackerIp: action.target_ip,
+        targetView: "defense",
       });
     } catch (err: unknown) {
       setFeedbackMessage({
@@ -133,37 +213,146 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
     }
   };
 
+  // Handle Cancelling PENDING actions
+  const handleCancel = async (action: DefenseAction) => {
+    if (!action.id || action.status !== "PENDING") return;
+    setCancellingId(action.id);
+    setFeedbackMessage(null);
+    try {
+      if (isDemoMode) {
+        setActions((prev) => {
+          const next = prev.map((a) =>
+            a.id === action.id ? { ...a, status: "CANCELLED" as DefenseActionStatus } : a,
+          );
+          onActionsSynced?.(
+            next.filter((act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id)),
+          );
+          return next;
+        });
+        setFeedbackMessage({
+          type: "success",
+          text: `Đã hủy lệnh chờ cho IP ${action.target_ip ?? "mục tiêu"}.`,
+        });
+        return;
+      }
+      await cancelDefenseAction(action.id);
+      await loadActions(true);
+      setFeedbackMessage({
+        type: "success",
+        text: `Đã hủy lệnh chờ cho IP ${action.target_ip ?? "mục tiêu"}.`,
+      });
+    } catch (err: unknown) {
+      setFeedbackMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Không thể hủy lệnh tường lửa",
+      });
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const handleActionCreated = (newAction: DefenseAction) => {
-    setActions((prev) => [newAction, ...prev]);
-    setFeedbackMessage({
-      type: "success",
-      text: `Đã kích hoạt thành công lệnh tường lửa cho IP ${newAction.target_ip ?? "mục tiêu"}!`,
+    setActions((prev) => {
+      const next = [newAction, ...prev];
+      onActionsSynced?.(
+        next.filter((act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id)),
+      );
+      return next;
+    });
+    const msg = `Đã kích hoạt thành công lệnh tường lửa cho IP ${newAction.target_ip ?? "mục tiêu"}!`;
+    setFeedbackMessage({ type: "success", text: msg });
+    onNotify?.({
+      id: `defense-create-${newAction.id}`,
+      type: "defense",
+      title: "Đã tạo lệnh tường lửa",
+      message: msg,
+      attackerIp: newAction.target_ip,
+      targetView: "defense",
     });
   };
 
-  // KPIs
-  const totalCount = actions.length;
-  const appliedCount = actions.filter((a) => a.status === "APPLIED").length;
-  const failedCount = actions.filter((a) => a.status === "FAILED").length;
-  const successRate = totalCount > 0 ? Math.round((appliedCount / (appliedCount + failedCount || 1)) * 100) : 100;
-  const revertedCount = actions.filter((a) => a.status === "REVERTED").length;
+  const scopedActions = useMemo(() => {
+    return actions.filter((act) => {
+      if (!FIREWALL_ACTION_TYPES.has(act.action_type)) return false;
+      if (!nodeIds.has(act.node_id)) return false;
+      if (effectiveNodeFilter !== "all" && act.node_id !== effectiveNodeFilter) return false;
+      return true;
+    });
+  }, [actions, nodeIds, effectiveNodeFilter]);
+
+  const pendingUnblockKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const act of scopedActions) {
+      if (
+        act.action_type === "UNBLOCK_IP_NFTABLES" &&
+        (act.status === "PENDING" || act.status === "SENT")
+      ) {
+        const refId = act.command_payload?.target_action_id ?? act.command_payload?.revert_action_id;
+        if (typeof refId === "string" && refId) {
+          keys.add(`id:${refId}`);
+        }
+        if (act.target_ip) {
+          keys.add(`ip:${act.node_id}:${act.target_ip}`);
+        }
+      }
+    }
+    return keys;
+  }, [scopedActions]);
+
+  // KPIs strictly scoped to firewall actions in current project/node filter
+  const totalCount = scopedActions.length;
+  const appliedCount = scopedActions.filter(
+    (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
+  ).length;
+  const pendingCount = scopedActions.filter(
+    (a) => a.status === "PENDING" || a.status === "SENT",
+  ).length;
+  const revertedCount = scopedActions.filter((a) => a.status === "REVERTED").length;
+  const failedCount = scopedActions.filter(
+    (a) => a.status === "FAILED" || a.status === "EXPIRED",
+  ).length;
+  const successTotal = appliedCount + revertedCount;
+  const completedOutcomes = successTotal + failedCount;
+  const successRate =
+    completedOutcomes > 0 ? Math.round((successTotal / completedOutcomes) * 100) : 100;
 
   // Filtered unified action list
   const filteredActions = useMemo(() => {
-    return actions.filter((act) => {
-      if (nodeFilter !== "all" && act.node_id !== nodeFilter) return false;
-      if (statusFilter !== "all" && act.status !== statusFilter) return false;
+    return scopedActions.filter((act) => {
+      if (statusFilter === "APPLIED") {
+        if (act.status !== "APPLIED" || act.action_type === "UNBLOCK_IP_NFTABLES") return false;
+      } else if (statusFilter === "PENDING_GROUP") {
+        if (act.status !== "PENDING" && act.status !== "SENT") return false;
+      } else if (statusFilter === "REVERTED") {
+        if (act.status !== "REVERTED") return false;
+      } else if (statusFilter === "FAILED") {
+        if (act.status !== "FAILED" && act.status !== "EXPIRED") return false;
+      }
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
+        const query = searchQuery.trim().toLowerCase();
+        const node = nodeMap.get(act.node_id);
         const matchIp = act.target_ip?.toLowerCase().includes(query) ?? false;
         const matchId = act.id.toLowerCase().includes(query);
+        const matchIncident = act.incident_id?.toLowerCase().includes(query) ?? false;
         const matchNode = act.node_id.toLowerCase().includes(query);
+        const matchHostname = node?.hostname.toLowerCase().includes(query) ?? false;
+        const matchNodeIp = node?.ip_address.toLowerCase().includes(query) ?? false;
         const matchType = act.action_type.toLowerCase().includes(query);
-        if (!matchIp && !matchId && !matchNode && !matchType) return false;
+        if (
+          !matchIp &&
+          !matchId &&
+          !matchIncident &&
+          !matchNode &&
+          !matchHostname &&
+          !matchNodeIp &&
+          !matchType
+        ) {
+          return false;
+        }
       }
       return true;
     });
-  }, [actions, nodeFilter, statusFilter, searchQuery]);
+  }, [scopedActions, statusFilter, searchQuery, nodeMap]);
 
   return (
     <div className="defense-view">
@@ -217,7 +406,7 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
             {successRate}%
           </div>
           <span className="kpi-footnote">
-            {appliedCount} thành công · {failedCount} thất bại
+            {successTotal} thành công · {failedCount} thất bại
           </span>
         </article>
 
@@ -252,6 +441,7 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
             {[
               { id: "all", label: "Tất cả", count: totalCount },
               { id: "APPLIED", label: "Đang chặn", count: appliedCount },
+              { id: "PENDING_GROUP", label: "Đang chờ", count: pendingCount },
               { id: "REVERTED", label: "Đã gỡ bỏ", count: revertedCount },
               { id: "FAILED", label: "Thất bại", count: failedCount },
             ].map(({ id, label, count }) => (
@@ -285,7 +475,7 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
             <label htmlFor="defense-node-filter" className="sr-only">Lọc theo máy chủ</label>
             <select
               id="defense-node-filter"
-              value={nodeFilter}
+              value={effectiveNodeFilter}
               onChange={(e) => setNodeFilter(e.target.value)}
               aria-label="Lọc theo máy chủ thực thi"
             >
@@ -334,7 +524,7 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
             <ShieldCheck size={36} style={{ color: "var(--status-ok)" }} />
             <h3>Tường lửa thông suốt — Không có dữ liệu</h3>
             <p>
-              {searchQuery || nodeFilter !== "all" || statusFilter !== "all"
+              {searchQuery || effectiveNodeFilter !== "all" || statusFilter !== "all"
                 ? "Không tìm thấy lệnh tường lửa nào phù hợp với bộ lọc hiện tại."
                 : "Tất cả máy chủ đang hoạt động an toàn và không có địa chỉ IP nào bị khóa."}
             </p>
@@ -355,18 +545,38 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
               <tbody>
                 {filteredActions.map((act) => {
                   const isApplied = act.status === "APPLIED";
-                  const isFailed = act.status === "FAILED";
+                  const isFailed = act.status === "FAILED" || act.status === "EXPIRED";
                   const isReverted = act.status === "REVERTED";
+                  const isPendingOrSent = act.status === "PENDING" || act.status === "SENT";
+                  const isPendingUnblock =
+                    isApplied &&
+                    act.action_type === "BLOCK_IP_NFTABLES" &&
+                    (pendingUnblockKeys.has(`id:${act.id}`) ||
+                      (act.target_ip ? pendingUnblockKeys.has(`ip:${act.node_id}:${act.target_ip}`) : false));
 
                   const durationSec = Number(act.command_payload?.duration_seconds ?? 0);
-                  const createdAtMs = new Date(act.created_at).getTime();
-                  const expiresAtMs = durationSec > 0 ? createdAtMs + durationSec * 1000 : 0;
-                  const remainingSec = expiresAtMs > 0 ? Math.max(0, Math.floor((expiresAtMs - now) / 1000)) : 0;
+                  const effectiveUntilMs = act.effective_until
+                    ? new Date(act.effective_until).getTime()
+                    : 0;
+                  const appliedBaseMs = act.applied_at
+                    ? new Date(act.applied_at).getTime()
+                    : new Date(act.created_at).getTime();
+                  const expiresAtMs =
+                    effectiveUntilMs > 0
+                      ? effectiveUntilMs
+                      : durationSec > 0
+                        ? appliedBaseMs + durationSec * 1000
+                        : 0;
+                  const remainingSec =
+                    expiresAtMs > 0 ? Math.max(0, Math.floor((expiresAtMs - now) / 1000)) : 0;
                   const isExpiringSoon = remainingSec > 0 && remainingSec <= 60;
-                  const isExpired = durationSec > 0 && remainingSec === 0;
+                  const isExpired = expiresAtMs > 0 && remainingSec === 0;
 
                   return (
-                    <tr key={act.id} className={isApplied ? "active-block-row" : ""}>
+                    <tr
+                      key={act.id}
+                      className={isApplied && act.action_type === "BLOCK_IP_NFTABLES" ? "active-block-row" : ""}
+                    >
                       <td>
                         <div className="ip-cell">
                           {act.target_ip ? (
@@ -437,11 +647,11 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
                         )}
                       </td>
                       <td title={`Kích hoạt: ${formatRelativeTime(act.created_at)}`}>
-                        {act.action_type === "RESTART_SERVICE" ? (
-                          <span className="text-muted" style={{ fontSize: 13 }}>Tức thời</span>
+                        {act.action_type === "UNBLOCK_IP_NFTABLES" ? (
+                          <span className="text-muted" style={{ fontSize: 13 }}>Gỡ chặn tức thời</span>
                         ) : isApplied ? (
-                          durationSec === 0 ? (
-                            <span className="badge badge-neutral">Vĩnh viễn</span>
+                          durationSec === 0 && !act.effective_until ? (
+                            <span className="badge badge-neutral">Tạm thời</span>
                           ) : isExpired ? (
                             <span className="badge badge-warn">
                               <Clock size={12} /> Hết hạn (Đang thu hồi)
@@ -451,26 +661,34 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
                               <Clock size={12} /> {formatDuration(remainingSec)} còn lại
                             </span>
                           )
+                        ) : isPendingOrSent ? (
+                          <span className="text-muted" style={{ fontSize: 13 }}>
+                            {durationSec > 0 ? `Cấu hình ${formatDuration(durationSec)}` : "Đang xếp hàng"}
+                          </span>
                         ) : isReverted ? (
                           <span className="text-muted" style={{ fontSize: 13 }}>
-                            {durationSec > 0 ? `${Math.round(durationSec / 60)} phút` : "Vĩnh viễn"}
+                            {durationSec > 0 ? `${Math.round(durationSec / 60)} phút` : "—"}
                           </span>
                         ) : (
                           <span className="text-muted" style={{ fontSize: 13 }}>—</span>
                         )}
                       </td>
                       <td>
-                        {isApplied && (
+                        {isPendingUnblock ? (
+                          <span className="status-badge warn">
+                            <i /> Đang chờ gỡ
+                          </span>
+                        ) : isApplied ? (
                           <span className="status-badge ok">
                             <i /> Đang áp dụng
                           </span>
-                        )}
+                        ) : null}
                         {isReverted && (
                           <span className="status-badge neutral">
                             <i /> Đã gỡ bỏ
                           </span>
                         )}
-                        {(isFailed || act.status === "EXPIRED") && (
+                        {isFailed && (
                           <span
                             className="status-badge crit"
                             title={
@@ -503,27 +721,46 @@ export function DefenseView({ nodes, isDemoMode }: Props) {
                         )}
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {isApplied ? (
+                        {isApplied && act.action_type === "BLOCK_IP_NFTABLES" ? (
                           <button
                             type="button"
                             className="btn btn-sm btn-outline-danger"
                             onClick={() => void handleUnblock(act)}
-                            disabled={revertingId === act.id}
-                            title="Gỡ bỏ lệnh chặn IP khỏi bảng tường lửa nftables"
+                            disabled={revertingId === act.id || isPendingUnblock}
+                            title={
+                              isPendingUnblock
+                                ? "Đã gửi lệnh gỡ chặn, đang chờ Agent thực thi"
+                                : "Gỡ bỏ lệnh chặn IP khỏi bảng tường lửa nftables"
+                            }
                           >
                             {revertingId === act.id ? (
                               <RefreshCw size={13} className="spin" />
                             ) : (
                               <MinusCircle size={13} />
                             )}
-                            Gỡ chặn
+                            {isPendingUnblock ? "Đang chờ gỡ" : "Gỡ chặn"}
+                          </button>
+                        ) : act.status === "PENDING" ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline"
+                            onClick={() => void handleCancel(act)}
+                            disabled={cancellingId === act.id}
+                            title="Hủy lệnh đang chờ trước khi Agent nhận thực thi"
+                          >
+                            {cancellingId === act.id ? (
+                              <RefreshCw size={13} className="spin" />
+                            ) : (
+                              <XCircle size={13} />
+                            )}
+                            Hủy lệnh
                           </button>
                         ) : isFailed ? (
                           <span
                             className="error-detail-text"
-                            title={act.error_message ?? "Rào chắn an toàn từ chối IP"}
+                            title={act.error_message ?? "Lệnh tường lửa thất bại"}
                           >
-                            IP được bảo vệ
+                            {getFailureSummary(act)}
                           </span>
                         ) : (
                           <span className="text-muted">—</span>

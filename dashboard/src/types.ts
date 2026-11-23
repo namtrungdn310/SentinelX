@@ -131,6 +131,8 @@ export interface DefenseAction {
   agent_ack_at: string | null;
   error_message: string | null;
   created_at: string;
+  applied_at?: string | null;
+  effective_until?: string | null;
 }
 
 export interface DefensePolicy {

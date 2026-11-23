@@ -68,6 +68,8 @@ try {
     const { LiveEventStream } = await server.ssrLoadModule("/src/components/LiveEventStream.tsx");
     const { IncidentsView } = await server.ssrLoadModule("/src/components/IncidentsView.tsx");
     const { IncidentDetailModal } = await server.ssrLoadModule("/src/components/IncidentDetailModal.tsx");
+    const { DefenseView } = await server.ssrLoadModule("/src/components/DefenseView.tsx");
+    const { ManualBlockModal } = await server.ssrLoadModule("/src/components/ManualBlockModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
     const { MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS } = await server.ssrLoadModule("/src/mockData.ts");
@@ -567,6 +569,34 @@ try {
             },
         });
         assert.ok(execErrMsg.includes("Kích hoạt bị lỗi"));
+    });
+    check("DefenseView scopes strictly to firewall actions and separates pending/reverted/failed controls", () => {
+        const defaultProjectNodes = MOCK_NODES.filter(
+            (n) => n.project_id === MOCK_PROJECTS[0].id,
+        );
+        const defenseHtml = renderToStaticMarkup(createElement(DefenseView, {
+            nodes: defaultProjectNodes,
+            isDemoMode: true,
+        }));
+        assert.ok(defenseHtml.includes("203.0.113.195"));
+        assert.ok(defenseHtml.includes("198.51.100.42"));
+        assert.ok(defenseHtml.includes("198.51.100.77"));
+        assert.ok(!defenseHtml.includes("RESTART_SERVICE"));
+        assert.ok(!defenseHtml.includes(">RESTART<"));
+        assert.ok(defenseHtml.includes("Đang chờ"));
+        assert.ok(defenseHtml.includes("Hủy lệnh"));
+        assert.ok(defenseHtml.includes("Gỡ chặn"));
+        assert.ok(!defenseHtml.includes("Vĩnh viễn"));
+
+        const modalHtml = renderToStaticMarkup(createElement(ManualBlockModal, {
+            isOpen: true,
+            onClose: noop,
+            nodes: defaultProjectNodes,
+            onActionCreated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(!modalHtml.includes('value="0"'));
+        assert.ok(modalHtml.includes('value="1440"'));
     });
     const originalFetch = globalThis.fetch;
     try {

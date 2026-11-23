@@ -223,12 +223,23 @@ export async function createManualDefenseAction(payload: {
   command_payload?: Record<string, unknown>;
   incident_id?: string | null;
 }): Promise<DefenseAction> {
-  const res = await fetch(`${API_BASE}/defense/actions/manual`, {
+  const res = await fetch(`${API_BASE}/defense/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Lỗi thực hiện lệnh phòng thủ: ${res.statusText}`);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      if (typeof errBody?.detail === "string") {
+        detail = errBody.detail;
+      }
+    } catch {
+      // ignore non-JSON error body
+    }
+    throw new Error(`Lỗi thực hiện lệnh phòng thủ: ${detail}`);
+  }
   return res.json();
 }
 

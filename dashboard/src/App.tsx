@@ -83,9 +83,10 @@ export function App() {
     createProject,
     incidents,
     incidentRevision,
+    defenseActions,
     syncProjectIncidents,
+    syncProjectDefenseActions,
     syncNodeSettings,
-    activeBlocksCount,
     securityToasts,
     pushSecurityToast,
     dismissSecurityToast,
@@ -107,6 +108,28 @@ export function App() {
       syncProjectIncidents(selectedProjectId, items);
     },
     [syncProjectIncidents, selectedProjectId],
+  );
+  const activeBlocksCount = useMemo(() => {
+    const projectNodeIds = new Set(
+      nodes
+        .filter((node) => !selectedProjectId || node.project_id === selectedProjectId)
+        .map((node) => node.id),
+    );
+    return defenseActions.filter(
+      (a) =>
+        projectNodeIds.has(a.node_id) &&
+        a.status === "APPLIED" &&
+        a.action_type === "BLOCK_IP_NFTABLES",
+    ).length;
+  }, [defenseActions, nodes, selectedProjectId]);
+  const handleDefenseActionsSynced = useCallback(
+    (items: typeof defenseActions) => {
+      const ids = nodes
+        .filter((node) => !selectedProjectId || node.project_id === selectedProjectId)
+        .map((node) => node.id);
+      syncProjectDefenseActions(ids, items);
+    },
+    [nodes, selectedProjectId, syncProjectDefenseActions],
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
@@ -678,8 +701,11 @@ export function App() {
           )}
           {effectiveView === "defense" && (
             <DefenseView
-              nodes={nodes}
+              nodes={projectNodes}
               isDemoMode={isDemoMode}
+              defenseRevision={incidentRevision}
+              onActionsSynced={handleDefenseActionsSynced}
+              onNotify={pushSecurityToast}
             />
           )}
           {effectiveView === "policies" && (

@@ -28,13 +28,15 @@ export function ManualBlockModal({
 
   if (!isOpen) return null;
 
+  const effectiveNodeId = nodes.some((n) => n.id === nodeId) ? nodeId : nodes[0]?.id || "";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetIp.trim()) {
       setError("Vui lòng nhập địa chỉ IP cần chặn");
       return;
     }
-    if (!nodeId) {
+    if (!effectiveNodeId) {
       setError("Vui lòng chọn máy chủ áp dụng");
       return;
     }
@@ -42,20 +44,23 @@ export function ManualBlockModal({
     setLoading(true);
     setError(null);
     try {
-      const durationSeconds = durationMinutes * 60;
+      const durationSeconds = Math.max(60, Math.min(86400, durationMinutes * 60));
       if (isDemoMode) {
+        const nowIso = new Date().toISOString();
         const mockAction: DefenseAction = {
           id: `def-man-${Date.now()}`,
           incident_id: null,
           policy_id: null,
-          node_id: nodeId,
+          node_id: effectiveNodeId,
           action_type: "BLOCK_IP_NFTABLES",
           target_ip: targetIp.trim(),
           command_payload: { duration_seconds: durationSeconds, manual: true },
           status: "APPLIED",
-          agent_ack_at: new Date().toISOString(),
+          agent_ack_at: nowIso,
           error_message: null,
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
+          applied_at: nowIso,
+          effective_until: new Date(Date.now() + durationSeconds * 1000).toISOString(),
         };
         onActionCreated(mockAction);
         onClose();
@@ -63,7 +68,7 @@ export function ManualBlockModal({
       }
 
       const res = await createManualDefenseAction({
-        node_id: nodeId,
+        node_id: effectiveNodeId,
         action_type: "BLOCK_IP_NFTABLES",
         target_ip: targetIp.trim(),
         command_payload: {
@@ -129,10 +134,11 @@ export function ManualBlockModal({
             <label htmlFor={`${id}-node`}>Máy chủ áp dụng</label>
             <select
               id={`${id}-node`}
-              value={nodeId}
+              value={effectiveNodeId}
               onChange={(e) => setNodeId(e.target.value)}
-              disabled={loading}
+              disabled={loading || nodes.length === 0}
             >
+              {nodes.length === 0 && <option value="">Không có máy chủ trong dự án</option>}
               {nodes.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.hostname} · {n.ip_address}
@@ -153,8 +159,8 @@ export function ManualBlockModal({
               <option value={15}>15 phút</option>
               <option value={30}>30 phút</option>
               <option value={60}>1 giờ</option>
-              <option value={1440}>24 giờ</option>
-              <option value={0}>Vĩnh viễn đến khi gỡ thủ công</option>
+              <option value={360}>6 giờ</option>
+              <option value={1440}>24 giờ (tối đa)</option>
             </select>
           </div>
         </div>
