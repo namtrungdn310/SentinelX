@@ -280,13 +280,13 @@ export function IncidentsView({ selectedProjectId, nodes, isDemoMode, onNotify }
         <div className="severity-guide-item">
           <span className="severity-badge warn">{SEVERITY_LABELS.HIGH}</span>
           <span className="severity-guide-text">
-            Vượt ngưỡng cảnh báo ban đầu (CPU ≥ 80%, RAM / Đĩa ≥ 85% hoặc vượt ngưỡng mạng cơ bản)
+            Vượt ngưỡng cảnh báo ban đầu (tài nguyên hoặc lưu lượng mạng lần đầu vượt mức chuẩn)
           </span>
         </div>
         <div className="severity-guide-item">
           <span className="severity-badge crit">{SEVERITY_LABELS.CRITICAL}</span>
           <span className="severity-guide-text">
-            Leo thang khi chạm mức tới hạn: CPU / RAM (3 mẫu) / Đĩa ≥ 95% · SYN ≥ 200 (hoặc ≥ 100 khi ACK = 0), quét ≥ 30 cổng, hoặc ≥ 2.000 pkt / 10 MB trong 10s
+            Kéo dài ≥ 60 giây hoặc lặp lại ≥ 3 cửa sổ liên tiếp chưa hạ nhiệt (hoặc chạm ngưỡng tới hạn ≥ 95% / tấn công lớn)
           </span>
         </div>
       </div>

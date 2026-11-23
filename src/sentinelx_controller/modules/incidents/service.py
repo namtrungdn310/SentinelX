@@ -56,6 +56,8 @@ _METRIC_LABELS: dict[str, str] = {
 _DELIVERY_FAILED_MARKER = "lỗi tải lệnh:"
 _EXECUTION_FAILED_MARKER = "lỗi kích hoạt:"
 _CLOSED_SUPPRESSION_WINDOW = timedelta(seconds=60)
+_CRITICAL_ESCALATION_WINDOW = timedelta(seconds=60)
+_CRITICAL_ESCALATION_EVENTS = 3
 
 
 def _strip_error_lines(summary: str | None) -> str:
@@ -256,16 +258,28 @@ class IncidentService:
             first_event = events[0]
             title = _expected_title(first_event)
             peak_event = max(events, key=lambda e: SEVERITY_WEIGHT[e.severity.value])
+            latest_batch_event = max(events, key=lambda e: e.detected_at)
+            batch_span = ensure_utc(latest_batch_event.detected_at) - ensure_utc(
+                first_event.detected_at
+            )
+            initial_severity = (
+                DetectionSeverity.CRITICAL.value
+                if (
+                    len(events) >= _CRITICAL_ESCALATION_EVENTS
+                    or batch_span >= _CRITICAL_ESCALATION_WINDOW
+                )
+                else peak_event.severity.value
+            )
             active_incident = IncidentModel(
                 project_id=project_id,
                 title=title,
                 status=IncidentStatus.DETECTED.value,
-                severity=peak_event.severity.value,
+                severity=initial_severity,
                 started_at=first_event.detected_at,
                 summary=_format_event_summary(peak_event),
                 node_id=node_id,
                 correlation_key=correlation_key,
-                last_event_at=max(e.detected_at for e in events),
+                last_event_at=latest_batch_event.detected_at,
             )
             await self._repo.create(active_incident)
         else:
@@ -278,6 +292,15 @@ class IncidentService:
                         active_incident.severity = k
                         break
             latest_event = max(events, key=lambda e: e.detected_at)
+            existing_count = await self._event_count(active_incident.id)
+            sustained_duration = ensure_utc(latest_event.detected_at) - ensure_utc(
+                active_incident.started_at
+            )
+            if active_incident.severity != DetectionSeverity.CRITICAL.value and (
+                existing_count + len(events) >= _CRITICAL_ESCALATION_EVENTS
+                or sustained_duration >= _CRITICAL_ESCALATION_WINDOW
+            ):
+                active_incident.severity = DetectionSeverity.CRITICAL.value
             new_summary = _format_event_summary(latest_event)
             existing_summary = active_incident.summary or ""
             preserved_suffix: str | None = None
@@ -447,7 +470,11 @@ class IncidentService:
     async def _event_count(self, incident_id: uuid.UUID) -> int:
         if self._detection_service is None:
             return 0
-        return (await self._detection_service.incident_counts([incident_id])).get(incident_id, 0)
+        counts = await self._detection_service.incident_counts([incident_id])
+        if isinstance(counts, dict):
+            val = counts.get(incident_id, 0)
+            return int(val) if isinstance(val, int) else 0
+        return 0
 
     async def list_incidents(
         self,

@@ -162,7 +162,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     resolved_at: null,
     summary:
       "CPU: 94.2% (>= 85.0%) · 3 mẫu · celery-worker (4 workers): 78.5%",
-    event_count: 3,
+    event_count: 1,
     targeted_service: "Tiến trình celery-worker",
   },
   {
@@ -234,7 +234,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     resolved_at: null,
     summary:
       "UDP (NTP :123) · IP: 198.18.0.88 · 180 pps · 210 KB/s\nnftables: DROP 198.18.0.88 (thời hạn: 10 phút)",
-    event_count: 4,
+    event_count: 2,
     attacker_ip: "198.18.0.88",
     targeted_ports: [123],
     targeted_service: "Dịch vụ đồng bộ thời gian NTP",
@@ -294,7 +294,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     resolved_at: new Date(Date.now() - 220 * 60000).toISOString(),
     summary:
       "CPU: 91.8% (>= 85.0%) · 3 mẫu · celery-worker (4 workers): 76.2%",
-    event_count: 3,
+    event_count: 2,
     targeted_service: "Tiến trình celery-worker",
   },
   {

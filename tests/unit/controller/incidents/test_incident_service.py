@@ -294,3 +294,53 @@ async def test_mark_defense_failed_delivery_and_execution_states() -> None:
         "nftables: DROP 203.0.113.195 (thời hạn: 30 phút)"
     )
     assert _extract_defense_status(model.summary, model.status) is None
+
+
+@pytest.mark.asyncio
+async def test_correlate_events_escalates_high_to_critical_on_duration_or_windows() -> None:
+    repo = AsyncMock()
+    detection_service = AsyncMock()
+    project_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    start_time = datetime.now(UTC) - timedelta(seconds=70)
+
+    # 1. Sustained >= 60s escalates HIGH -> CRITICAL
+    active_by_time = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        node_id=node_id,
+        title="Quá tải CPU",
+        status=IncidentStatus.DETECTED.value,
+        severity=DetectionSeverity.HIGH.value,
+        started_at=start_time,
+        correlation_key="resource",
+    )
+    repo.find_active_incident.return_value = active_by_time
+    detection_service.incident_counts.return_value = {active_by_time.id: 1}
+
+    service = IncidentService(repository=repo, detection_service=detection_service)
+    follow_up = make_event(severity=DetectionSeverity.HIGH)
+    follow_up.detected_at = start_time + timedelta(seconds=65)
+    correlated = await service.correlate_events(project_id, node_id, [follow_up])
+    assert correlated[0][0].severity == DetectionSeverity.CRITICAL
+    assert active_by_time.severity == DetectionSeverity.CRITICAL.value
+
+    # 2. Repeated >= 3 windows within < 60s also escalates HIGH -> CRITICAL
+    recent_start = datetime.now(UTC) - timedelta(seconds=20)
+    active_by_count = IncidentModel(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        node_id=node_id,
+        title="Quá tải CPU",
+        status=IncidentStatus.DETECTED.value,
+        severity=DetectionSeverity.HIGH.value,
+        started_at=recent_start,
+        correlation_key="resource",
+    )
+    repo.find_active_incident.return_value = active_by_count
+    detection_service.incident_counts.return_value = {active_by_count.id: 2}
+    third_event = make_event(severity=DetectionSeverity.HIGH)
+    third_event.detected_at = recent_start + timedelta(seconds=20)
+    correlated2 = await service.correlate_events(project_id, node_id, [third_event])
+    assert correlated2[0][0].severity == DetectionSeverity.CRITICAL
+    assert active_by_count.severity == DetectionSeverity.CRITICAL.value

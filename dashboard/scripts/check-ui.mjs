@@ -386,7 +386,7 @@ try {
         assert.ok(html.includes("Xử lý thủ công"));
         assert.ok(html.includes("severity-guide-bar"));
         assert.ok(html.includes("Vượt ngưỡng cảnh báo ban đầu"));
-        assert.ok(html.includes("CPU / RAM (3 mẫu) / Đĩa ≥ 95%"));
+        assert.ok(html.includes("Kéo dài ≥ 60 giây hoặc lặp lại ≥ 3 cửa sổ liên tiếp"));
         assert.ok(!html.includes("Cần xử lý thủ công"));
         assert.ok(!html.includes('<option value="MEDIUM">'));
         assert.ok(html.includes("Đang chờ Agent tải lệnh"));
