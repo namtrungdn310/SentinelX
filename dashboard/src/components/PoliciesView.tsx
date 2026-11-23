@@ -451,15 +451,6 @@ export function PoliciesView({
       {/* TAB 2: Defense Policies */}
       {activeTab === "policies" && (
         <section className="policies-container-section" aria-label="Danh mục chính sách bảo vệ">
-          <div className="table-toolbar">
-            <div className="policy-toolbar-title">
-              <h3 style={{ fontSize: 15, margin: 0, fontWeight: 600 }}>Quy tắc tự động ứng phó</h3>
-              <small style={{ color: "var(--text-muted)" }}>
-                Các chính sách chuẩn đã được tối ưu sẵn theo từng loại sự cố — chỉ cần bật hoặc tắt theo nhu cầu dự án
-              </small>
-            </div>
-          </div>
-
           {policies.length === 0 && isPoliciesLoading ? (
             <div className="panel empty-state-card">
               <Sliders size={32} style={{ color: "var(--text-muted)" }} />

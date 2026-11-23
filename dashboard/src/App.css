@@ -3355,12 +3355,6 @@ body:has(.event-full) .event-full {
     gap: 16px;
 }
 
-.policy-toolbar-title {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
 .service-badge {
     display: inline-flex;
     align-items: center;

@@ -640,6 +640,7 @@ try {
         assert.ok(fixedPoliciesTabHtml.includes("Tự phục hồi thích ứng khi cạn kiệt RAM"));
         assert.ok(fixedPoliciesTabHtml.includes('role="switch"'));
         assert.ok(!fixedPoliciesTabHtml.includes("Làm mới chính sách"));
+        assert.ok(!fixedPoliciesTabHtml.includes("Quy tắc tự động ứng phó"));
         assert.ok(!fixedPoliciesTabHtml.includes("Thêm chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Chỉnh sửa chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Xóa chính sách"));
