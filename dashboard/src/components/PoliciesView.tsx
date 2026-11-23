@@ -85,7 +85,10 @@ export function PoliciesView({
 
   // Load Whitelist
   const loadWhitelist = useCallback(async () => {
-    if (!effectiveProjectId) return;
+    if (!effectiveProjectId) {
+      setWhitelist([]);
+      return;
+    }
     setIsWhitelistLoading(true);
     setError(null);
     try {
@@ -292,6 +295,17 @@ export function PoliciesView({
       {error && (
         <div className="connection-error" role="alert">
           <span>{error}</span>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              void loadWhitelist();
+              void loadPolicies();
+            }}
+            disabled={isWhitelistLoading || isPoliciesLoading}
+          >
+            Thử lại
+          </button>
         </div>
       )}
 
@@ -363,15 +377,25 @@ export function PoliciesView({
           {filteredWhitelist.length === 0 ? (
             <div className="empty-state-card">
               <ShieldCheck size={36} style={{ color: "var(--status-ok)" }} />
-              <h3>Chưa có IP an toàn nào</h3>
-              <p>Thêm các mạng nội bộ hoặc IP tin cậy để bảo vệ hệ thống khỏi việc tự chặn nhầm.</p>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setIsWhitelistModalOpen(true)}
-              >
-                <Plus size={15} /> Thêm IP an toàn đầu tiên
-              </button>
+              <h3>
+                {whitelistSearch.trim()
+                  ? "Không tìm thấy IP hoặc CIDR phù hợp"
+                  : "Chưa có IP an toàn nào"}
+              </h3>
+              <p>
+                {whitelistSearch.trim()
+                  ? "Thử xóa hoặc đổi từ khóa tìm kiếm để xem toàn bộ danh sách an toàn."
+                  : "Thêm các mạng nội bộ hoặc IP tin cậy để bảo vệ hệ thống khỏi việc tự chặn nhầm."}
+              </p>
+              {!whitelistSearch.trim() && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setIsWhitelistModalOpen(true)}
+                >
+                  <Plus size={15} /> Thêm IP an toàn đầu tiên
+                </button>
+              )}
             </div>
           ) : (
             <div className="table-scroll">
@@ -434,21 +458,16 @@ export function PoliciesView({
                 Các chính sách chuẩn đã được tối ưu sẵn theo từng loại sự cố — chỉ cần bật hoặc tắt theo nhu cầu dự án
               </small>
             </div>
-            <div className="toolbar-actions">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => void loadPolicies()}
-                disabled={isPoliciesLoading}
-                aria-label="Tải lại danh mục chính sách"
-              >
-                <RefreshCw size={15} className={isPoliciesLoading ? "spin" : ""} />
-                Làm mới chính sách
-              </button>
-            </div>
           </div>
 
-          <div className="policies-grid-2x2">
+          {policies.length === 0 && isPoliciesLoading ? (
+            <div className="panel empty-state-card">
+              <Sliders size={32} style={{ color: "var(--text-muted)" }} />
+              <h3>Đang tải bộ chính sách chuẩn...</h3>
+              <p>Hệ thống đang đồng bộ danh sách quy tắc bảo vệ từ Controller.</p>
+            </div>
+          ) : (
+            <div className="policies-grid-2x2">
             {policies.map((policy) => {
               const isToggling = togglingPolicyId === policy.id;
 
@@ -498,7 +517,7 @@ export function PoliciesView({
                       <span className="meta-label">Hành động</span>
                       <strong className="meta-value">
                         {policy.action_type === "ADAPTIVE"
-                          ? "Tự động tối ưu"
+                          ? "Tự động thích ứng"
                           : policy.action_type === "BLOCK_IP_NFTABLES"
                           ? "Khóa IP tường lửa"
                           : policy.action_type === "RATE_LIMIT"
@@ -525,7 +544,7 @@ export function PoliciesView({
                       </span>
                       <strong className="meta-value">
                         {policy.action_type === "ADAPTIVE"
-                          ? "Phân cấp tối ưu"
+                          ? "Theo mức độ quá tải"
                           : policy.action_type === "ALERT_ONLY"
                           ? "Chỉ ghi nhận"
                           : policy.action_type === "RESTART_SERVICE" || policy.action_type === "CLEAR_OS_CACHE"
@@ -571,7 +590,8 @@ export function PoliciesView({
                 </article>
               );
             })}
-          </div>
+            </div>
+          )}
         </section>
       )}
 
