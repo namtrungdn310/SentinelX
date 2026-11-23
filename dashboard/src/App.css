@@ -2462,7 +2462,7 @@ body:has(.event-full) .event-full {
 
 .severity-guide-bar {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
     gap: 10px 20px;
     padding: 10px 16px;
     background: var(--bg-panel);
@@ -2477,7 +2477,7 @@ body:has(.event-full) .event-full {
     min-width: 0;
 }
 
-.severity-guide-item .sev-badge {
+.severity-guide-item .severity-badge {
     flex-shrink: 0;
     white-space: nowrap;
 }

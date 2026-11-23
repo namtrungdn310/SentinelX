@@ -171,7 +171,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     node_id: "node-api-02",
     title: "Quá tải RAM",
     status: "DETECTED",
-    severity: "CRITICAL",
+    severity: "HIGH",
     started_at: new Date(Date.now() - 5 * 60000).toISOString(),
     resolved_at: null,
     summary:
@@ -189,7 +189,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 10 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "RAM: 92.1% (3.68 / 4.0 GB, >= 85.0%) · 3 mẫu · nginx (PID 5104): 44.5%\nservice: RESTART nginx",
+      "RAM: 96.4% (3.86 / 4.0 GB, >= 85.0%) · 3 mẫu · nginx (PID 5104): 44.5%\nservice: RESTART nginx",
     event_count: 3,
     targeted_service: "Dịch vụ Web Proxy Nginx",
   },
@@ -199,7 +199,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     node_id: "node-api-02",
     title: "Dò quét cổng",
     status: "DETECTED",
-    severity: "HIGH",
+    severity: "CRITICAL",
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
     summary:
@@ -233,7 +233,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 55 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "UDP (NTP :123) · IP: 198.18.0.88 · 3.800 pps · 18.2 MB/s\nnftables: DROP 198.18.0.88 (thời hạn: 10 phút)",
+      "UDP (NTP :123) · IP: 198.18.0.88 · 180 pps · 210 KB/s\nnftables: DROP 198.18.0.88 (thời hạn: 10 phút)",
     event_count: 4,
     attacker_ip: "198.18.0.88",
     targeted_ports: [123],
@@ -279,7 +279,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 210 * 60000).toISOString(),
     resolved_at: new Date(Date.now() - 195 * 60000).toISOString(),
     summary:
-      "RAM: 90.4% (3.62 / 4.0 GB, >= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java",
+      "RAM: 95.8% (3.83 / 4.0 GB, >= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java",
     event_count: 3,
     targeted_service: "Dịch vụ Java Application Gateway",
   },
@@ -447,7 +447,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         incident_id: "inc-mem-408",
         node_id: "node-api-02",
         detector_name: "memory_exhaustion_detector",
-        severity: "CRITICAL",
+        severity: "HIGH",
         attacker_ip: null,
         confidence_score: 0.95,
         details: {
@@ -468,7 +468,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         incident_id: "inc-mem-408",
         node_id: "node-api-02",
         detector_name: "memory_exhaustion_detector",
-        severity: "CRITICAL",
+        severity: "HIGH",
         attacker_ip: null,
         confidence_score: 0.97,
         details: {
@@ -494,7 +494,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         incident_id: "inc-scan-402",
         node_id: "node-api-02",
         detector_name: "port_scan_detector",
-        severity: "HIGH",
+        severity: "CRITICAL",
         attacker_ip: "198.51.100.42",
         confidence_score: 0.88,
         details: {
@@ -508,7 +508,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         incident_id: "inc-scan-402",
         node_id: "node-api-02",
         detector_name: "port_scan_detector",
-        severity: "HIGH",
+        severity: "CRITICAL",
         attacker_ip: "198.51.100.42",
         confidence_score: 0.92,
         details: {
@@ -553,8 +553,8 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
         confidence_score: 0.91,
         details: {
           protocol: "UDP",
-          packet_rate_pps: 3800,
-          byte_rate_mbps: 18.2,
+          packet_rate_pps: 180,
+          byte_rate_mbps: 0.21,
           targeted_ports: [123],
         },
         detected_at: new Date(Date.now() - 54 * 60000).toISOString(),
@@ -645,7 +645,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
           process_count: 1,
           cgroup: "gateway.service",
           process_percent: 71.0,
-          current_value: 90.4,
+          current_value: 95.8,
           threshold_value: 85.0,
           command: "java -Xms2048m -Xmx3584m -jar /opt/gateway/app.jar",
         },
@@ -697,7 +697,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
           process_count: 4,
           cgroup: "nginx.service",
           process_percent: 44.5,
-          current_value: 92.1,
+          current_value: 96.4,
           threshold_value: 85.0,
           command: "nginx: worker process",
         },
