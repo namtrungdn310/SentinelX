@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Edit3,
   Flame,
   Plus,
   RefreshCw,
@@ -18,24 +17,24 @@ import {
 } from "lucide-react";
 import type { Project, DefensePolicy, IPWhitelist } from "../types";
 import {
+  createPolicy,
   fetchPolicies,
   updatePolicy,
-  deletePolicy,
   fetchWhitelist,
   deleteWhitelist,
 } from "../api";
 import { MOCK_POLICIES, MOCK_WHITELIST } from "../mockData";
 import { formatPolicyDuration } from "../presentation";
 import { AddWhitelistModal } from "./AddWhitelistModal";
-import { EditPolicyModal } from "./EditPolicyModal";
+
+type TabType = "whitelist" | "policies";
 
 interface Props {
   selectedProjectId: string | null;
   projects: Project[];
   isDemoMode: boolean;
+  initialTab?: TabType;
 }
-
-type TabType = "whitelist" | "policies";
 
 function formatRelativeTime(dateString: string): string {
   const diffMs = Date.now() - new Date(dateString).getTime();
@@ -49,8 +48,13 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDay} ngày trước`;
 }
 
-export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props) {
-  const [activeTab, setActiveTab] = useState<TabType>("whitelist");
+export function PoliciesView({
+  selectedProjectId,
+  projects,
+  isDemoMode,
+  initialTab = "whitelist",
+}: Props) {
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const effectiveProjectId = selectedProjectId || projects[0]?.id || "";
 
   // Whitelist State
@@ -73,8 +77,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
   });
   const [isPoliciesLoading, setIsPoliciesLoading] = useState(false);
   const [togglingPolicyId, setTogglingPolicyId] = useState<string | null>(null);
-  const [editingPolicy, setEditingPolicy] = useState<DefensePolicy | null>(null);
-  const [isCreatePolicyOpen, setIsCreatePolicyOpen] = useState(false);
+  const seedingProjectRef = useRef<Map<string, Promise<DefensePolicy[]>>>(new Map());
 
   // Common UI State
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
     }
   }, [effectiveProjectId, selectedProjectId, isDemoMode]);
 
-  // Load Policies
+  // Load & ensure canonical system policies exist for the project
   const loadPolicies = useCallback(async () => {
     setIsPoliciesLoading(true);
     setError(null);
@@ -112,8 +115,58 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         setPolicies(MOCK_POLICIES);
         return;
       }
-      const data = await fetchPolicies(effectiveProjectId || undefined);
-      setPolicies(data);
+      if (!effectiveProjectId) {
+        setPolicies([]);
+        return;
+      }
+
+      const existingPromise = seedingProjectRef.current.get(effectiveProjectId);
+      if (existingPromise) {
+        setPolicies(await existingPromise);
+        return;
+      }
+
+      const task = (async (): Promise<DefensePolicy[]> => {
+        const loaded = await fetchPolicies(effectiveProjectId);
+        const existingEventTypes = new Set(loaded.map((p) => p.event_type));
+        const missingDefaults = MOCK_POLICIES.filter(
+          (tmpl) => !existingEventTypes.has(tmpl.event_type),
+        );
+        if (missingDefaults.length === 0) {
+          return loaded;
+        }
+        const createdList: DefensePolicy[] = [];
+        for (const tmpl of missingDefaults) {
+          const created = await createPolicy(effectiveProjectId, {
+            name: tmpl.name,
+            event_type: tmpl.event_type,
+            action_type: tmpl.action_type,
+            target_params: tmpl.target_params,
+            cooldown_seconds: tmpl.cooldown_seconds,
+            block_duration_seconds: tmpl.block_duration_seconds,
+            is_auto_execute: tmpl.is_auto_execute,
+            is_active: tmpl.is_active,
+          });
+          createdList.push(created);
+        }
+        return [...loaded, ...createdList];
+      })();
+
+      seedingProjectRef.current.set(effectiveProjectId, task);
+      try {
+        const result = await task;
+        const orderIndex = new Map(
+          MOCK_POLICIES.map((p, idx) => [p.event_type, idx]),
+        );
+        const sorted = [...result].sort((a, b) => {
+          const idxA = orderIndex.get(a.event_type) ?? 999;
+          const idxB = orderIndex.get(b.event_type) ?? 999;
+          return idxA - idxB;
+        });
+        setPolicies(sorted);
+      } finally {
+        seedingProjectRef.current.delete(effectiveProjectId);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Lỗi tải danh mục chính sách");
     } finally {
@@ -180,7 +233,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         );
         setFeedback({
           type: "success",
-          text: `Đã ${nextVal ? "kích hoạt" : "tạm dừng"} chính sách "${policy.name}".`,
+          text: `Đã ${nextVal ? "bật" : "tắt"} chính sách "${policy.name}".`,
         });
         return;
       }
@@ -188,7 +241,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
       setPolicies((prev) => prev.map((p) => (p.id === policy.id ? updated : p)));
       setFeedback({
         type: "success",
-        text: `Đã cập nhật trạng thái chính sách "${policy.name}".`,
+        text: `Đã ${nextVal ? "bật" : "tắt"} chính sách "${policy.name}".`,
       });
     } catch (err: unknown) {
       setFeedback({
@@ -198,50 +251,6 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
     } finally {
       setTogglingPolicyId(null);
     }
-  };
-
-  // Handle Delete Policy
-  const handleDeletePolicy = async (policy: DefensePolicy) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa chính sách "${policy.name}"?`)) {
-      return;
-    }
-    try {
-      if (isDemoMode) {
-        setPolicies((prev) => prev.filter((p) => p.id !== policy.id));
-        setFeedback({
-          type: "success",
-          text: `Đã xóa chính sách "${policy.name}".`,
-        });
-        return;
-      }
-      await deletePolicy(policy.id);
-      setPolicies((prev) => prev.filter((p) => p.id !== policy.id));
-      setFeedback({
-        type: "success",
-        text: `Đã xóa chính sách "${policy.name}" thành công.`,
-      });
-    } catch (err: unknown) {
-      setFeedback({
-        type: "error",
-        text: err instanceof Error ? err.message : "Không thể xóa chính sách",
-      });
-    }
-  };
-
-  const handlePolicyUpdated = (updated: DefensePolicy) => {
-    setPolicies((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    setFeedback({
-      type: "success",
-      text: `Đã cập nhật chính sách "${updated.name}" thành công!`,
-    });
-  };
-
-  const handlePolicyCreated = (created: DefensePolicy) => {
-    setPolicies((prev) => [created, ...prev]);
-    setFeedback({
-      type: "success",
-      text: `Đã tạo chính sách bảo vệ "${created.name}" thành công!`,
-    });
   };
 
   const getProjectName = (projId: string) => {
@@ -422,7 +431,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
             <div className="policy-toolbar-title">
               <h3 style={{ fontSize: 15, margin: 0, fontWeight: 600 }}>Quy tắc tự động ứng phó</h3>
               <small style={{ color: "var(--text-muted)" }}>
-                Hệ thống tự động kích hoạt ngăn chặn khi Detector phát hiện bất thường
+                Các chính sách chuẩn đã được tối ưu sẵn theo từng loại sự cố — chỉ cần bật hoặc tắt theo nhu cầu dự án
               </small>
             </div>
             <div className="toolbar-actions">
@@ -436,37 +445,10 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                 <RefreshCw size={15} className={isPoliciesLoading ? "spin" : ""} />
                 Làm mới chính sách
               </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setIsCreatePolicyOpen(true)}
-                disabled={!effectiveProjectId}
-              >
-                <Plus size={16} />
-                Thêm chính sách
-              </button>
             </div>
           </div>
 
-          {policies.length === 0 ? (
-            <div className="panel empty-state-card">
-              <Sliders size={36} style={{ color: "var(--brand-indigo)" }} />
-              <h3>Chưa có chính sách tự động nào</h3>
-              <p>
-                Tạo quy tắc ứng phó tự động để hệ thống phản ứng khi Detector phát hiện tấn công mạng hoặc quá tải tài nguyên.
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setIsCreatePolicyOpen(true)}
-                disabled={!effectiveProjectId}
-              >
-                <Plus size={15} /> Tạo chính sách đầu tiên
-              </button>
-            </div>
-          ) : (
-            <div className="policies-grid-2x2">
+          <div className="policies-grid-2x2">
             {policies.map((policy) => {
               const isToggling = togglingPolicyId === policy.id;
 
@@ -508,26 +490,6 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                         )}
                       </div>
                       <h3>{policy.name}</h3>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label={`Chỉnh sửa chính sách ${policy.name}`}
-                        title="Chỉnh sửa chính sách"
-                        onClick={() => setEditingPolicy(policy)}
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button danger-icon-button"
-                        aria-label={`Xóa chính sách ${policy.name}`}
-                        title="Xóa chính sách"
-                        onClick={() => void handleDeletePolicy(policy)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
                     </div>
                   </div>
 
@@ -609,8 +571,7 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
                 </article>
               );
             })}
-            </div>
-          )}
+          </div>
         </section>
       )}
 
@@ -621,20 +582,6 @@ export function PoliciesView({ selectedProjectId, projects, isDemoMode }: Props)
         projectId={effectiveProjectId}
         existingWhitelist={whitelist}
         onWhitelistCreated={handleWhitelistCreated}
-        isDemoMode={isDemoMode}
-      />
-
-      {/* Create / Edit Policy Modal */}
-      <EditPolicyModal
-        isOpen={Boolean(editingPolicy) || isCreatePolicyOpen}
-        onClose={() => {
-          setEditingPolicy(null);
-          setIsCreatePolicyOpen(false);
-        }}
-        policy={editingPolicy}
-        projectId={effectiveProjectId}
-        onPolicyUpdated={handlePolicyUpdated}
-        onPolicyCreated={handlePolicyCreated}
         isDemoMode={isDemoMode}
       />
     </div>

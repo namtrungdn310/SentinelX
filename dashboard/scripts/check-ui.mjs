@@ -71,7 +71,6 @@ try {
     const { DefenseView } = await server.ssrLoadModule("/src/components/DefenseView.tsx");
     const { ManualBlockModal } = await server.ssrLoadModule("/src/components/ManualBlockModal.tsx");
     const { PoliciesView } = await server.ssrLoadModule("/src/components/PoliciesView.tsx");
-    const { EditPolicyModal } = await server.ssrLoadModule("/src/components/EditPolicyModal.tsx");
     const { AddWhitelistModal } = await server.ssrLoadModule("/src/components/AddWhitelistModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
@@ -621,7 +620,7 @@ try {
         assert.equal(validateManualBlockIp("192.168.1.55", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
         assert.equal(validateManualBlockIp("203.0.113.195", targetNode, prodWhitelist, MOCK_DEFENSE_ACTIONS).valid, false);
     });
-    check("PoliciesView and modals validate CIDRs, omit permanent block, and map policy contracts", async () => {
+    check("PoliciesView renders whitelist validation and fixed toggle-only system policies", async () => {
         const policiesHtml = renderToStaticMarkup(createElement(PoliciesView, {
             selectedProjectId: MOCK_PROJECTS[0].id,
             projects: MOCK_PROJECTS,
@@ -631,27 +630,19 @@ try {
         assert.ok(policiesHtml.includes("Danh sách an toàn"));
         assert.ok(policiesHtml.includes("Chính sách bảo vệ tự động"));
 
-        const editHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
-            isOpen: true,
-            onClose: noop,
-            policy: MOCK_POLICIES[0],
-            onPolicyUpdated: noop,
+        const fixedPoliciesTabHtml = renderToStaticMarkup(createElement(PoliciesView, {
+            selectedProjectId: MOCK_PROJECTS[0].id,
+            projects: MOCK_PROJECTS,
             isDemoMode: true,
+            initialTab: "policies",
         }));
-        assert.ok(!editHtml.includes('value="0"'));
-        assert.ok(editHtml.includes('value="1440"'));
-
-        const createHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
-            isOpen: true,
-            onClose: noop,
-            policy: null,
-            projectId: MOCK_PROJECTS[0].id,
-            onPolicyUpdated: noop,
-            onPolicyCreated: noop,
-            isDemoMode: true,
-        }));
-        assert.ok(createHtml.includes("Tạo chính sách bảo vệ mới"));
-        assert.ok(createHtml.includes("syn_flood_detector"));
+        assert.ok(fixedPoliciesTabHtml.includes("Chặn tấn công SYN Flood"));
+        assert.ok(fixedPoliciesTabHtml.includes("Tự phục hồi thích ứng khi cạn kiệt RAM"));
+        assert.ok(fixedPoliciesTabHtml.includes('role="switch"'));
+        assert.ok(!fixedPoliciesTabHtml.includes("Thêm chính sách"));
+        assert.ok(!fixedPoliciesTabHtml.includes("Chỉnh sửa chính sách"));
+        assert.ok(!fixedPoliciesTabHtml.includes("Xóa chính sách"));
+        assert.ok(!fixedPoliciesTabHtml.includes("Vĩnh viễn"));
 
         const whitelistHtml = renderToStaticMarkup(createElement(AddWhitelistModal, {
             isOpen: true,
