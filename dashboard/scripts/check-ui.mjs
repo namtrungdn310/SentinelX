@@ -644,6 +644,8 @@ try {
         assert.ok(!fixedPoliciesTabHtml.includes("Quy tắc tự động ứng phó"));
         assert.ok(!fixedPoliciesTabHtml.includes("Thêm chính sách"));
         assert.ok(fixedPoliciesTabHtml.includes("Chỉnh sửa chính sách"));
+        assert.ok(!fixedPoliciesTabHtml.includes("nftables-badge"));
+        assert.ok(!fixedPoliciesTabHtml.includes("adaptive-badge"));
         assert.ok(!fixedPoliciesTabHtml.includes("Xóa chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Vĩnh viễn"));
 

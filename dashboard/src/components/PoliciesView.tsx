@@ -4,17 +4,12 @@ import {
   CheckCircle2,
   Clock,
   Edit3,
-  Flame,
   Plus,
   RefreshCw,
-  RotateCcw,
   Search,
-  ShieldAlert,
   ShieldCheck,
   Sliders,
-  Sparkles,
   Trash2,
-  Zap,
 } from "lucide-react";
 import type { Project, DefensePolicy, IPWhitelist } from "../types";
 import {
@@ -484,31 +479,6 @@ export function PoliciesView({
                         <span className="detector-event-tag font-mono">
                           {policy.event_type}
                         </span>
-                        {policy.action_type === "ADAPTIVE" ? (
-                          <span className="adaptive-badge">
-                            <Zap size={12} /> Tự động thích ứng
-                          </span>
-                        ) : policy.action_type === "BLOCK_IP_NFTABLES" ? (
-                          <span className="nftables-badge">
-                            <Flame size={12} /> Khóa IP tường lửa
-                          </span>
-                        ) : policy.action_type === "RATE_LIMIT" ? (
-                          <span className="rate-limit-badge">
-                            <Sliders size={12} /> Giới hạn tốc độ
-                          </span>
-                        ) : policy.action_type === "CLEAR_OS_CACHE" ? (
-                          <span className="cache-badge">
-                            <Sparkles size={12} /> Giải phóng bộ nhớ đệm
-                          </span>
-                        ) : policy.action_type === "ALERT_ONLY" ? (
-                          <span className="alert-badge">
-                            <ShieldAlert size={12} /> Chỉ cảnh báo
-                          </span>
-                        ) : (
-                          <span className="service-badge">
-                            <RotateCcw size={12} /> Khởi động lại dịch vụ
-                          </span>
-                        )}
                       </div>
                       <h3>{policy.name}</h3>
                     </div>
