@@ -706,7 +706,7 @@ export function DefenseView({
                         )}
                         {act.status === "PENDING" && (
                           <span className="status-badge warn">
-                            <i /> Đang chờ tải
+                            <i /> Chờ Agent tải lệnh
                           </span>
                         )}
                         {act.status === "SENT" && (

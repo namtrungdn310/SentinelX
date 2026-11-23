@@ -584,6 +584,7 @@ try {
         assert.ok(!defenseHtml.includes("RESTART_SERVICE"));
         assert.ok(!defenseHtml.includes(">RESTART<"));
         assert.ok(defenseHtml.includes("Đang chờ"));
+        assert.ok(defenseHtml.includes("Chờ Agent tải lệnh"));
         assert.ok(defenseHtml.includes("Hủy lệnh"));
         assert.ok(defenseHtml.includes("Gỡ chặn"));
         assert.ok(!defenseHtml.includes("Vĩnh viễn"));
