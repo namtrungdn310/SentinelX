@@ -404,6 +404,8 @@ try {
         assert.ok(!html.includes("inc-mem-389"));
         assert.ok(html.includes('<span class="severity-badge crit">Khẩn cấp</span>'));
         assert.ok(html.includes('<span class="severity-badge warn">Cao</span>'));
+        assert.ok(html.includes("status-badge info"));
+        assert.ok(html.includes("status-badge pending"));
 
         const resolvedTabHtml = renderToStaticMarkup(createElement(IncidentsView, {
             selectedProjectId: MOCK_PROJECTS[0].id,

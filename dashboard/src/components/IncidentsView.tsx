@@ -246,7 +246,7 @@ export function IncidentsView({
         );
       case "MITIGATING":
         return (
-          <span className="status-badge warn">
+          <span className="status-badge info">
             <i /> Đang kích hoạt
           </span>
         );
@@ -269,7 +269,7 @@ export function IncidentsView({
           }
         }
         return (
-          <span className="status-badge crit">
+          <span className="status-badge pending">
             <i /> {handlingTab === "auto" ? "Đang chờ Agent tải lệnh" : "Đang diễn ra"}
           </span>
         );

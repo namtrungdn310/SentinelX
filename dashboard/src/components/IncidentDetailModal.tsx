@@ -181,8 +181,12 @@ export function IncidentDetailModal({
     incident.status === "RESOLVED"
       ? "ok"
       : incident.status === "MITIGATING"
-        ? "warn"
-        : "crit";
+        ? "info"
+        : incident.status === "FALSE_POSITIVE"
+          ? "unknown"
+          : defenseFailure
+            ? "crit"
+            : "pending";
 
   const statusLabel =
     incident.status === "RESOLVED"
