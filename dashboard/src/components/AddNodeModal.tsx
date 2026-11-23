@@ -95,7 +95,7 @@ export function AddNodeModal({
           `export SENTINELX_CONTROLLER_URL=${shellQuote(controllerUrl)}`,
           `export SENTINELX_NODE_ID=${shellQuote(createdNode.id)}`,
           `export SENTINELX_ENROLLMENT_TOKEN=${shellQuote(token)}`,
-          "uv run sentinelx-agent",
+          "uv run python -m sentinelx_agent.main",
         ].join("\n")
       : "";
   const copy = async () => {

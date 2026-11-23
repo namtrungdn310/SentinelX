@@ -94,25 +94,28 @@ export function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => getSavedProjectId() ?? projects[0]?.id ?? null,
   );
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const effectiveSelectedProjectId = selectedProject?.id ?? null;
   const activeIncidentsCount = useMemo(
     () =>
       incidents.filter(
         (item) =>
-          (!selectedProjectId || item.project_id === selectedProjectId) &&
+          (!effectiveSelectedProjectId || item.project_id === effectiveSelectedProjectId) &&
           (item.status === "DETECTED" || item.status === "MITIGATING"),
       ).length,
-    [incidents, selectedProjectId],
+    [incidents, effectiveSelectedProjectId],
   );
   const handleIncidentsSynced = useCallback(
     (items: typeof incidents) => {
-      syncProjectIncidents(selectedProjectId, items);
+      syncProjectIncidents(effectiveSelectedProjectId, items);
     },
-    [syncProjectIncidents, selectedProjectId],
+    [syncProjectIncidents, effectiveSelectedProjectId],
   );
   const activeBlocksCount = useMemo(() => {
     const projectNodeIds = new Set(
       nodes
-        .filter((node) => !selectedProjectId || node.project_id === selectedProjectId)
+        .filter((node) => !effectiveSelectedProjectId || node.project_id === effectiveSelectedProjectId)
         .map((node) => node.id),
     );
     return defenseActions.filter(
@@ -121,15 +124,15 @@ export function App() {
         a.status === "APPLIED" &&
         a.action_type === "BLOCK_IP_NFTABLES",
     ).length;
-  }, [defenseActions, nodes, selectedProjectId]);
+  }, [defenseActions, nodes, effectiveSelectedProjectId]);
   const handleDefenseActionsSynced = useCallback(
     (items: typeof defenseActions) => {
       const ids = nodes
-        .filter((node) => !selectedProjectId || node.project_id === selectedProjectId)
+        .filter((node) => !effectiveSelectedProjectId || node.project_id === effectiveSelectedProjectId)
         .map((node) => node.id);
       syncProjectDefenseActions(ids, items);
     },
-    [nodes, selectedProjectId, syncProjectDefenseActions],
+    [nodes, effectiveSelectedProjectId, syncProjectDefenseActions],
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
@@ -141,9 +144,7 @@ export function App() {
   const [statusFacet, setStatusFacet] = useState<"all" | Health>("all");
   const [tableState, setTableState] = useState<HostTableState>({ view: "table", sort: null });
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
-  const selectedProject =
-    projects.find((project) => project.id === selectedProjectId) ?? null;
-  const effectiveView = !selectedProjectId
+  const effectiveView = !effectiveSelectedProjectId
     ? "projects"
     : activeView === "projects"
       ? "overview"
@@ -208,7 +209,7 @@ export function App() {
     setSelectedNodeId(node.id);
   };
   const projectNodes = nodes.filter(
-    (node) => !selectedProjectId || node.project_id === selectedProjectId,
+    (node) => !effectiveSelectedProjectId || node.project_id === effectiveSelectedProjectId,
   );
   const displayedProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -250,9 +251,9 @@ export function App() {
   const visibleNode = selectedNode;
   const detailNode = nodes.find((node) => node.id === detailNodeId) ?? null;
   useEffect(() => {
-    if (activeView === "metrics" && nodeId && !isDemoMode)
+    if (effectiveView === "metrics" && nodeId && !isDemoMode)
       void loadHistory(nodeId, sampleLimit);
-  }, [activeView, nodeId, isDemoMode, sampleLimit, loadHistory]);
+  }, [effectiveView, nodeId, isDemoMode, sampleLimit, loadHistory]);
   const telemetrySamples = nodeId ? (histories[nodeId] ?? []) : [];
   const isLoadingChart =
     chartRequest?.nodeId === nodeId && chartRequest.loading;
@@ -466,7 +467,7 @@ export function App() {
       <div className="app-workspace">
         <Header
           projects={projects}
-          selectedProject={selectedProjectId}
+          selectedProject={effectiveSelectedProjectId}
           onSelectProject={setSelectedProjectId}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -691,7 +692,7 @@ export function App() {
           )}
           {effectiveView === "incidents" && (
             <IncidentsView
-              selectedProjectId={selectedProjectId}
+              selectedProjectId={effectiveSelectedProjectId}
               nodes={nodes}
               isDemoMode={isDemoMode}
               incidentRevision={incidentRevision}
@@ -710,14 +711,14 @@ export function App() {
           )}
           {effectiveView === "policies" && (
             <PoliciesView
-              selectedProjectId={selectedProjectId}
+              selectedProjectId={effectiveSelectedProjectId}
               projects={projects}
               isDemoMode={isDemoMode}
             />
           )}
           {effectiveView === "settings" && (
             <SettingsView
-              selectedProjectId={selectedProjectId}
+              selectedProjectId={effectiveSelectedProjectId}
               projects={projects}
               nodes={nodes}
               isDemoMode={isDemoMode}
@@ -730,9 +731,9 @@ export function App() {
         </main>
       </div>
       <AddNodeModal
-        key={isAddNodeOpen ? (selectedProjectId ?? "all") : "closed"}
+        key={isAddNodeOpen ? (effectiveSelectedProjectId ?? "all") : "closed"}
         projects={projects}
-        selectedProjectId={selectedProjectId}
+        selectedProjectId={effectiveSelectedProjectId}
         isOpen={isAddNodeOpen}
         onClose={() => setIsAddNodeOpen(false)}
         onNodeCreated={handleNodeCreated}

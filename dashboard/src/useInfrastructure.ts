@@ -105,6 +105,9 @@ export function useInfrastructure() {
     if (!modeRef.current) {
       if (message.event === "incident_alert") {
         setIncidentRevision((r) => r + 1);
+        void fetchIncidents({ limit: 100 })
+          .then((items) => setIncidents(items))
+          .catch(() => null);
         pushSecurityToast({
           id: `toast-inc-${Date.now()}`,
           type: "incident",
@@ -154,20 +157,57 @@ export function useInfrastructure() {
             .then((items) => setDefenseActions(items))
             .catch(() => null);
         }
-        pushSecurityToast({
-          id: `toast-def-${Date.now()}`,
-          type: "defense",
-          title: "Tường lửa đã kích hoạt",
-          message: "Đã khóa địa chỉ IP nguồn tấn công",
-          attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
-          targetView: "defense",
-        });
+        const actionType = String(message.data.action_type ?? "");
+        const actionStatus = String(message.data.status ?? "PENDING");
+        const targetIp = typeof message.data.target_ip === "string" ? message.data.target_ip : null;
+        if (actionType === "UNBLOCK_IP_NFTABLES") {
+          pushSecurityToast({
+            id: `toast-def-${Date.now()}`,
+            type: "defense",
+            title: "Đã tạo lệnh gỡ chặn IP",
+            message: "Đang chờ Agent gỡ quy tắc trên nftables",
+            attackerIp: targetIp,
+            targetView: "defense",
+          });
+        } else if (actionType === "RESTART_SERVICE" || actionType === "CLEAR_OS_CACHE") {
+          pushSecurityToast({
+            id: `toast-def-${Date.now()}`,
+            type: "defense",
+            title: "Đã xếp hàng lệnh khôi phục",
+            message: "Đang chờ Agent thực thi khôi phục dịch vụ",
+            targetView: "incidents",
+          });
+        } else {
+          pushSecurityToast({
+            id: `toast-def-${Date.now()}`,
+            type: "defense",
+            title: actionStatus === "APPLIED" ? "Tường lửa đã kích hoạt" : "Lệnh tường lửa mới",
+            message:
+              actionStatus === "APPLIED"
+                ? "Đã chặn địa chỉ IP nguồn tấn công"
+                : "Đang chờ Agent tải lệnh chặn IP",
+            attackerIp: targetIp,
+            targetView: "defense",
+          });
+        }
       } else if (message.event === "defense_action_updated") {
         setIncidentRevision((r) => r + 1);
         if (!modeRef.current) {
           void fetchDefenseActions({ limit: 100 })
             .then((items) => setDefenseActions(items))
             .catch(() => null);
+        }
+        const actionType = String(message.data.action_type ?? "");
+        const actionStatus = String(message.data.status ?? "");
+        if (actionStatus === "APPLIED" && actionType === "BLOCK_IP_NFTABLES") {
+          pushSecurityToast({
+            id: `toast-def-ack-${Date.now()}`,
+            type: "defense",
+            title: "Tường lửa đã kích hoạt",
+            message: "Agent đã áp dụng lệnh chặn IP vào nftables",
+            attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
+            targetView: "defense",
+          });
         }
       } else if (
         message.event === "defense_action_reverted" ||
