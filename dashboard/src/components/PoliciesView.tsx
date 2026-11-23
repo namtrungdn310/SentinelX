@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Edit3,
   Flame,
   Plus,
   RefreshCw,
@@ -26,6 +27,7 @@ import {
 import { MOCK_POLICIES, MOCK_WHITELIST } from "../mockData";
 import { formatPolicyDuration } from "../presentation";
 import { AddWhitelistModal } from "./AddWhitelistModal";
+import { EditPolicyModal } from "./EditPolicyModal";
 
 type TabType = "whitelist" | "policies";
 
@@ -77,6 +79,7 @@ export function PoliciesView({
   });
   const [isPoliciesLoading, setIsPoliciesLoading] = useState(false);
   const [togglingPolicyId, setTogglingPolicyId] = useState<string | null>(null);
+  const [editingPolicy, setEditingPolicy] = useState<DefensePolicy | null>(null);
   const seedingProjectRef = useRef<Map<string, Promise<DefensePolicy[]>>>(new Map());
 
   // Common UI State
@@ -254,6 +257,14 @@ export function PoliciesView({
     } finally {
       setTogglingPolicyId(null);
     }
+  };
+
+  const handlePolicyUpdated = (updated: DefensePolicy) => {
+    setPolicies((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setFeedback({
+      type: "success",
+      text: `Đã cập nhật chính sách "${updated.name}" thành công!`,
+    });
   };
 
   const getProjectName = (projId: string) => {
@@ -475,7 +486,7 @@ export function PoliciesView({
                         </span>
                         {policy.action_type === "ADAPTIVE" ? (
                           <span className="adaptive-badge">
-                            <Zap size={12} /> Tự động tối ưu
+                            <Zap size={12} /> Tự động thích ứng
                           </span>
                         ) : policy.action_type === "BLOCK_IP_NFTABLES" ? (
                           <span className="nftables-badge">
@@ -501,6 +512,15 @@ export function PoliciesView({
                       </div>
                       <h3>{policy.name}</h3>
                     </div>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Chỉnh sửa chính sách ${policy.name}`}
+                      title="Chỉnh sửa thông số chính sách"
+                      onClick={() => setEditingPolicy(policy)}
+                    >
+                      <Edit3 size={15} />
+                    </button>
                   </div>
 
                   <div className="policy-meta-grid">
@@ -593,6 +613,15 @@ export function PoliciesView({
         projectId={effectiveProjectId}
         existingWhitelist={whitelist}
         onWhitelistCreated={handleWhitelistCreated}
+        isDemoMode={isDemoMode}
+      />
+
+      {/* Edit Policy Modal */}
+      <EditPolicyModal
+        isOpen={Boolean(editingPolicy)}
+        onClose={() => setEditingPolicy(null)}
+        policy={editingPolicy}
+        onPolicyUpdated={handlePolicyUpdated}
         isDemoMode={isDemoMode}
       />
     </div>

@@ -71,6 +71,7 @@ try {
     const { DefenseView } = await server.ssrLoadModule("/src/components/DefenseView.tsx");
     const { ManualBlockModal } = await server.ssrLoadModule("/src/components/ManualBlockModal.tsx");
     const { PoliciesView } = await server.ssrLoadModule("/src/components/PoliciesView.tsx");
+    const { EditPolicyModal } = await server.ssrLoadModule("/src/components/EditPolicyModal.tsx");
     const { AddWhitelistModal } = await server.ssrLoadModule("/src/components/AddWhitelistModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
@@ -642,9 +643,19 @@ try {
         assert.ok(!fixedPoliciesTabHtml.includes("Làm mới chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Quy tắc tự động ứng phó"));
         assert.ok(!fixedPoliciesTabHtml.includes("Thêm chính sách"));
-        assert.ok(!fixedPoliciesTabHtml.includes("Chỉnh sửa chính sách"));
+        assert.ok(fixedPoliciesTabHtml.includes("Chỉnh sửa chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Xóa chính sách"));
         assert.ok(!fixedPoliciesTabHtml.includes("Vĩnh viễn"));
+
+        const editHtml = renderToStaticMarkup(createElement(EditPolicyModal, {
+            isOpen: true,
+            onClose: noop,
+            policy: MOCK_POLICIES[0],
+            onPolicyUpdated: noop,
+            isDemoMode: true,
+        }));
+        assert.ok(!editHtml.includes('value="0"'));
+        assert.ok(editHtml.includes('value="1440"'));
 
         const whitelistHtml = renderToStaticMarkup(createElement(AddWhitelistModal, {
             isOpen: true,
