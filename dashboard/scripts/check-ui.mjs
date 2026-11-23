@@ -385,8 +385,8 @@ try {
         assert.ok(html.includes("Xử lý tự động"));
         assert.ok(html.includes("Xử lý thủ công"));
         assert.ok(html.includes("severity-guide-bar"));
-        assert.ok(html.includes("Mới vượt ngưỡng cảnh báo ban đầu"));
-        assert.ok(html.includes("Duy trì vượt ngưỡng ≥ 60 giây chưa dứt"));
+        assert.ok(html.includes("Vượt ngưỡng cảnh báo ban đầu"));
+        assert.ok(html.includes("Duy trì vượt ngưỡng ≥ 60 giây (hoặc đạt ≥ 95% / tấn công lớn)"));
         assert.ok(!html.includes("Cần xử lý thủ công"));
         assert.ok(!html.includes('<option value="MEDIUM">'));
         assert.ok(html.includes("Đang chờ Agent tải lệnh"));
