@@ -166,3 +166,28 @@ Toàn bộ các tiêu chí nghiệm thu của **FOUNDATION FREEZE** đã đượ
 - [x] Client $\rightarrow$ Custom LB $\rightarrow$ Remote Backends hoạt động với thuật toán Round Robin, Least In-Flight và cơ chế Active Health Check Eject/Re-add.
 - [x] Không có bất kỳ phụ thuộc cứng nào vào `localhost` hay single-host.
 - [x] 100% bài kiểm tra tự động PASS (`130/130 passed`), mã nguồn sạch (`ruff` 0 warnings, `mypy` strict mode).
+
+---
+
+## 6. Lộ trình Triển khai Đã Chốt: Test Mức 1 → PC Windows ở Nhà & Demo Từ Xa
+
+Để phù hợp quá trình hoàn thiện đồ án trước khi vận hành nhiều máy từ xa, thứ tự triển khai được chốt như sau:
+
+### Giai đoạn 1 (Hiện tại — Mức 1): Hoàn thiện & Test trên Docker Compose (1 máy)
+- Dùng [compose.yaml](../compose.yaml) để kiểm thử đầy đủ pipeline trước khi mở rộng sang nhiều máy:
+  - `docker compose --profile core up -d` (Controller + PostgreSQL)
+  - `docker compose --profile lab up -d --build` (thêm Load Balancer + 2 Backend + 2 Agent Linux)
+  - `docker compose --profile attack up -d` (thêm container mô phỏng lưu lượng / tấn công)
+
+### Giai đoạn 2: Deploy trên PC Windows ở Nhà (Bật máy là chạy + Nhiều Laptop Demo Từ Xa)
+Mô hình:
+- **PC Windows ở nhà (Always-ready Control Plane khi bật máy)**:
+  1. Bật tùy chọn **Start Docker Desktop when you sign in to your computer** trong Docker Desktop và tắt chế độ **Sleep** của Windows khi cắm điện.
+  2. Toàn bộ các service trong [compose.yaml](../compose.yaml) giữ chính sách `restart: unless-stopped` để tự khởi động lại mỗi khi mở PC.
+  3. **Hạng mục cần bổ sung trước khi bật Giai đoạn 2**: Thêm service `sentinelx_dashboard` (Nginx build sẵn `dashboard/dist/` + reverse proxy `/api` và WebSocket `/api/v1/ws` sang `sentinelx_controller:8000`) vào `compose.yaml` để mọi máy truy cập thẳng Dashboard qua cùng 1 cổng web mà không cần chạy `vite` dev server.
+- **Kết nối từ nhiều laptop ở xa**:
+  - **Phương án ưu tiên — Tailscale**: Cài Tailscale chạy nền trên PC ở nhà và các laptop demo. Các laptop truy cập Dashboard/LB qua IP Tailscale cố định của PC (không cần mở port modem/router), đồng thời các VM/laptop Linux ở xa có thể trỏ `SENTINELX_CONTROLLER_URL` về IP Tailscale này để chạy multi-host thật.
+  - **Phương án bổ sung — Cloudflare Tunnel (`cloudflared`)**: Chạy dưới dạng Windows Service trỏ về cổng Nginx Dashboard khi cần chia sẻ link HTTPS cho trình duyệt ngoài không cài Tailscale; **bắt buộc** bật Cloudflare Access hoặc Nginx Basic Auth vì Controller hiện chưa có lớp JWT auth ở các API dashboard.
+
+### Giai đoạn 3 (Tùy chọn ngoài thực tế — Cloud VPS / Linux Server)
+- Có thể nâng cấp phần Control Plane lên Linux VPS chạy 24/7 (ví dụ DigitalOcean Droplet ≥ 1 GB RAM + tạo 2 GB Swap) đặt sau Nginx HTTPS có xác thực, và cài `sentinelx-agent` dạng `systemd` service lên từng máy chủ Linux đích (luôn điền `protected_cidrs` cho IP quản trị / Controller / SSH trước khi chuyển `defense_executor_type` sang `nftables`).
