@@ -26,6 +26,7 @@ class Backend:
     weight: int = 1
     health_path: str | None = None
     is_healthy: bool = True
+    admin_enabled: bool = True
     health_state: BackendHealthState = BackendHealthState.HEALTHY
 
     # Request concurrency metrics
@@ -145,7 +146,9 @@ class Backend:
             "name": self.name,
             "url": self.url,
             "weight": self.weight,
+            "health_path": self.health_path,
             "is_healthy": self.is_healthy,
+            "admin_enabled": self.admin_enabled,
             "health_state": self.health_state.value,
             "in_flight": self.in_flight,
             "total_requests": self.total_requests,
@@ -157,6 +160,7 @@ class Backend:
             "last_health_status_code": self.last_health_status_code,
             "last_health_error": self.last_health_error,
             "flapping_detected": self.flapping_detected,
+            "last_state_change_at": self.last_state_change_at,
         }
 
 
@@ -181,8 +185,8 @@ class BackendPool:
         return cls(backends=backends)
 
     def get_available_backends(self) -> list[Backend]:
-        """Return all healthy backends available for routing."""
-        return [b for b in self.backends if b.is_healthy]
+        """Return all healthy, admin-enabled backends available for routing."""
+        return [b for b in self.backends if b.is_healthy and b.admin_enabled]
 
     def get_by_url(self, url: str) -> Backend | None:
         """Lookup a specific backend by its base URL."""
@@ -192,12 +196,70 @@ class BackendPool:
                 return b
         return None
 
+    def get_by_identifier(self, identifier: str) -> Backend | None:
+        """Lookup a backend by exact URL or human-readable name."""
+        cleaned = identifier.strip().rstrip("/")
+        for b in self.backends:
+            if b.url == cleaned or b.name == identifier.strip():
+                return b
+        return None
+
+    def sync_pool(self, configs: list[BackendConfig]) -> None:
+        """Hot-replace pool membership while preserving counters and health state."""
+        existing_by_url = {b.url: b for b in self.backends}
+        next_backends: list[Backend] = []
+        seen_urls: set[str] = set()
+        for idx, cfg in enumerate(configs):
+            if cfg.url in seen_urls:
+                continue
+            seen_urls.add(cfg.url)
+            existing = existing_by_url.get(cfg.url)
+            if existing is not None:
+                existing.name = cfg.name or existing.name or f"backend-{idx + 1}"
+                existing.weight = cfg.weight
+                existing.health_path = cfg.health_path
+                next_backends.append(existing)
+            else:
+                next_backends.append(
+                    Backend(
+                        url=cfg.url,
+                        name=cfg.name or f"backend-{idx + 1}",
+                        weight=cfg.weight,
+                        health_path=cfg.health_path,
+                    )
+                )
+        self.backends = next_backends
+
+    def set_backend_admin_state(
+        self,
+        identifier: str,
+        enabled: bool,
+        *,
+        force: bool = False,
+    ) -> Backend:
+        """Enable or manually drain/eject a backend without losing its health status."""
+        backend = self.get_by_identifier(identifier)
+        if backend is None:
+            raise KeyError(f"Backend '{identifier}' not found in pool")
+        if not enabled and backend.admin_enabled and backend.is_healthy and not force:
+            routable_count = len(self.get_available_backends())
+            if routable_count <= 1:
+                raise ValueError(
+                    "Cannot disable the last healthy available backend without force=true"
+                )
+        if backend.admin_enabled != enabled:
+            backend.admin_enabled = enabled
+            backend.last_state_change_at = datetime.now(UTC).isoformat()
+        return backend
+
     def stats(self) -> dict[str, Any]:
         """Aggregate pool-level telemetry metrics."""
         available = self.get_available_backends()
         return {
             "total_backends": len(self.backends),
             "healthy_backends": len(available),
+            "routable_backends": len(available),
+            "admin_disabled_backends": sum(1 for b in self.backends if not b.admin_enabled),
             "total_in_flight": sum(b.in_flight for b in self.backends),
             "total_requests": sum(b.total_requests for b in self.backends),
             "total_success": sum(b.success_requests for b in self.backends),

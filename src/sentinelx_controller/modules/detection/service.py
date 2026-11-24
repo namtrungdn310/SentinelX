@@ -86,7 +86,7 @@ class DetectionService:
                     value = MetricSample.model_validate(sample)
                     if value.cpu_percent >= 80 or value.memory_percent >= 85:
                         return False
-                    if value.disk_percent is None or value.disk_percent >= 85:
+                    if value.disk_percent is not None and value.disk_percent >= 85:
                         return False
         return True
 

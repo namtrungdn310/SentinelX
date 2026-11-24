@@ -69,6 +69,7 @@ $env:SENTINELX_LB_BACKENDS="http://192.168.1.20:8080,http://192.168.1.30:8080"
 $env:SENTINELX_LB_ALGORITHM="round_robin"
 $env:SENTINELX_LB_HEALTH_CHECK__ENABLED="true"
 $env:SENTINELX_LB_HEALTH_CHECK__PATH="/health"
+$env:SENTINELX_LB_ADMIN_TOKEN="sentinelx_dev_lb_token"
 uv run python -m sentinelx_lb.main
 
 # Linux/macOS Bash:
@@ -78,8 +79,11 @@ SENTINELX_LB_BACKENDS="http://192.168.1.20:8080,http://192.168.1.30:8080" \
 SENTINELX_LB_ALGORITHM=round_robin \
 SENTINELX_LB_HEALTH_CHECK__ENABLED=true \
 SENTINELX_LB_HEALTH_CHECK__PATH="/health" \
+SENTINELX_LB_ADMIN_TOKEN="sentinelx_dev_lb_token" \
 uv run python -m sentinelx_lb.main
 ```
+
+> **Điều khiển Load Balancer động từ Dashboard**: Controller đồng bộ pool & thuật toán xuống LB thông qua Admin API (`PUT /lb/admin/config`, `PATCH /lb/admin/algorithm`, `POST /lb/admin/backends/state`). Hãy đặt cùng giá trị `SENTINELX_LB_ADMIN_TOKEN` trên cả `sentinelx_controller` và `sentinelx_lb`, đồng thời cấu hình `SENTINELX_DEFAULT_LB_URL` trên Controller (ví dụ `http://sentinelx_lb:8080` trong Docker Compose hoặc `http://192.168.1.10:8080` khi chạy LAN) để người dùng tạo Project chỉ cần bật Load Balancer mà không cần nhập tay URL.
 
 ### 1.5 Khởi động Dashboard UI
 ```bash

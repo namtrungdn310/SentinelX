@@ -287,7 +287,10 @@ export function DefenseView({
         act.action_type === "UNBLOCK_IP_NFTABLES" &&
         (act.status === "PENDING" || act.status === "SENT")
       ) {
-        const refId = act.command_payload?.target_action_id ?? act.command_payload?.revert_action_id;
+        const refId =
+          act.command_payload?.original_defense_action_id ??
+          act.command_payload?.target_action_id ??
+          act.command_payload?.revert_action_id;
         if (typeof refId === "string" && refId) {
           keys.add(`id:${refId}`);
         }

@@ -98,6 +98,10 @@ class LBSettings(BaseSettings):
         ge=0.5,
         description="Timeout for forwarding requests to upstream backend",
     )
+    admin_token: str | None = Field(
+        default=None,
+        description="Optional bearer token protecting /lb/admin/* control endpoints",
+    )
     log_level: str = Field(default="INFO", description="Logging level")
 
     @field_validator("backends", mode="before")

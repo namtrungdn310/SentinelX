@@ -73,6 +73,8 @@ def test_syn_flood_detector_triggers_high() -> None:
     assert isinstance(event.details, NetworkAnomalyDetail)
     assert event.details.attack_type == "SYN_FLOOD"
     assert event.details.metric_ratio == 8.0
+    assert event.details.extra_context["min_syn_threshold"] == 50
+    assert event.details.extra_context["syn_ack_ratio_threshold"] == 3.0
 
 
 def test_syn_flood_detector_triggers_critical_on_no_ack_or_high_volume() -> None:
@@ -138,6 +140,7 @@ def test_port_scan_detector_triggers_high_on_15_ports() -> None:
     assert isinstance(event.details, NetworkAnomalyDetail)
     assert event.details.attack_type == "PORT_SCAN"
     assert len(event.details.targeted_ports) == 16
+    assert event.details.extra_context["port_threshold"] == 15
 
 
 def test_port_scan_detector_triggers_critical_on_30_ports_or_truncated() -> None:
@@ -204,6 +207,8 @@ def test_traffic_spike_detector_triggers_udp_flood() -> None:
     assert event.severity == DetectionSeverity.HIGH
     assert isinstance(event.details, NetworkAnomalyDetail)
     assert event.details.attack_type == "UDP_FLOOD"
+    assert event.details.extra_context["pps_threshold"] == 30.0
+    assert event.details.extra_context["bytes_per_second_threshold"] is None
 
 
 def test_traffic_spike_detector_triggers_critical_on_high_volumetric_packets() -> None:
@@ -224,6 +229,9 @@ def test_traffic_spike_detector_triggers_critical_on_high_volumetric_packets() -
 
     assert len(events) == 1
     assert events[0].severity == DetectionSeverity.CRITICAL
+    assert isinstance(events[0].details, NetworkAnomalyDetail)
+    assert events[0].details.extra_context["pps_threshold"] == 100.0
+    assert events[0].details.extra_context["bytes_per_second_threshold"] == 500_000.0
 
 
 # ─── 4. NETWORK ENGINE EVALUATE STATE & COOLDOWN TESTS ───

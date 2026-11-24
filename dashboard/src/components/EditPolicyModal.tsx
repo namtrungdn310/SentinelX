@@ -182,9 +182,12 @@ function EditPolicyModalForm({
                 <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
               </select>
               <small className="field-hint">
-                {actionType === "ADAPTIVE" && "Hệ thống tự chẩn đoán: nếu do bộ nhớ đệm đĩa thì dọn đệm an toàn; nếu do rò rỉ RAM thì khởi động lại dịch vụ tương ứng."}
-                {actionType === "CLEAR_OS_CACHE" && "Chạy sync và giải phóng bộ nhớ đệm đĩa (Page Cache) mà không làm gián đoạn dịch vụ."}
-                {actionType === "RESTART_SERVICE" && "Tự động gửi lệnh khởi động lại dịch vụ gây cạn kiệt RAM qua systemd khi vượt ngưỡng."}
+                {actionType === "ADAPTIVE" &&
+                  "Hệ thống tự kiểm tra: nếu có dịch vụ ứng dụng chiếm >= 40% lượng RAM đang sử dụng sẽ tự động khởi động lại dịch vụ đó; ngược lại (tải phân tán, dịch vụ lõi hoặc bộ nhớ đệm) sẽ giải phóng bộ nhớ đệm an toàn."}
+                {actionType === "CLEAR_OS_CACHE" &&
+                  "Chạy sync và giải phóng bộ nhớ đệm hệ điều hành (Page Cache, dentries, inodes) mà không làm gián đoạn dịch vụ."}
+                {actionType === "RESTART_SERVICE" &&
+                  "Khởi động lại dịch vụ chiếm >= 40% tài nguyên quá tải qua systemd (hoặc dịch vụ dự phòng bên dưới); từ chối tự restart dịch vụ lõi hệ thống."}
               </small>
             </div>
           )}
@@ -201,6 +204,11 @@ function EditPolicyModalForm({
                 placeholder="Để trống để tự xác định dịch vụ tương ứng (vd: nginx)"
                 disabled={loading}
               />
+              {!hasMultipleActions && (
+                <small className="field-hint">
+                  Ưu tiên dịch vụ chiếm &gt;= 40% tải CPU đang quá tải; nếu tải phân tán hoặc là dịch vụ lõi sẽ tự động từ chối restart.
+                </small>
+              )}
             </div>
           )}
 

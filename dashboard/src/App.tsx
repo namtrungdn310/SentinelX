@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  ArrowLeftRight,
   ChevronRight,
   Box,
   LayoutDashboard,
@@ -39,10 +40,12 @@ import { SecurityToast } from "./components/SecurityToast";
 import { NodeDetailModal } from "./components/NodeDetailModal";
 import { ProjectsView } from "./components/ProjectsView";
 import { AddProjectModal } from "./components/AddProjectModal";
+import { ProjectLBConfigModal } from "./components/ProjectLBConfigModal";
+import { LoadBalancerView } from "./components/LoadBalancerView";
 import { AuthView } from "./components/AuthView";
 import { authService, type User } from "./auth";
 import { useInfrastructure } from "./useInfrastructure";
-import type { Node } from "./types";
+import type { Node, Project } from "./types";
 
 const STORAGE_KEY_SELECTED_PROJECT = "sentinelx_selected_project_id";
 
@@ -54,7 +57,7 @@ const getSavedProjectId = (): string | null => {
   }
 };
 
-const views = ["projects", "overview", "hosts", "metrics", "events", "incidents", "defense", "policies", "settings"];
+const views = ["projects", "overview", "hosts", "load-balancer", "metrics", "events", "incidents", "defense", "policies", "settings"];
 const currentView = () => {
   const hash = window.location.hash.slice(1);
   if (views.includes(hash)) {
@@ -81,6 +84,9 @@ export function App() {
     toggleDemo,
     addNode,
     createProject,
+    updateProject,
+    syncProjectLocalLB,
+    updateNode,
     incidents,
     incidentRevision,
     defenseActions,
@@ -143,6 +149,10 @@ export function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => nodes[0]?.id ?? null);
   const [isAddNodeOpen, setIsAddNodeOpen] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
+  const [editingModal, setEditingModal] = useState<{
+    project: Project;
+    mode: "lb" | "project";
+  } | null>(null);
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sampleLimit, setSampleLimit] = useState(30);
@@ -272,6 +282,7 @@ export function App() {
     projects: "Dự án hạ tầng",
     overview: "Tổng quan hạ tầng",
     hosts: "Danh sách máy chủ",
+    "load-balancer": "Cân bằng tải",
     metrics: "Mẫu dữ liệu tài nguyên",
     events: "Nhật ký hệ thống",
     incidents: "Sự cố an ninh",
@@ -377,6 +388,14 @@ export function App() {
               {[
                 { id: "overview", label: "Tổng quan", Icon: LayoutDashboard },
                 { id: "hosts", label: "Máy chủ", Icon: Server, count: projectNodes.length },
+                {
+                  id: "load-balancer",
+                  label: "Cân bằng tải",
+                  Icon: ArrowLeftRight,
+                  count: selectedProject.load_balancer?.enabled
+                    ? projectNodes.filter((n) => n.lb_role === "lb_backend").length
+                    : undefined,
+                },
                 { id: "metrics", label: "Mẫu dữ liệu", Icon: Activity },
                 { id: "events", label: "Nhật ký sự kiện", Icon: Terminal },
                 { id: "settings", label: "Thiết lập cấu hình", Icon: Settings2 },
@@ -500,6 +519,7 @@ export function App() {
                 navigate("overview");
               }}
               onOpenCreateModal={() => setIsAddProjectOpen(true)}
+              onEditProject={(proj) => setEditingModal({ project: proj, mode: "project" })}
             />
           ) : (
             <>
@@ -534,7 +554,9 @@ export function App() {
               <KPICards
                 nodes={displayedNodes}
                 incidents={projectIncidents}
+                activeProject={selectedProject}
                 isLoading={isLoading}
+                onOpenLoadBalancer={() => navigate("load-balancer")}
               />
               <InfrastructureOverview
                 nodes={displayedNodes}
@@ -578,6 +600,22 @@ export function App() {
               onOpenDetail={openDetail}
               state={tableState}
               onStateChange={setTableState}
+            />
+          )}
+          {effectiveView === "load-balancer" && selectedProject && (
+            <LoadBalancerView
+              key={selectedProject.id}
+              project={selectedProject}
+              projectNodes={projectNodes}
+              isDemoMode={isDemoMode}
+              onOpenConfig={() =>
+                setEditingModal({ project: selectedProject, mode: "lb" })
+              }
+              onOpenAddNode={() => setIsAddNodeOpen(true)}
+              onUpdateProjectLB={updateProject}
+              onSyncProjectLocalLB={syncProjectLocalLB}
+              onUpdateNode={updateNode}
+              onNotify={pushSecurityToast}
             />
           )}
           {effectiveView === "metrics" && (
@@ -758,6 +796,17 @@ export function App() {
             setSelectedProjectId(created.id);
             navigate("overview");
           }
+        }}
+      />
+      <ProjectLBConfigModal
+        key={editingModal ? `${editingModal.mode}:${editingModal.project.id}` : "edit-closed"}
+        isOpen={Boolean(editingModal)}
+        project={editingModal?.project ?? null}
+        mode={editingModal?.mode ?? "lb"}
+        isDemoMode={isDemoMode}
+        onClose={() => setEditingModal(null)}
+        onSave={async (projectId, payload) => {
+          await updateProject(projectId, payload);
         }}
       />
       {detailNode && (

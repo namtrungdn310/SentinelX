@@ -95,6 +95,25 @@ class IncidentRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def list_active_resource_incidents(
+        self,
+        project_id: uuid.UUID,
+        node_id: uuid.UUID,
+    ) -> list[IncidentModel]:
+        """List open resource incidents for a node across all resource detectors."""
+        stmt = (
+            select(IncidentModel)
+            .where(
+                IncidentModel.project_id == project_id,
+                IncidentModel.node_id == node_id,
+                IncidentModel.status.in_(["DETECTED", "MITIGATING"]),
+                IncidentModel.correlation_key.like("resource%"),
+            )
+            .order_by(IncidentModel.started_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
     async def query_incidents(
         self,
         project_id: uuid.UUID | None = None,

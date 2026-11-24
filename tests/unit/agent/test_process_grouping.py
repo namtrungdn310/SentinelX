@@ -154,3 +154,41 @@ def test_find_top_process_memory_leak_dominant() -> None:
         assert cpu == 2.0
         assert mem == 65.0
         assert count == 1
+
+
+def test_find_top_process_focus_metric_and_cpu_normalization() -> None:
+    cpu_proc = MagicMock()
+    cpu_proc.info = {
+        "pid": 901,
+        "name": "gzip",
+        "cpu_percent": 160.0,
+        "memory_percent": 3.0,
+        "cmdline": [],
+    }
+    mem_proc = MagicMock()
+    mem_proc.info = {
+        "pid": 902,
+        "name": "java",
+        "cpu_percent": 8.0,
+        "memory_percent": 62.0,
+        "cmdline": ["java", "-jar", "api.jar"],
+    }
+
+    with (
+        patch("psutil.process_iter", return_value=[cpu_proc, mem_proc]),
+        patch.object(RealResourceCollector, "_read_cgroup_service", return_value=None),
+        patch("os.cpu_count", return_value=4),
+    ):
+        name_mem, _, _, mem_val, _, _ = RealResourceCollector._find_top_process(
+            focus_metric="memory",
+            normalize_cpu=True,
+        )
+        assert name_mem == "api"
+        assert mem_val == 62.0
+
+        name_cpu, _, cpu_val, _, _, _ = RealResourceCollector._find_top_process(
+            focus_metric="cpu",
+            normalize_cpu=True,
+        )
+        assert name_cpu == "gzip"
+        assert cpu_val == 40.0

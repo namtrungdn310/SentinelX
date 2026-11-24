@@ -54,6 +54,13 @@ class TrafficSpikeDetector(BaseNetworkDetector):
                 )
                 confidence = 0.92 if is_udp_flood else 0.85
 
+                pps_threshold = (
+                    self.udp_threshold if is_udp_flood else self.packet_threshold
+                ) / 10
+                bps_threshold = self.byte_threshold / 10
+                pps_triggered = is_udp_flood or packets >= self.packet_threshold
+                bps_triggered = byte_count >= self.byte_threshold
+
                 event = DetectionEventContract(
                     node_id=str(node_id),
                     detector_name=self.name,
@@ -77,6 +84,10 @@ class TrafficSpikeDetector(BaseNetworkDetector):
                             "direction": feature.direction,
                             "packets_per_second": packets / 10,
                             "bytes_per_second": byte_count / 10,
+                            "pps_threshold": pps_threshold if pps_triggered else None,
+                            "bytes_per_second_threshold": (
+                                bps_threshold if bps_triggered else None
+                            ),
                         },
                     ),
                     detected_at=window.window_end,

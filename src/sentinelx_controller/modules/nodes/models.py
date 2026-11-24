@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from sentinelx_common.contracts.agents import EnrollmentStatus
@@ -45,6 +45,20 @@ class NodeModel(Base, TimestampMixin):
         nullable=False,
     )
     os_info: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    lb_role: Mapped[str] = mapped_column(
+        String(20),
+        default="standalone",
+        nullable=False,
+    )
+    lb_backend_port: Mapped[int] = mapped_column(
+        Integer,
+        default=8080,
+        nullable=False,
+    )
+    lb_health_path: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )

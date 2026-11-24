@@ -14,7 +14,30 @@ SUPPORTED_ACTIONS = frozenset(
         "ADAPTIVE",
     }
 )
+PROTECTED_SYSTEM_SERVICES = frozenset(
+    {
+        "systemd",
+        "init",
+        "sshd",
+        "ssh",
+        "sentinelx-agent",
+        "docker",
+        "dockerd",
+        "containerd",
+        "postgres",
+        "postgresql",
+        "db",
+    }
+)
 MAX_BLOCK_SECONDS = 86400
+
+
+def is_protected_system_service(service_name: str) -> bool:
+    """Return True if service_name refers to a core OS or control-plane daemon."""
+    clean = service_name.strip().lower()
+    if clean.endswith(".service"):
+        clean = clean[:-8]
+    return clean in PROTECTED_SYSTEM_SERVICES
 
 
 def normalize_command(

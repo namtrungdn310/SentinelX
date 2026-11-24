@@ -75,6 +75,8 @@ class LoadBalancer:
 
     def set_algorithm(self, algorithm: LBAlgorithm) -> None:
         """Switch routing algorithm dynamically at runtime."""
+        if algorithm == self._algorithm:
+            return
         self._algorithm = algorithm
         self._strategy = self._create_strategy(algorithm)
 

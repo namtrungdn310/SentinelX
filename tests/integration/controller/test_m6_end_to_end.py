@@ -130,3 +130,14 @@ async def test_m6_end_to_end_service_restart_pipeline(tmp_path: Path) -> None:
         assert (await h.client.get(f"/api/v1/defense/actions/{command['id']}")).json()[
             "status"
         ] in ("APPLIED", "SIMULATED")
+
+        # One-shot RESTART_SERVICE once APPLIED must not permanently suppress future restarts.
+        followup = await h.client.post(
+            "/api/v1/defense/actions",
+            json={
+                "node_id": h.node,
+                "action_type": "RESTART_SERVICE",
+                "command_payload": {"service_name": "order-worker"},
+            },
+        )
+        assert followup.status_code == 201, followup.text

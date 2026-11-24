@@ -105,7 +105,19 @@ class TelemetryService:
                 node_id=node_uuid,
                 samples=request.samples,
             )
-            if events and self._incident_service is not None:
+            if not events and self._incident_service is not None:
+                node_resp = await self._node_service.get_node(request.node_id)
+                project_uuid = uuid.UUID(node_resp.project_id)
+                await self._incident_service.resolve_quiet_resource_incidents(
+                    project_id=project_uuid,
+                    node_id=node_uuid,
+                    has_active_actions=(
+                        self._defense_service.has_active_incident_actions
+                        if self._defense_service is not None
+                        else None
+                    ),
+                )
+            elif events and self._incident_service is not None:
                 node_resp = await self._node_service.get_node(request.node_id)
                 project_uuid = uuid.UUID(node_resp.project_id)
                 correlated = await self._incident_service.correlate_events(

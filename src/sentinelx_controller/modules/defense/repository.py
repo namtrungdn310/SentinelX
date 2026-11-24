@@ -181,12 +181,26 @@ class DefenseRepository:
         action_type: str,
         target_ip: str | None,
     ) -> bool:
-        """Check if an active action (PENDING, SENT, APPLIED) already exists for this target."""
-        active_statuses = [
-            DefenseActionStatus.PENDING.value,
-            DefenseActionStatus.SENT.value,
-            DefenseActionStatus.APPLIED.value,
-        ]
+        """Check if an active action already owns this target.
+
+        Stateful network blocks stay active while APPLIED until REVERTED.
+        One-shot host actions (RESTART_SERVICE, CLEAR_OS_CACHE, etc.) are only
+        in-flight while PENDING or SENT; subsequent executions are governed by
+        PolicyEngine cooldown.
+        """
+        stateful_actions = {"BLOCK_IP_NFTABLES", "RATE_LIMIT"}
+        active_statuses = (
+            [
+                DefenseActionStatus.PENDING.value,
+                DefenseActionStatus.SENT.value,
+                DefenseActionStatus.APPLIED.value,
+            ]
+            if action_type in stateful_actions
+            else [
+                DefenseActionStatus.PENDING.value,
+                DefenseActionStatus.SENT.value,
+            ]
+        )
         stmt = select(func.count(DefenseActionModel.id)).where(
             DefenseActionModel.node_id == node_id,
             DefenseActionModel.action_type == action_type,
@@ -219,16 +233,20 @@ class DefenseRepository:
         self,
         incident_id: uuid.UUID,
     ) -> bool:
-        """Check if any active blocking actions remain for an incident."""
-        active_statuses = [
-            DefenseActionStatus.PENDING.value,
-            DefenseActionStatus.SENT.value,
-            DefenseActionStatus.APPLIED.value,
-        ]
+        """Check if stateful blocking rules or in-flight commands remain for an incident."""
         stmt = select(func.count(DefenseActionModel.id)).where(
             DefenseActionModel.incident_id == incident_id,
-            DefenseActionModel.status.in_(active_statuses),
             DefenseActionModel.action_type != "UNBLOCK_IP_NFTABLES",
+            or_(
+                DefenseActionModel.status.in_(
+                    [
+                        DefenseActionStatus.PENDING.value,
+                        DefenseActionStatus.SENT.value,
+                    ]
+                ),
+                DefenseActionModel.status.in_([DefenseActionStatus.APPLIED.value])
+                & DefenseActionModel.action_type.in_(["BLOCK_IP_NFTABLES", "RATE_LIMIT"]),
+            ),
         )
         res = await self._session.execute(stmt)
         return (res.scalar_one() or 0) > 0

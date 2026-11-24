@@ -71,6 +71,8 @@ class SynFloodDetector(BaseNetworkDetector):
                             "window_id": str(window.window_id),
                             "direction": feature.direction,
                             "syn_per_second": feature.syn_count * scale / 10,
+                            "min_syn_threshold": self.min_syn,
+                            "syn_ack_ratio_threshold": self.syn_ack_ratio,
                         },
                     ),
                     detected_at=window.window_end,

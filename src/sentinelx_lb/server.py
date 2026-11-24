@@ -1,11 +1,14 @@
 """Aiohttp application factory and route registration for SentinelX Load Balancer."""
 
 import logging
+import secrets
+from typing import Any
 
 from aiohttp import ClientSession, web
+from pydantic import ValidationError
 
 from sentinelx_lb.balancer import LoadBalancer
-from sentinelx_lb.config import LBSettings
+from sentinelx_lb.config import BackendConfig, HealthCheckConfig, LBAlgorithm, LBSettings
 from sentinelx_lb.health import ActiveHealthChecker
 from sentinelx_lb.pool import BackendPool
 from sentinelx_lb.proxy import ReverseProxyHandler
@@ -59,6 +62,132 @@ async def proxy_dispatcher(request: web.Request) -> web.StreamResponse:
     return await handler.handle_proxy(request)
 
 
+def _authorize_admin(request: web.Request) -> web.Response | None:
+    """Enforce SENTINELX_LB_ADMIN_TOKEN if configured on the LB daemon."""
+    expected = request.app[SETTINGS_KEY].admin_token
+    if not expected:
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    elif "X-SentinelX-LB-Token" in request.headers:
+        token = request.headers["X-SentinelX-LB-Token"].strip()
+    if not token or not secrets.compare_digest(token, expected):
+        return web.json_response({"error": "Unauthorized LB admin request"}, status=401)
+    return None
+
+
+async def update_lb_config(request: web.Request) -> web.Response:
+    """Hot-update routing algorithm, backend pool, and health check settings."""
+    denied = _authorize_admin(request)
+    if denied is not None:
+        return denied
+
+    try:
+        payload: dict[str, Any] = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    settings = request.app[SETTINGS_KEY]
+    balancer = request.app[BALANCER_KEY]
+    pool = request.app[POOL_KEY]
+    health_checker = request.app[HEALTH_CHECKER_KEY]
+
+    if "algorithm" in payload and payload["algorithm"] is not None:
+        try:
+            algo = LBAlgorithm(str(payload["algorithm"]))
+        except ValueError:
+            return web.json_response(
+                {"error": f"Unsupported algorithm: {payload['algorithm']}"},
+                status=422,
+            )
+        balancer.set_algorithm(algo)
+        settings.algorithm = algo
+
+    if "backends" in payload and payload["backends"] is not None:
+        raw_backends = payload["backends"]
+        if not isinstance(raw_backends, list):
+            return web.json_response({"error": "backends must be a list"}, status=422)
+        try:
+            backend_configs = [BackendConfig.model_validate(item) for item in raw_backends]
+        except ValidationError as exc:
+            return web.json_response({"error": str(exc)}, status=422)
+        pool.sync_pool(backend_configs)
+        settings.backends = backend_configs
+
+    if "health_check" in payload and payload["health_check"] is not None:
+        try:
+            hc = HealthCheckConfig.model_validate(payload["health_check"])
+        except ValidationError as exc:
+            return web.json_response({"error": str(exc)}, status=422)
+        await health_checker.update_config(hc)
+        settings.health_check = hc
+
+    logger.info(
+        "LB config hot-updated: algorithm=%s backends=%d",
+        balancer.algorithm.value,
+        len(pool.backends),
+    )
+    return await lb_status(request)
+
+
+async def update_lb_algorithm(request: web.Request) -> web.Response:
+    """Hot-switch LB routing algorithm."""
+    denied = _authorize_admin(request)
+    if denied is not None:
+        return denied
+
+    try:
+        payload: dict[str, Any] = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    raw_algo = payload.get("algorithm")
+    try:
+        algo = LBAlgorithm(str(raw_algo))
+    except ValueError:
+        return web.json_response({"error": f"Unsupported algorithm: {raw_algo}"}, status=422)
+
+    balancer = request.app[BALANCER_KEY]
+    settings = request.app[SETTINGS_KEY]
+    balancer.set_algorithm(algo)
+    settings.algorithm = algo
+    return await lb_status(request)
+
+
+async def set_backend_state(request: web.Request) -> web.Response:
+    """Enable or manually drain/disable a backend in the LB pool."""
+    denied = _authorize_admin(request)
+    if denied is not None:
+        return denied
+
+    try:
+        payload: dict[str, Any] = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    identifier = str(
+        payload.get("identifier") or request.match_info.get("identifier") or ""
+    ).strip()
+    if not identifier:
+        return web.json_response({"error": "Backend identifier is required"}, status=422)
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        return web.json_response({"error": "enabled boolean is required"}, status=422)
+    force = bool(payload.get("force", False))
+
+    pool = request.app[POOL_KEY]
+    try:
+        backend = pool.set_backend_admin_state(identifier, enabled, force=force)
+    except KeyError as exc:
+        return web.json_response({"error": str(exc)}, status=404)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+
+    return web.json_response({"backend": backend.to_dict(), "pool": pool.stats()})
+
+
 def create_app(settings: LBSettings | None = None) -> web.Application:
     """Build and configure the aiohttp Load Balancer web application."""
     if settings is None:
@@ -108,6 +237,10 @@ def create_app(settings: LBSettings | None = None) -> web.Application:
     # 1. Management and introspection endpoints
     app.router.add_get("/health", health_check)
     app.router.add_get("/lb/status", lb_status)
+    app.router.add_put("/lb/admin/config", update_lb_config)
+    app.router.add_patch("/lb/admin/algorithm", update_lb_algorithm)
+    app.router.add_post("/lb/admin/backends/state", set_backend_state)
+    app.router.add_post("/lb/admin/backends/{identifier}/state", set_backend_state)
 
     # 2. Catch-all reverse proxy route (must be added last)
     app.router.add_route("*", "/{tail:.*}", proxy_dispatcher)

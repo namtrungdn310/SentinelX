@@ -197,6 +197,116 @@ async def test_incident_technical_summary_and_mitigation_note() -> None:
         "RAM: 90.4% (>= 85.0%) · 3 mẫu · java (PID 4112): 71.0%\nservice: RESTART java"
     )
 
+    syn_thr_ev = DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name="syn_flood_detector",
+        severity=DetectionSeverity.CRITICAL,
+        attacker_ip="203.0.113.195",
+        confidence_score=0.98,
+        details=NetworkAnomalyDetail(
+            attack_type="SYN_FLOOD",
+            source_ip="203.0.113.195",
+            destination_ip="10.0.1.15",
+            protocol="tcp",
+            packet_count=524,
+            byte_count=31440,
+            syn_count=520,
+            ack_count=4,
+            targeted_ports=[80, 443],
+            metric_ratio=130.0,
+            extra_context={
+                "min_syn_threshold": 50,
+                "syn_ack_ratio_threshold": 3.0,
+            },
+        ),
+        detected_at=datetime.now(UTC),
+    )
+    assert _format_event_summary(syn_thr_ev) == (
+        "SYN: 520 (>= 50/10s) · ACK: 4 · Tỷ lệ SYN/ACK: 130.0 (>= 3.0)"
+        " · IP: 203.0.113.195 · Port: 80, 443"
+    )
+
+    scan_ev = DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name="port_scan_detector",
+        severity=DetectionSeverity.CRITICAL,
+        attacker_ip="198.51.100.42",
+        confidence_score=0.92,
+        details=NetworkAnomalyDetail(
+            attack_type="PORT_SCAN",
+            source_ip="198.51.100.42",
+            destination_ip="10.0.1.15",
+            protocol="tcp",
+            packet_count=96,
+            byte_count=5760,
+            targeted_ports=list(range(20, 68)),
+            extra_context={
+                "ports_scanned_count": 48,
+                "ports_truncated": False,
+                "port_threshold": 15,
+            },
+        ),
+        detected_at=datetime.now(UTC),
+    )
+    assert _format_event_summary(scan_ev) == (
+        "IP: 198.51.100.42 · 48 cổng (TCP) (>= 15/10s) · 96 pkt"
+    )
+
+    udp_ev = DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name="traffic_spike_detector",
+        severity=DetectionSeverity.HIGH,
+        attacker_ip="198.18.0.88",
+        confidence_score=0.92,
+        details=NetworkAnomalyDetail(
+            attack_type="UDP_FLOOD",
+            source_ip="198.18.0.88",
+            destination_ip="10.0.1.15",
+            protocol="udp",
+            packet_count=1800,
+            byte_count=2_100_000,
+            targeted_ports=[123],
+            extra_context={
+                "packets_per_second": 180.0,
+                "bytes_per_second": 210_000.0,
+                "pps_threshold": 30.0,
+                "bytes_per_second_threshold": None,
+            },
+        ),
+        detected_at=datetime.now(UTC),
+    )
+    assert _format_event_summary(udp_ev) == (
+        "UDP · IP: 198.18.0.88 · 180 pps (>= 30 pps) · 210.0 KB/s · Port: 123"
+    )
+
+    udp_bps_ev = DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name="traffic_spike_detector",
+        severity=DetectionSeverity.CRITICAL,
+        attacker_ip="192.0.2.77",
+        confidence_score=0.92,
+        details=NetworkAnomalyDetail(
+            attack_type="UDP_FLOOD",
+            source_ip="192.0.2.77",
+            destination_ip="10.0.1.15",
+            protocol="udp",
+            packet_count=54200,
+            byte_count=425_000_000,
+            targeted_ports=[53],
+            extra_context={
+                "packets_per_second": 5420.0,
+                "bytes_per_second": 42_500_000.0,
+                "pps_threshold": 30.0,
+                "bytes_per_second_threshold": 500_000.0,
+            },
+        ),
+        detected_at=datetime.now(UTC),
+    )
+    assert _format_event_summary(udp_bps_ev) == (
+        "UDP · IP: 192.0.2.77 · 5.420 pps (>= 30 pps)"
+        " · 42.5 MB/s (>= 500.0 KB/s) · Port: 53"
+    )
+
 
 @pytest.mark.asyncio
 async def test_recently_closed_incident_suppresses_immediate_retrigger_and_stale_events() -> None:
@@ -330,3 +440,55 @@ async def test_correlate_events_escalates_high_to_critical_after_60s() -> None:
     correlated_late = await service.correlate_events(project_id, node_id, [late_follow_up])
     assert correlated_late[0][0].severity == DetectionSeverity.CRITICAL
     assert active_recent.severity == DetectionSeverity.CRITICAL.value
+
+
+@pytest.mark.asyncio
+async def test_correlate_events_separates_resource_detectors_and_resolves_quiet() -> None:
+    repo = AsyncMock()
+    detection_service = AsyncMock()
+    project_id = uuid.uuid4()
+    node_id = uuid.uuid4()
+    repo.find_active_incident.return_value = None
+    repo.find_recently_closed_incident.return_value = None
+
+    created: list[IncidentModel] = []
+
+    async def mock_create(inc: IncidentModel) -> IncidentModel:
+        inc.id = uuid.uuid4()
+        created.append(inc)
+        return inc
+
+    repo.create.side_effect = mock_create
+    service = IncidentService(repository=repo, detection_service=detection_service)
+
+    cpu_ev = make_event(severity=DetectionSeverity.HIGH, detector_name="cpu_threshold_detector")
+    mem_ev = make_event(
+        severity=DetectionSeverity.HIGH,
+        detector_name="memory_exhaustion_detector",
+    )
+    correlated = await service.correlate_events(project_id, node_id, [cpu_ev, mem_ev])
+    assert len(correlated) == 2
+    assert {inc.correlation_key for inc in created} == {
+        "resource:cpu_threshold_detector",
+        "resource:memory_exhaustion_detector",
+    }
+
+    stale_inc = created[0]
+    stale_inc.status = IncidentStatus.MITIGATING.value
+    stale_inc.last_event_at = datetime.now(UTC) - timedelta(seconds=180)
+    repo.list_active_resource_incidents.return_value = [stale_inc]
+    repo.get_by_id.return_value = stale_inc
+    detection_service.incident_counts.return_value = {stale_inc.id: 1}
+    detection_service.observed_quiet.return_value = True
+
+    async def no_active(_inc_id: uuid.UUID) -> bool:
+        return False
+
+    resolved = await service.resolve_quiet_resource_incidents(
+        project_id,
+        node_id,
+        quiet_window_seconds=120,
+        has_active_actions=no_active,
+    )
+    assert resolved == 1
+    assert stale_inc.status == IncidentStatus.RESOLVED.value

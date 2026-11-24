@@ -1,10 +1,11 @@
 """Real Linux/OS hardware resource collector for SentinelX Agent."""
 
 import logging
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import psutil
 
@@ -70,9 +71,13 @@ class RealResourceCollector:
     @classmethod
     def _find_top_process(
         cls,
+        focus_metric: Literal["auto", "cpu", "memory"] = "auto",
+        *,
+        normalize_cpu: bool = False,
     ) -> tuple[str | None, int | None, float | None, float | None, int | None, str | None]:
         """Hybrid Process Grouping: Priority 1 (Linux Cgroup) -> Priority 2 (Regex / PPID)."""
         try:
+            cpu_divisor = float(os.cpu_count() or 1) if normalize_cpu else 1.0
             groups: dict[str, dict[str, Any]] = {}
             for proc in psutil.process_iter(
                 ["pid", "name", "cpu_percent", "memory_percent", "cmdline"]
@@ -83,7 +88,9 @@ class RealResourceCollector:
                     if name.lower() in ("system idle process", "system", "idle", "registry"):
                         continue
                     pid = int(info["pid"]) if info.get("pid") is not None else 0
-                    cpu = float(info.get("cpu_percent") or 0.0)
+                    cpu = float(info.get("cpu_percent") or 0.0) / cpu_divisor
+                    if normalize_cpu:
+                        cpu = min(100.0, max(0.0, cpu))
                     mem = float(info.get("memory_percent") or 0.0)
                     cmdline = info.get("cmdline") or []
 
@@ -114,16 +121,32 @@ class RealResourceCollector:
             if not groups:
                 return None, None, None, None, None, None
 
-            top_group = max(
-                groups.values(),
-                key=lambda g: max(g["cpu_percent"], g["memory_percent"]),
-            )
+            if focus_metric == "cpu":
+                top_group = max(
+                    groups.values(),
+                    key=lambda g: (g["cpu_percent"], g["memory_percent"]),
+                )
+            elif focus_metric == "memory":
+                top_group = max(
+                    groups.values(),
+                    key=lambda g: (g["memory_percent"], g["cpu_percent"]),
+                )
+            else:
+                top_group = max(
+                    groups.values(),
+                    key=lambda g: max(g["cpu_percent"], g["memory_percent"]),
+                )
             primary_pid = min(top_group["pids"]) if top_group["pids"] else None
+            cpu_total = (
+                min(100.0, top_group["cpu_percent"])
+                if normalize_cpu
+                else top_group["cpu_percent"]
+            )
             return (
                 top_group["name"][:64],
                 primary_pid,
-                round(top_group["cpu_percent"], 2),
-                round(top_group["memory_percent"], 2),
+                round(cpu_total, 2),
+                round(min(100.0, top_group["memory_percent"]), 2),
                 len(top_group["pids"]),
                 top_group["cgroup"][:128] if top_group["cgroup"] else None,
             )
@@ -170,7 +193,14 @@ class RealResourceCollector:
         top_count: int | None = None
         top_cgroup: str | None = None
         if cpu_pct >= 75.0 or mem_pct >= 75.0:
-            top_name, top_pid, top_cpu, top_mem, top_count, top_cgroup = self._find_top_process()
+            if mem_pct >= 75.0 and (cpu_pct < 75.0 or mem_pct >= cpu_pct):
+                focus_metric: Literal["auto", "cpu", "memory"] = "memory"
+            else:
+                focus_metric = "cpu"
+            top_name, top_pid, top_cpu, top_mem, top_count, top_cgroup = self._find_top_process(
+                focus_metric=focus_metric,
+                normalize_cpu=True,
+            )
 
         return MetricSample(
             observed_at=datetime.now(UTC),

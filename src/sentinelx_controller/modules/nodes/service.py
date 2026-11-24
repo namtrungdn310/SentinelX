@@ -17,7 +17,13 @@ from sentinelx_common.contracts.agents import (
     HeartbeatResponse,
 )
 from sentinelx_common.contracts.defense import AgentCommandContract
-from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse, NodeStatus
+from sentinelx_common.contracts.nodes import (
+    NodeLBRoleType,
+    NodeRegisterRequest,
+    NodeResponse,
+    NodeStatus,
+    NodeUpdateRequest,
+)
 from sentinelx_common.contracts.projects import (
     ProjectSettingsResponse,
     ProjectSettingsUpdateRequest,
@@ -37,6 +43,7 @@ _PROFILE_CADENCE: dict[str, tuple[int, float]] = {
     "resource_saving": (10, 10.0),
 }
 _VALID_PROFILES: set[str] = set(_PROFILE_CADENCE)
+_STALE_HEARTBEAT_SECONDS = 60
 
 
 class NodeService:
@@ -78,7 +85,45 @@ class NodeService:
             hostname=request.hostname,
             ip_address=request.ip_address,
             os_info=request.os_info,
+            lb_role=request.lb_role,
+            lb_backend_port=request.lb_backend_port,
+            lb_health_path=request.lb_health_path,
         )
+        return self._to_response(node)
+
+    async def update_node(
+        self,
+        node_id_str: str,
+        request: NodeUpdateRequest,
+    ) -> NodeResponse:
+        """Update node metadata or Load Balancer backend participation settings."""
+        try:
+            n_uuid = uuid.UUID(node_id_str)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid node UUID format",
+            ) from err
+
+        node = await self._node_repo.get_by_id(n_uuid)
+        if node is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Node '{node_id_str}' not found",
+            )
+
+        if request.hostname is not None:
+            node.hostname = request.hostname.strip()
+        if request.os_info is not None:
+            node.os_info = request.os_info.strip() or None
+        if request.lb_role is not None:
+            node.lb_role = request.lb_role
+        if request.lb_backend_port is not None:
+            node.lb_backend_port = request.lb_backend_port
+        if request.lb_health_path is not None:
+            node.lb_health_path = request.lb_health_path.strip() or None
+
+        await self._node_repo.save(node)
         return self._to_response(node)
 
     async def get_node(self, node_id_str: str) -> NodeResponse:
@@ -464,13 +509,26 @@ class NodeService:
 
     @staticmethod
     def _to_response(model: NodeModel) -> NodeResponse:
+        effective_status = NodeStatus(model.status)
+        if (
+            effective_status == NodeStatus.ONLINE
+            and model.last_seen_at is not None
+            and (datetime.now(UTC) - ensure_utc(model.last_seen_at)).total_seconds()
+            > _STALE_HEARTBEAT_SECONDS
+        ):
+            effective_status = NodeStatus.OFFLINE
+        raw_role = getattr(model, "lb_role", "standalone")
+        lb_role: NodeLBRoleType = "lb_backend" if raw_role == "lb_backend" else "standalone"
         return NodeResponse(
             node_id=str(model.id),
             project_id=str(model.project_id),
             hostname=model.hostname,
             ip_address=model.ip_address,
-            status=NodeStatus(model.status),
+            status=effective_status,
             os_info=model.os_info,
+            lb_role=lb_role,
+            lb_backend_port=getattr(model, "lb_backend_port", 8080) or 8080,
+            lb_health_path=getattr(model, "lb_health_path", None),
             last_seen=ensure_utc(model.last_seen_at) if model.last_seen_at else None,
             created_at=ensure_utc(model.created_at),
             agent_capabilities=model.agent_capabilities or {},
