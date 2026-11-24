@@ -159,3 +159,152 @@ def test_duplicate_prevention_for_ip_blocking() -> None:
     assert res2.authorized is False
     assert res2.status == PolicyEvaluationStatus.DENIED_DUPLICATE
     assert "recently authorized" in res2.reason
+
+
+def _resource_event(
+    detector_name: str,
+    *,
+    current_value: float,
+    process_name: str | None = None,
+    process_percent: float | None = None,
+) -> DetectionEventContract:
+    metric_name = (
+        "memory_percent" if detector_name == "memory_exhaustion_detector" else "cpu_percent"
+    )
+    extra: dict[str, object] = {}
+    if process_name is not None:
+        extra["process_name"] = process_name
+    if process_percent is not None:
+        extra["process_percent"] = process_percent
+        if metric_name == "memory_percent":
+            extra["process_memory_percent"] = process_percent
+        else:
+            extra["process_cpu_percent"] = process_percent
+    return DetectionEventContract(
+        node_id=str(uuid.uuid4()),
+        detector_name=detector_name,
+        severity=DetectionSeverity.HIGH,
+        attacker_ip=None,
+        confidence_score=0.92,
+        details=ResourceAnomalyDetail(
+            metric_name=metric_name,
+            current_value=current_value,
+            threshold_value=85.0,
+            window_duration_seconds=10,
+            consecutive_samples=3,
+            extra_context=extra,
+        ),
+        detected_at=datetime.now(UTC),
+    )
+
+
+def test_adaptive_memory_requires_40_percent_dominance_else_clears_os_cache() -> None:
+    engine = PolicyEngine()
+    policy = DefensePolicyModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="Quá tải RAM",
+        event_type="memory_exhaustion_detector",
+        action_type="ADAPTIVE",
+        cooldown_seconds=180,
+        block_duration_seconds=0,
+        enabled=True,
+    )
+
+    # >= 40% share (60 / 90 = 66.7%) -> RESTART_SERVICE
+    dominant_ev = _resource_event(
+        "memory_exhaustion_detector",
+        current_value=90.0,
+        process_name="nginx",
+        process_percent=60.0,
+    )
+    res_dominant = engine.evaluate(dominant_ev, policies=[policy], whitelists=[])
+    assert res_dominant.authorized is True
+    assert res_dominant.action_type == PolicyActionType.RESTART_SERVICE
+    assert res_dominant.target == "nginx"
+
+    # < 40% share (20 / 90 = 22.2%) -> CLEAR_OS_CACHE fallback
+    distributed_ev = _resource_event(
+        "memory_exhaustion_detector",
+        current_value=90.0,
+        process_name="worker",
+        process_percent=20.0,
+    )
+    res_distributed = engine.evaluate(distributed_ev, policies=[policy], whitelists=[])
+    assert res_distributed.authorized is True
+    assert res_distributed.action_type == PolicyActionType.CLEAR_OS_CACHE
+    assert res_distributed.target == "os-cache"
+
+    # Protected system service even with high usage -> safe fallback to CLEAR_OS_CACHE
+    protected_ev = _resource_event(
+        "memory_exhaustion_detector",
+        current_value=92.0,
+        process_name="postgres.service",
+        process_percent=70.0,
+    )
+    res_protected = engine.evaluate(protected_ev, policies=[policy], whitelists=[])
+    assert res_protected.authorized is True
+    assert res_protected.action_type == PolicyActionType.CLEAR_OS_CACHE
+
+
+def test_adaptive_cpu_requires_40_percent_dominance_else_alert_only() -> None:
+    engine = PolicyEngine()
+    policy = DefensePolicyModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="Quá tải CPU",
+        event_type="cpu_threshold_detector",
+        action_type="ADAPTIVE",
+        cooldown_seconds=300,
+        block_duration_seconds=0,
+        enabled=True,
+    )
+
+    dominant_ev = _resource_event(
+        "cpu_threshold_detector",
+        current_value=90.0,
+        process_name="celery-worker",
+        process_percent=50.0,
+    )
+    res_dominant = engine.evaluate(dominant_ev, policies=[policy], whitelists=[])
+    assert res_dominant.authorized is True
+    assert res_dominant.action_type == PolicyActionType.RESTART_SERVICE
+    assert res_dominant.target == "celery-worker"
+
+    low_share_ev = _resource_event(
+        "cpu_threshold_detector",
+        current_value=90.0,
+        process_name="cron",
+        process_percent=15.0,
+    )
+    res_low = engine.evaluate(low_share_ev, policies=[policy], whitelists=[])
+    assert res_low.authorized is True
+    assert res_low.action_type == PolicyActionType.ALERT_ONLY
+
+
+def test_explicit_restart_rejects_missing_or_protected_service() -> None:
+    engine = PolicyEngine()
+    policy = DefensePolicyModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        name="Restart CPU",
+        event_type="cpu_threshold_detector",
+        action_type="RESTART_SERVICE",
+        target_params={},
+        enabled=True,
+    )
+
+    no_proc_ev = _resource_event("cpu_threshold_detector", current_value=92.0)
+    res_missing = engine.evaluate(no_proc_ev, policies=[policy], whitelists=[])
+    assert res_missing.authorized is False
+    assert res_missing.status == PolicyEvaluationStatus.NO_POLICY_MATCH
+
+    protected_ev = _resource_event(
+        "cpu_threshold_detector",
+        current_value=92.0,
+        process_name="sshd",
+        process_percent=75.0,
+    )
+    res_protected = engine.evaluate(protected_ev, policies=[policy], whitelists=[])
+    assert res_protected.authorized is False
+    assert res_protected.status == PolicyEvaluationStatus.NO_POLICY_MATCH

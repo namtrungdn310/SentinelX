@@ -10,10 +10,14 @@ import type {
   Incident,
   IncidentDetail,
   IncidentStatus,
+  LBAlgorithmType,
   MetricQueryResponse,
   Node,
+  NodeLBRoleType,
   PresetProfileType,
   Project,
+  ProjectLBConfig,
+  ProjectLBStatus,
   ProjectSettings,
   RealtimeMessage,
 } from "./types";
@@ -34,35 +38,88 @@ export async function fetchDetectionEvents(): Promise<RealtimeMessage[]> {
   }));
 }
 
+export function defaultProjectLBConfig(): ProjectLBConfig {
+  return {
+    enabled: false,
+    lb_url: null,
+    algorithm: "round_robin",
+    health_path: "/health",
+    health_interval_seconds: 3,
+    failure_threshold: 3,
+    success_threshold: 2,
+  };
+}
+
+function normalizeProject(data: Record<string, unknown>): Project {
+  return {
+    id: String(data.project_id ?? data.id),
+    name: String(data.name ?? ""),
+    description: (data.description as string | null) ?? null,
+    load_balancer: (data.load_balancer as ProjectLBConfig | undefined) ?? defaultProjectLBConfig(),
+    created_at: String(data.created_at ?? ""),
+  };
+}
+
+function normalizeNode(data: Record<string, unknown>): Node {
+  return {
+    id: String(data.node_id ?? data.id),
+    project_id: String(data.project_id ?? ""),
+    hostname: String(data.hostname ?? ""),
+    ip_address: String(data.ip_address ?? ""),
+    status: (data.status as Node["status"]) ?? "unenrolled",
+    last_seen: (data.last_seen ?? data.last_seen_at ?? null) as string | null,
+    created_at: String(data.created_at ?? ""),
+    lb_role: (data.lb_role as NodeLBRoleType | undefined) ?? "standalone",
+    lb_backend_port: typeof data.lb_backend_port === "number" ? data.lb_backend_port : 8080,
+    lb_health_path: (data.lb_health_path as string | null | undefined) ?? null,
+    agent_capabilities: (data.agent_capabilities as Record<string, unknown> | undefined) ?? undefined,
+  };
+}
+
 export async function fetchProjects(): Promise<Project[]> {
   const res = await fetch(`${API_BASE}/projects`, {
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) throw new Error(`Lỗi tải dự án: ${res.statusText}`);
   const data = await res.json();
-  return data.map((project: Project & { project_id?: string }) => ({
-    ...project,
-    id: project.project_id ?? project.id,
-  }));
+  return data.map((project: Record<string, unknown>) => normalizeProject(project));
 }
 
 export async function createProject(
   name: string,
   description?: string,
+  loadBalancer?: ProjectLBConfig,
 ): Promise<Project> {
+  const payload: Record<string, unknown> = { name, description };
+  if (loadBalancer) {
+    payload.load_balancer = loadBalancer;
+  }
   const res = await fetch(`${API_BASE}/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Lỗi tạo dự án: ${res.statusText}`);
-  const data = await res.json();
-  return {
-    id: data.project_id,
-    name: data.name,
-    description: data.description,
-    created_at: data.created_at,
-  };
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi tạo dự án: ${res.statusText}`);
+  }
+  return normalizeProject(await res.json());
+}
+
+export async function updateProject(
+  projectId: string,
+  payload: { name?: string; description?: string | null; load_balancer?: ProjectLBConfig },
+): Promise<Project> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi cập nhật dự án: ${res.statusText}`);
+  }
+  return normalizeProject(await res.json());
 }
 
 export async function fetchNodes(projectId?: string): Promise<Node[]> {
@@ -72,22 +129,14 @@ export async function fetchNodes(projectId?: string): Promise<Node[]> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`Lỗi tải máy chủ: ${res.statusText}`);
   const data = await res.json();
-  return data.map((n: Record<string, unknown>) => ({
-    id: n.node_id || n.id,
-    project_id: n.project_id,
-    hostname: n.hostname,
-    ip_address: n.ip_address,
-    status: n.status,
-    last_seen: n.last_seen || n.last_seen_at || null,
-    created_at: n.created_at,
-    agent_capabilities: (n.agent_capabilities as Record<string, unknown> | undefined) ?? undefined,
-  }));
+  return data.map((n: Record<string, unknown>) => normalizeNode(n));
 }
 
 export async function createNode(
   projectId: string,
   hostname: string,
   ipAddress: string,
+  lbConfig?: { lb_role?: NodeLBRoleType; lb_backend_port?: number; lb_health_path?: string | null },
 ): Promise<Node> {
   const res = await fetch(`${API_BASE}/nodes`, {
     method: "POST",
@@ -96,19 +145,35 @@ export async function createNode(
       project_id: projectId,
       hostname,
       ip_address: ipAddress,
+      ...(lbConfig ? lbConfig : {}),
     }),
   });
-  if (!res.ok) throw new Error(`Lỗi đăng ký node: ${res.statusText}`);
-  const data = await res.json();
-  return {
-    id: data.node_id,
-    project_id: data.project_id,
-    hostname: data.hostname,
-    ip_address: data.ip_address,
-    status: data.status,
-    last_seen: data.last_seen,
-    created_at: data.created_at,
-  };
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi đăng ký node: ${res.statusText}`);
+  }
+  return normalizeNode(await res.json());
+}
+
+export async function updateNode(
+  nodeId: string,
+  payload: {
+    hostname?: string;
+    lb_role?: NodeLBRoleType;
+    lb_backend_port?: number;
+    lb_health_path?: string | null;
+  },
+): Promise<Node> {
+  const res = await fetch(`${API_BASE}/nodes/${nodeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi cập nhật máy chủ: ${res.statusText}`);
+  }
+  return normalizeNode(await res.json());
 }
 
 export async function createEnrollmentToken(
@@ -513,5 +578,80 @@ export async function updateNodeSettings(
     body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
   });
   if (!res.ok) throw new Error(`Lỗi lưu cấu hình máy chủ: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchProjectLBStatus(projectId: string): Promise<ProjectLBStatus> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi tải trạng thái Load Balancer: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function updateProjectLBConfig(
+  projectId: string,
+  config: ProjectLBConfig,
+): Promise<ProjectLBStatus> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi lưu cấu hình Load Balancer: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function switchProjectLBAlgorithm(
+  projectId: string,
+  algorithm: LBAlgorithmType,
+): Promise<ProjectLBStatus> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer/algorithm`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ algorithm }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi đổi thuật toán: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function syncProjectLB(projectId: string): Promise<ProjectLBStatus> {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer/sync`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi đồng bộ Load Balancer: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function setProjectLBBackendState(
+  projectId: string,
+  nodeId: string,
+  enabled: boolean,
+  force = false,
+): Promise<ProjectLBStatus> {
+  const res = await fetch(
+    `${API_BASE}/projects/${projectId}/load-balancer/backends/${nodeId}/state`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, force }),
+    },
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail || `Lỗi cập nhật trạng thái backend: ${res.statusText}`);
+  }
   return res.json();
 }

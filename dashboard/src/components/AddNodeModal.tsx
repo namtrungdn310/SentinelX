@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { ArrowRight, Check, Copy, Server, X } from "lucide-react";
-import type { Project, Node } from "../types";
+import type { Node, Project } from "../types";
 import { createNode, createEnrollmentToken } from "../api";
 import { Modal } from "./Modal";
 
@@ -72,6 +72,7 @@ export function AddNodeModal({
             status: "unenrolled",
             last_seen: null,
             created_at: new Date().toISOString(),
+            lb_role: "standalone",
           }
         : await createNode(targetProjectId, hostname.trim(), ipAddress.trim());
       setCreatedNode(node);

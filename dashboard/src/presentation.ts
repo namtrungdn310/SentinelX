@@ -437,7 +437,28 @@ export function classifyIncidentHandling(
 ): IncidentHandlingInfo {
   const detectorType = inferIncidentDetector(incident, explicitDetector);
 
-  if (incident.status === "MITIGATING" || (incident.summary || "").includes("nftables:")) {
+  const lowerSummary = (incident.summary || "").toLowerCase();
+  if (incident.status === "MITIGATING" || lowerSummary.includes("nftables:")) {
+    if (lowerSummary.includes("os-cache:")) {
+      return {
+        mode: "auto",
+        detectorType,
+        label: "Tự động · Giải phóng bộ nhớ đệm",
+        reason: "Đã kích hoạt giải phóng bộ nhớ đệm hệ điều hành",
+      };
+    }
+    if (
+      lowerSummary.includes("service:") ||
+      detectorType === "cpu_threshold_detector" ||
+      detectorType === "memory_exhaustion_detector"
+    ) {
+      return {
+        mode: "auto",
+        detectorType,
+        label: "Tự động · Khởi động lại dịch vụ",
+        reason: "Đã kích hoạt lệnh khởi động lại dịch vụ gây quá tải",
+      };
+    }
     return {
       mode: "auto",
       detectorType,

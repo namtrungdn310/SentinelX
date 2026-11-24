@@ -11,6 +11,8 @@ import type {
   PresetProfileType,
   TelemetryDetectionPreset,
   ProjectSettings,
+  ProjectLBStatus,
+  LBBackendRuntime,
 } from "./types";
 
 export const PROJ_PROD_ID = "77db55e0-1ebe-4b69-be7c-286519d21442";
@@ -23,18 +25,45 @@ export const MOCK_PROJECTS: Project[] = [
     name: "Production Web Cluster",
     description:
       "Cụm máy chủ hạ tầng chính chạy tải dịch vụ thương mại điện tử",
+    load_balancer: {
+      enabled: true,
+      lb_url: "http://172.28.1.100:8080",
+      algorithm: "round_robin",
+      health_path: "/health",
+      health_interval_seconds: 3,
+      failure_threshold: 3,
+      success_threshold: 2,
+    },
     created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
   },
   {
     id: PROJ_EDGE_ID,
     name: "Edge AI & Gateway",
     description: "Cụm tính toán biên, Reverse Proxy & Load Balancer phân tán",
+    load_balancer: {
+      enabled: true,
+      lb_url: "http://10.0.1.5:8080",
+      algorithm: "least_in_flight",
+      health_path: "/health",
+      health_interval_seconds: 3,
+      failure_threshold: 3,
+      success_threshold: 2,
+    },
     created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
   },
   {
     id: PROJ_DATA_ID,
     name: "PostgreSQL Cluster",
     description: "Cụm lưu trữ PostgreSQL cho hạ tầng dữ liệu",
+    load_balancer: {
+      enabled: false,
+      lb_url: null,
+      algorithm: "round_robin",
+      health_path: "/health",
+      health_interval_seconds: 3,
+      failure_threshold: 3,
+      success_threshold: 2,
+    },
     created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
   },
 ];
@@ -48,6 +77,8 @@ export const MOCK_NODES: Node[] = [
     status: "online",
     last_seen: new Date().toISOString(),
     created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
+    lb_role: "lb_backend",
+    lb_backend_port: 8080,
     latestCpu: 26.4,
     latestMemory: 48.2,
     latestDisk: 32.5,
@@ -65,6 +96,8 @@ export const MOCK_NODES: Node[] = [
     status: "online",
     last_seen: new Date().toISOString(),
     created_at: new Date(Date.now() - 9 * 86400000).toISOString(),
+    lb_role: "lb_backend",
+    lb_backend_port: 8080,
     latestCpu: 64.8,
     latestMemory: 72.1,
     latestDisk: 45.0,
@@ -82,6 +115,8 @@ export const MOCK_NODES: Node[] = [
     status: "degraded",
     last_seen: new Date().toISOString(),
     created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
+    lb_role: "standalone",
+    lb_backend_port: 8080,
     latestCpu: 18.2,
     latestMemory: 86.5,
     latestDisk: 61.2,
@@ -99,6 +134,8 @@ export const MOCK_NODES: Node[] = [
     status: "online",
     last_seen: new Date().toISOString(),
     created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+    lb_role: "lb_backend",
+    lb_backend_port: 8080,
     latestCpu: 78.4,
     latestMemory: 55.0,
     latestDisk: 28.0,
@@ -116,6 +153,8 @@ export const MOCK_NODES: Node[] = [
     status: "offline",
     last_seen: new Date(Date.now() - 180000).toISOString(),
     created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+    lb_role: "standalone",
+    lb_backend_port: 8080,
     cpuCores: 2,
     totalMemoryBytes: 4 * 1024 * 1024 * 1024,
     totalDiskBytes: 500 * 1024 * 1024 * 1024,
@@ -128,6 +167,8 @@ export const MOCK_NODES: Node[] = [
     status: "unenrolled",
     last_seen: null,
     created_at: new Date().toISOString(),
+    lb_role: "standalone",
+    lb_backend_port: 8080,
     cpuCores: 4,
     totalMemoryBytes: 4 * 1024 * 1024 * 1024,
     totalDiskBytes: 100 * 1024 * 1024 * 1024,
@@ -203,7 +244,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 6 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "IP: 198.51.100.42 · 48 cổng / 10s (>= 15)",
+      "IP: 198.51.100.42 · 48 cổng (TCP) (>= 15/10s)",
     event_count: 3,
     attacker_ip: "198.51.100.42",
     targeted_ports: [20, 21, 22, 23, 24, 25, 80, 443, 8080, 8081, 8082],
@@ -233,7 +274,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 55 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "UDP (NTP :123) · IP: 198.18.0.88 · 180 pps · 210 KB/s\nnftables: DROP 198.18.0.88 (thời hạn: 10 phút)",
+      "UDP (NTP :123) · IP: 198.18.0.88 · 180 pps (>= 30 pps) · 210 KB/s\nnftables: DROP 198.18.0.88 (thời hạn: 10 phút)",
     event_count: 2,
     attacker_ip: "198.18.0.88",
     targeted_ports: [123],
@@ -307,7 +348,7 @@ export const MOCK_INCIDENTS: Incident[] = [
     started_at: new Date(Date.now() - 25 * 60000).toISOString(),
     resolved_at: null,
     summary:
-      "UDP (DNS :53) · IP: 192.0.2.77 · 5.420 pps · 42.5 MB/s",
+      "UDP (DNS :53) · IP: 192.0.2.77 · 5.420 pps (>= 30 pps) · 42.5 MB/s (>= 500.0 KB/s)",
     event_count: 8,
     attacker_ip: "192.0.2.77",
     targeted_ports: [53],
@@ -577,7 +618,7 @@ export const MOCK_INCIDENT_DETAILS: Record<string, IncidentDetail> = {
           byte_rate_mbps: 42.5,
           protocol: "UDP",
           targeted_ports: [53],
-          threshold: "PPS > 5000",
+          threshold: "PPS >= 30 (>= 500.0 KB/s)",
         },
         detected_at: new Date(Date.now() - 25 * 60000).toISOString(),
       },
@@ -1078,4 +1119,89 @@ export const MOCK_PROJECT_SETTINGS: Record<string, ProjectSettings> = {
     updated_by: "devops@sentinelx.com",
   },
 };
+
+export function buildMockProjectLBStatus(
+  project: Project,
+  projectNodes: Node[],
+  overrides?: Record<string, Partial<LBBackendRuntime>>,
+): ProjectLBStatus {
+  const lb = project.load_balancer ?? {
+    enabled: false,
+    lb_url: null,
+    algorithm: "round_robin" as const,
+    health_path: "/health",
+    health_interval_seconds: 3,
+    failure_threshold: 3,
+    success_threshold: 2,
+  };
+
+  const backendNodes = projectNodes.filter((n) => n.lb_role === "lb_backend");
+  const nowIso = new Date(Date.now() - 1000).toISOString();
+
+  const backends: LBBackendRuntime[] = backendNodes.map((node, index) => {
+    const port = node.lb_backend_port ?? 8080;
+    const url = `http://${node.ip_address}:${port}`;
+    const patch = overrides?.[node.id] ?? {};
+    const healthyByNode = node.status === "online" || node.status === "degraded";
+    const is_healthy = patch.is_healthy ?? healthyByNode;
+    const admin_enabled = patch.admin_enabled ?? true;
+    const health_state =
+      patch.health_state ?? (is_healthy ? "healthy" : "unhealthy");
+    const totalRequests = patch.total_requests ?? 1420 + index * 310;
+    const errorRequests = patch.error_requests ?? (is_healthy ? index * 2 : 18);
+
+    return {
+      name: node.hostname,
+      url,
+      node_id: node.id,
+      weight: 1,
+      health_path: node.lb_health_path ?? lb.health_path,
+      is_healthy,
+      admin_enabled,
+      health_state,
+      in_flight: patch.in_flight ?? (is_healthy && admin_enabled ? (index % 2 === 0 ? 3 : 1) : 0),
+      total_requests: totalRequests,
+      success_requests: Math.max(0, totalRequests - errorRequests),
+      error_requests: errorRequests,
+      consecutive_failures: patch.consecutive_failures ?? (is_healthy ? 0 : lb.failure_threshold),
+      consecutive_successes: patch.consecutive_successes ?? (is_healthy ? lb.success_threshold : 0),
+      last_health_check_at: patch.last_health_check_at ?? nowIso,
+      last_health_status_code: is_healthy ? 200 : 503,
+      last_health_error: patch.last_health_error ?? (is_healthy ? null : "Health check /health không phản hồi"),
+      flapping_detected: false,
+    };
+  });
+
+  const healthyBackends = backends.filter((b) => b.is_healthy).length;
+  const routableBackends = backends.filter((b) => b.is_healthy && b.admin_enabled).length;
+  const adminDisabled = backends.filter((b) => !b.admin_enabled).length;
+
+  return {
+    project_id: project.id,
+    enabled: lb.enabled,
+    lb_url: lb.lb_url,
+    algorithm: lb.algorithm,
+    reachable: lb.enabled,
+    sync_status: lb.enabled ? "synced" : "disabled",
+    sync_message: lb.enabled
+      ? `Chế độ Demo mô phỏng · ${routableBackends}/${backends.length} backend sẵn sàng nhận tải.`
+      : null,
+    health_check: {
+      enabled: true,
+      path: lb.health_path,
+      interval_seconds: lb.health_interval_seconds,
+      failure_threshold: lb.failure_threshold,
+      success_threshold: lb.success_threshold,
+    },
+    total_backends: backends.length,
+    healthy_backends: healthyBackends,
+    routable_backends: routableBackends,
+    admin_disabled_backends: adminDisabled,
+    total_in_flight: backends.reduce((sum, b) => sum + b.in_flight, 0),
+    total_requests: backends.reduce((sum, b) => sum + b.total_requests, 0),
+    total_success: backends.reduce((sum, b) => sum + b.success_requests, 0),
+    total_errors: backends.reduce((sum, b) => sum + b.error_requests, 0),
+    backends,
+  };
+}
 

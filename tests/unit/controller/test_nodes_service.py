@@ -1,13 +1,13 @@
 """Unit tests for NodeService."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
-from sentinelx_common.contracts.nodes import NodeRegisterRequest
+from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeStatus
 from sentinelx_common.contracts.projects import ProjectResponse
 from sentinelx_controller.modules.nodes.models import NodeModel
 from sentinelx_controller.modules.nodes.repository import NodeRepository
@@ -72,3 +72,28 @@ async def test_register_node_duplicate_ip_raises_conflict() -> None:
 
     assert exc_info.value.status_code == 409
     assert "already registered" in exc_info.value.detail
+
+
+def test_to_response_marks_stale_online_node_offline() -> None:
+    now = datetime.now(UTC)
+    fresh = NodeModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        hostname="fresh-01",
+        ip_address="10.0.0.10",
+        status=NodeStatus.ONLINE.value,
+        last_seen_at=now - timedelta(seconds=10),
+        created_at=now - timedelta(hours=1),
+    )
+    stale = NodeModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        hostname="stale-01",
+        ip_address="10.0.0.11",
+        status=NodeStatus.ONLINE.value,
+        last_seen_at=now - timedelta(seconds=120),
+        created_at=now - timedelta(hours=1),
+    )
+
+    assert NodeService._to_response(fresh).status == NodeStatus.ONLINE
+    assert NodeService._to_response(stale).status == NodeStatus.OFFLINE

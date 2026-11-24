@@ -81,6 +81,8 @@ services:
       SENTINELX_DATABASE__URL: postgresql+asyncpg://${SENTINELX_DB_USER:-sentinelx}:${SENTINELX_DB_PASSWORD:-sentinelx_password}@postgres_db:5432/${SENTINELX_DB_NAME:-sentinelx}
       SENTINELX_LOGGING__LEVEL: ${SENTINELX_LOG_LEVEL:-INFO}
       SENTINELX_LOGGING__JSON_FORMAT: "true"
+      SENTINELX_LB_ADMIN_TOKEN: ${SENTINELX_LB_ADMIN_TOKEN:-sentinelx_dev_lb_token}
+      SENTINELX_DEFAULT_LB_URL: ${SENTINELX_DEFAULT_LB_URL:-http://sentinelx_lb:8080}
     networks:
       sentinelx_public:
       sentinelx_internal:
@@ -107,6 +109,7 @@ services:
       SENTINELX_LB_HEALTH_CHECK__ENABLED: "true"
       SENTINELX_LB_HEALTH_CHECK__PATH: "/health"
       SENTINELX_LB_HEALTH_CHECK__INTERVAL_SECONDS: "3.0"
+      SENTINELX_LB_ADMIN_TOKEN: ${SENTINELX_LB_ADMIN_TOKEN:-sentinelx_dev_lb_token}
       SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
     networks:
       sentinelx_public:

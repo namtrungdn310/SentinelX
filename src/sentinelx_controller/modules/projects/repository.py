@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,14 +21,21 @@ class ProjectRepository:
         name: str,
         description: str | None = None,
         project_id: uuid.UUID | None = None,
+        lb_config: dict[str, Any] | None = None,
     ) -> ProjectModel:
         """Create a new Project record in database."""
         project = ProjectModel(
             id=project_id or uuid.uuid4(),
             name=name.strip(),
             description=description.strip() if description else None,
+            lb_config=lb_config or {},
         )
         self._session.add(project)
+        await self._session.flush()
+        return project
+
+    async def save(self, project: ProjectModel) -> ProjectModel:
+        """Flush updates on an existing Project record."""
         await self._session.flush()
         return project
 

@@ -3,7 +3,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from sentinelx_common.contracts.agents import (
     AgentEnrollRequest,
@@ -13,7 +13,11 @@ from sentinelx_common.contracts.agents import (
     HeartbeatRequest,
     HeartbeatResponse,
 )
-from sentinelx_common.contracts.nodes import NodeRegisterRequest, NodeResponse
+from sentinelx_common.contracts.nodes import (
+    NodeRegisterRequest,
+    NodeResponse,
+    NodeUpdateRequest,
+)
 from sentinelx_common.contracts.projects import (
     ProjectSettingsResponse,
     ProjectSettingsUpdateRequest,
@@ -22,6 +26,9 @@ from sentinelx_controller.modules.defense.router import get_defense_service
 from sentinelx_controller.modules.defense.service import DefenseService
 from sentinelx_controller.modules.nodes.dependencies import get_node_service
 from sentinelx_controller.modules.nodes.service import NodeService
+from sentinelx_controller.modules.projects.lb_coordinator import ProjectLBCoordinator
+from sentinelx_controller.modules.projects.router import get_project_service
+from sentinelx_controller.modules.projects.service import ProjectService
 from sentinelx_controller.modules.recovery.router import get_recovery_service
 from sentinelx_controller.modules.recovery.service import RecoveryService
 
@@ -36,10 +43,44 @@ settings_router = APIRouter(tags=["settings"])
     summary="Register a new node into a project",
 )
 async def register_node(
+    raw_request: Request,
     request: NodeRegisterRequest,
     service: Annotated[NodeService, Depends(get_node_service)],
+    project_service: Annotated[ProjectService, Depends(get_project_service)],
 ) -> NodeResponse:
-    return await service.register_node(request)
+    created = await service.register_node(request)
+    if created.lb_role == "lb_backend":
+        coordinator = ProjectLBCoordinator(
+            project_service=project_service,
+            node_service=service,
+            lb_admin_token=raw_request.app.state.settings.lb_admin_token,
+            default_lb_url=raw_request.app.state.settings.default_lb_url,
+        )
+        await coordinator.sync_project_lb(created.project_id)
+    return created
+
+
+@router.patch(
+    "/{node_id}",
+    response_model=NodeResponse,
+    summary="Update node metadata or Load Balancer backend settings",
+)
+async def update_node(
+    node_id: str,
+    raw_request: Request,
+    request: NodeUpdateRequest,
+    service: Annotated[NodeService, Depends(get_node_service)],
+    project_service: Annotated[ProjectService, Depends(get_project_service)],
+) -> NodeResponse:
+    updated = await service.update_node(node_id, request)
+    coordinator = ProjectLBCoordinator(
+        project_service=project_service,
+        node_service=service,
+        lb_admin_token=raw_request.app.state.settings.lb_admin_token,
+        default_lb_url=raw_request.app.state.settings.default_lb_url,
+    )
+    await coordinator.sync_project_lb(updated.project_id)
+    return updated
 
 
 @router.post(

@@ -99,6 +99,17 @@ class ControllerSettings(BaseSettings):
     environment: str = Field(default="development", description="Runtime environment")
     service_name: str = Field(default="sentinelx-controller", description="Service name identifier")
     version: str = Field(default="0.1.0", description="Controller application version")
+    lb_admin_token: str | None = Field(
+        default=None,
+        description="Bearer token sent to sentinelx_lb /lb/admin/* endpoints",
+    )
+    default_lb_url: str | None = Field(
+        default=None,
+        description=(
+            "Default sentinelx_lb HTTP endpoint used when a project enables LB "
+            "without specifying a custom override URL"
+        ),
+    )
 
     server: ServerSettings = Field(default_factory=ServerSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)

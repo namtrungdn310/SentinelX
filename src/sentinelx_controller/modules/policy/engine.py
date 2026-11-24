@@ -2,9 +2,16 @@
 
 import ipaddress
 from datetime import UTC, datetime
+from typing import Literal
 
-from sentinelx_common.contracts.command_parameters import SUPPORTED_ACTIONS
-from sentinelx_common.contracts.detection import DetectionEventContract
+from sentinelx_common.contracts.command_parameters import (
+    SUPPORTED_ACTIONS,
+    is_protected_system_service,
+)
+from sentinelx_common.contracts.detection import (
+    DetectionEventContract,
+    ResourceAnomalyDetail,
+)
 from sentinelx_common.contracts.policy import (
     PolicyActionType,
     PolicyEvaluationResult,
@@ -12,6 +19,36 @@ from sentinelx_common.contracts.policy import (
 )
 from sentinelx_common.utils.time import ensure_utc
 from sentinelx_controller.modules.policy.models import DefensePolicyModel, IPWhitelistModel
+
+DOMINANT_PROCESS_SHARE_THRESHOLD = 0.40
+
+
+def _resolve_dominant_process(
+    event: DetectionEventContract,
+    metric_kind: Literal["cpu", "memory"],
+) -> str | None:
+    """Return process_name only if it is safe to restart and dominates the overloaded metric."""
+    details = event.details
+    extra = details.extra_context or {}
+    raw_name = extra.get("process_name")
+    if not isinstance(raw_name, str) or not raw_name.strip():
+        return None
+    process_name = raw_name.strip()
+    if is_protected_system_service(process_name):
+        return None
+
+    specific_key = "process_memory_percent" if metric_kind == "memory" else "process_cpu_percent"
+    proc_pct = extra.get(specific_key)
+    if proc_pct is None:
+        proc_pct = extra.get("process_percent")
+
+    if isinstance(details, ResourceAnomalyDetail) and isinstance(proc_pct, int | float):
+        if details.current_value > 0:
+            share = float(proc_pct) / float(details.current_value)
+            if share < DOMINANT_PROCESS_SHARE_THRESHOLD:
+                return None
+
+    return process_name
 
 
 class PolicyEngine:
@@ -111,16 +148,18 @@ class PolicyEngine:
         action = PolicyActionType(policy.action_type)
         if action == PolicyActionType.ADAPTIVE:
             if event.detector_name == "memory_exhaustion_detector":
-                if event.details.extra_context.get("process_name"):
+                dominant = _resolve_dominant_process(event, "memory")
+                if dominant is not None:
                     action = PolicyActionType.RESTART_SERVICE
-                    target = str(event.details.extra_context["process_name"])
+                    target = dominant
                 else:
                     action = PolicyActionType.CLEAR_OS_CACHE
                     target = "os-cache"
             elif event.detector_name == "cpu_threshold_detector":
-                if event.details.extra_context.get("process_name"):
+                dominant = _resolve_dominant_process(event, "cpu")
+                if dominant is not None:
                     action = PolicyActionType.RESTART_SERVICE
-                    target = str(event.details.extra_context["process_name"])
+                    target = dominant
                 else:
                     action = PolicyActionType.ALERT_ONLY
                     target = str(event.node_id)
@@ -129,7 +168,12 @@ class PolicyEngine:
                 "port_scan_detector",
                 "traffic_spike_detector",
             ):
-                if event.attacker_ip:
+                context = event.details.extra_context
+                if (
+                    event.attacker_ip
+                    and context.get("direction") == "inbound"
+                    and context.get("eligible_for_automatic_defense") is not False
+                ):
                     action = PolicyActionType.BLOCK_IP_NFTABLES
                     target = event.attacker_ip
                 else:
@@ -139,12 +183,31 @@ class PolicyEngine:
                 action = PolicyActionType.ALERT_ONLY
                 target = str(event.node_id)
         elif action == PolicyActionType.RESTART_SERVICE:
-            target = (
-                str(event.details.extra_context.get("process_name") or "")
-                or str(policy.target_params.get("service_name") or "")
-                or str(policy.target_params.get("target") or "")
-                or "default-worker"
+            metric_kind: Literal["cpu", "memory"] = (
+                "memory" if event.detector_name == "memory_exhaustion_detector" else "cpu"
             )
+            dominant = _resolve_dominant_process(event, metric_kind)
+            configured_target = str(
+                policy.target_params.get("service_name")
+                or policy.target_params.get("target")
+                or ""
+            ).strip()
+            resolved = dominant or configured_target
+            if not resolved:
+                return PolicyEvaluationResult(
+                    authorized=False,
+                    status=PolicyEvaluationStatus.NO_POLICY_MATCH,
+                    policy_id=str(policy.id),
+                    reason="Service restart requires an identified dominant or configured service",
+                )
+            if is_protected_system_service(resolved):
+                return PolicyEvaluationResult(
+                    authorized=False,
+                    status=PolicyEvaluationStatus.NO_POLICY_MATCH,
+                    policy_id=str(policy.id),
+                    reason=f"Target service '{resolved}' is a protected system service",
+                )
+            target = resolved
         elif action == PolicyActionType.CLEAR_OS_CACHE:
             target = "os-cache"
         else:

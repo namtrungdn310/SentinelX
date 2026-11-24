@@ -162,3 +162,14 @@ class ActiveHealthChecker:
             self._session = None
 
         logger.info("ActiveHealthChecker stopped.")
+
+    async def update_config(self, config: HealthCheckConfig) -> None:
+        """Apply updated health check parameters and start/stop loop if enabled toggled."""
+        was_enabled = self.config.enabled
+        self.config = config
+        if not config.enabled and was_enabled:
+            await self.stop()
+        elif config.enabled and not was_enabled:
+            await self.start()
+        elif config.enabled and self._task is None:
+            await self.start()

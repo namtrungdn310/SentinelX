@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, status
 
-from sentinelx_common.contracts.command_parameters import normalize_command
+from sentinelx_common.contracts.command_parameters import (
+    is_protected_system_service,
+    normalize_command,
+)
 from sentinelx_common.contracts.defense import (
     AgentCommandContract,
     CommandAckRequest,
@@ -98,6 +101,11 @@ class DefenseService:
             target, parameters = normalize_command(action_type, target_ip, payload)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+        if action_type == "RESTART_SERVICE" and target and is_protected_system_service(target):
+            raise HTTPException(
+                422,
+                f"Service '{target}' is a protected system service and cannot be restarted",
+            )
         if target and action_type == "BLOCK_IP_NFTABLES":
             ip = ipaddress.ip_address(target)
             if ip.is_loopback or ip.is_unspecified or ip.is_multicast or ip.is_link_local:

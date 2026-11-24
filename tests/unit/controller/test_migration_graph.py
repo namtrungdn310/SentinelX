@@ -7,7 +7,7 @@ from alembic.script import ScriptDirectory
 
 def test_m2_and_m3_keep_their_revisions_and_join_before_detection_state() -> None:
     scripts = ScriptDirectory(str(Path(__file__).resolve().parents[3] / "migrations"))
-    assert scripts.get_heads() == ["0010_core_reliability"]
+    assert scripts.get_heads() == ["0011_lb_control_plane"]
     merge = scripts.get_revision("0005_merge_m2_m3")
     assert merge is not None
     assert isinstance(merge.down_revision, tuple)

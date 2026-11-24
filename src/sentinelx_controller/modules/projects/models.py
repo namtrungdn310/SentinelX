@@ -1,9 +1,9 @@
 """SQLAlchemy model for Project entity."""
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import String, Text, Uuid
+from sqlalchemy import JSON, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from sentinelx_controller.infrastructure.database.base import Base, TimestampMixin
@@ -31,6 +31,11 @@ class ProjectModel(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+    lb_config: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        default=dict,
+        nullable=False,
     )
 
     # Relationships

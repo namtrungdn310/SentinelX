@@ -67,6 +67,7 @@ class PortScanDetector(BaseNetworkDetector):
                             "ports_scanned_count": ports_count,
                             "ports_truncated": feature.ports_truncated,
                             "direction": feature.direction,
+                            "port_threshold": self.port_threshold,
                             "eligible_for_automatic_defense": normalized_ports
                             >= self.port_threshold,
                         },

@@ -8,7 +8,10 @@ from urllib.parse import urlsplit
 
 import psutil
 
-from sentinelx_common.contracts.command_parameters import normalize_command
+from sentinelx_common.contracts.command_parameters import (
+    is_protected_system_service,
+    normalize_command,
+)
 from sentinelx_common.contracts.defense import AgentCommandContract
 from sentinelx_common.contracts.policy import PolicyActionType
 
@@ -97,20 +100,7 @@ class LocalSafetyValidator:
             )
             if not service_name or not isinstance(service_name, str):
                 return False, "Service name is required for RESTART_SERVICE"
-            protected_services = {
-                "systemd",
-                "init",
-                "sshd",
-                "ssh",
-                "sentinelx-agent",
-                "docker",
-                "dockerd",
-                "containerd",
-                "postgres",
-                "postgresql",
-                "db",
-            }
-            if service_name.lower().strip() in protected_services:
+            if is_protected_system_service(service_name):
                 return (
                     False,
                     f"Service '{service_name}' is a protected system service and "

@@ -3,11 +3,24 @@
  */
 
 export type NodeStatus = 'unenrolled' | 'online' | 'offline' | 'degraded';
+export type LBAlgorithmType = 'round_robin' | 'least_in_flight';
+export type NodeLBRoleType = 'standalone' | 'lb_backend';
+
+export interface ProjectLBConfig {
+  enabled: boolean;
+  lb_url: string | null;
+  algorithm: LBAlgorithmType;
+  health_path: string;
+  health_interval_seconds: number;
+  failure_threshold: number;
+  success_threshold: number;
+}
 
 export interface Project {
   id: string;
   name: string;
   description: string | null;
+  load_balancer?: ProjectLBConfig;
   created_at: string;
 }
 
@@ -19,6 +32,9 @@ export interface Node {
   status: NodeStatus;
   last_seen: string | null;
   created_at: string;
+  lb_role?: NodeLBRoleType;
+  lb_backend_port?: number;
+  lb_health_path?: string | null;
   agent_capabilities?: Record<string, unknown>;
   // Dynamic fields populated from telemetry
   latestCpu?: number;
@@ -186,5 +202,52 @@ export interface ProjectSettings {
   active_profile: PresetProfileType;
   updated_at: string;
   updated_by: string;
+}
+
+export interface LBBackendRuntime {
+  name: string;
+  url: string;
+  node_id: string | null;
+  weight?: number;
+  health_path: string | null;
+  is_healthy: boolean;
+  admin_enabled: boolean;
+  health_state: string;
+  in_flight: number;
+  total_requests: number;
+  success_requests: number;
+  error_requests: number;
+  consecutive_successes: number;
+  consecutive_failures: number;
+  last_health_check_at: string | null;
+  last_health_status_code?: number | null;
+  last_health_error: string | null;
+  flapping_detected?: boolean;
+}
+
+export interface ProjectLBStatus {
+  project_id: string;
+  enabled: boolean;
+  lb_url: string | null;
+  algorithm: LBAlgorithmType;
+  reachable: boolean;
+  sync_status: 'disabled' | 'synced' | 'unreachable' | 'error' | string;
+  sync_message: string | null;
+  health_check: {
+    enabled: boolean;
+    path: string;
+    interval_seconds: number;
+    failure_threshold: number;
+    success_threshold: number;
+  };
+  total_backends: number;
+  healthy_backends: number;
+  routable_backends: number;
+  admin_disabled_backends: number;
+  total_in_flight: number;
+  total_requests: number;
+  total_success: number;
+  total_errors: number;
+  backends: LBBackendRuntime[];
 }
 

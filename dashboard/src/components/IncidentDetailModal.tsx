@@ -422,28 +422,36 @@ export function IncidentDetailModal({
                                 </span>
                               )}
 
-                              {(ev.details?.process_percent !== undefined || ev.details?.process_cpu_percent !== undefined) ? (
-                                <span className="process-share-tag">
-                                  ·{" "}
-                                  <strong className="font-mono">
-                                    {String(ev.details.process_percent ?? ev.details.process_cpu_percent)}%
-                                    {ev.details?.current_value !== undefined || ev.details?.cpu_percent !== undefined
-                                      ? ` / ${String(ev.details.current_value ?? ev.details.cpu_percent)}%`
-                                      : ""}{" "}
-                                    {String(ev.details?.metric_name || "").includes("memory") ? "RAM" : "CPU"}
-                                  </strong>
-                                </span>
-                              ) : (
-                                (ev.details?.current_value !== undefined || ev.details?.cpu_percent !== undefined) && (
-                                  <span className="process-share-tag">
-                                    ·{" "}
-                                    <strong className="font-mono">
-                                      {String(ev.details.current_value ?? ev.details.cpu_percent)}%{" "}
-                                      {String(ev.details?.metric_name || "").includes("memory") ? "RAM" : "CPU"}
-                                    </strong>
-                                  </span>
-                                )
-                              )}
+                              {(() => {
+                                const isMemory = String(ev.details?.metric_name || "").includes("memory");
+                                const procPct = isMemory
+                                  ? (ev.details?.process_percent ?? ev.details?.process_memory_percent)
+                                  : (ev.details?.process_percent ?? ev.details?.process_cpu_percent);
+                                const hostPct = ev.details?.current_value ?? ev.details?.cpu_percent;
+                                if (procPct !== undefined) {
+                                  return (
+                                    <span className="process-share-tag">
+                                      ·{" "}
+                                      <strong className="font-mono">
+                                        {String(procPct)}%
+                                        {hostPct !== undefined ? ` / ${String(hostPct)}%` : ""}{" "}
+                                        {isMemory ? "RAM" : "CPU"}
+                                      </strong>
+                                    </span>
+                                  );
+                                }
+                                if (hostPct !== undefined) {
+                                  return (
+                                    <span className="process-share-tag">
+                                      ·{" "}
+                                      <strong className="font-mono">
+                                        {String(hostPct)}% {isMemory ? "RAM" : "CPU"}
+                                      </strong>
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                           ) : (
                             <div className="event-proc">

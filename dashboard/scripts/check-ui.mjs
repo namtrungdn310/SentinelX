@@ -74,6 +74,10 @@ try {
     const { EditPolicyModal } = await server.ssrLoadModule("/src/components/EditPolicyModal.tsx");
     const { AddWhitelistModal } = await server.ssrLoadModule("/src/components/AddWhitelistModal.tsx");
     const { SettingsView } = await server.ssrLoadModule("/src/components/SettingsView.tsx");
+    const { LoadBalancerView } = await server.ssrLoadModule("/src/components/LoadBalancerView.tsx");
+    const { AddProjectModal } = await server.ssrLoadModule("/src/components/AddProjectModal.tsx");
+    const { ProjectLBConfigModal } = await server.ssrLoadModule("/src/components/ProjectLBConfigModal.tsx");
+    const { AddNodeModal } = await server.ssrLoadModule("/src/components/AddNodeModal.tsx");
     const { SecurityToast } = await server.ssrLoadModule("/src/components/SecurityToast.tsx");
     const { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_NODES, MOCK_POLICIES, MOCK_PROJECTS, MOCK_WHITELIST } = await server.ssrLoadModule("/src/mockData.ts");
     const node = MOCK_NODES[0];
@@ -82,6 +86,7 @@ try {
     for (const [route, expected] of Object.entries({
         overview: "Tổng quan hạ tầng",
         hosts: "Danh sách máy chủ",
+        "load-balancer": "Cân bằng tải",
         metrics: "Mẫu dữ liệu tài nguyên",
         events: "Nhật ký hệ thống",
     })) {
@@ -499,7 +504,12 @@ try {
         assert.ok(!diskResolvedModal.includes("Thủ công: Đã giải quyết"));
 
         const scan = MOCK_INCIDENTS.find((i) => i.id === "inc-scan-402");
-        assert.equal(scan.summary, "IP: 198.51.100.42 · 48 cổng / 10s (>= 15)");
+        assert.equal(scan.summary, "IP: 198.51.100.42 · 48 cổng (TCP) (>= 15/10s)");
+
+        const udpMitigating = MOCK_INCIDENTS.find((i) => i.id === "inc-udp-395");
+        assert.ok(udpMitigating.summary.includes("180 pps (>= 30 pps)"));
+        const udpDetected = MOCK_INCIDENTS.find((i) => i.id === "inc-udp-398");
+        assert.ok(udpDetected.summary.includes("5.420 pps (>= 30 pps) · 42.5 MB/s (>= 500.0 KB/s)"));
 
         const memResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-mem-389");
         const cpuResolved = MOCK_INCIDENTS.find((i) => i.id === "inc-cpu-382");
@@ -507,6 +517,14 @@ try {
         assert.equal(classifyIncidentHandling(memResolved, MOCK_POLICIES).mode, "auto");
         assert.equal(classifyIncidentHandling(cpuResolved, MOCK_POLICIES).mode, "manual");
         assert.equal(classifyIncidentHandling(memMitigating, MOCK_POLICIES).mode, "auto");
+        assert.equal(classifyIncidentHandling(memMitigating, MOCK_POLICIES).label, "Tự động · Khởi động lại dịch vụ");
+        assert.equal(
+            classifyIncidentHandling(
+                { ...memMitigating, summary: "RAM: 90.0% (>= 85.0%)\nos-cache: CLEAR" },
+                MOCK_POLICIES,
+            ).label,
+            "Tự động · Giải phóng bộ nhớ đệm",
+        );
         assert.ok(resolvedTabHtml.includes("inc-mem-389"));
         assert.ok(memResolved.summary.includes("\nservice: RESTART java"));
 
@@ -778,6 +796,114 @@ try {
             assert.equal(sentPolicyPatchBody.enabled, false);
             assert.equal(sentPolicyPatchBody.is_active, undefined);
             assert.equal(updatedPol.is_active, false);
+        });
+
+        check("LoadBalancerView renders animated topology for LB project and CTA for standalone project", () => {
+            const prodProj = MOCK_PROJECTS[0];
+            const prodNodes = MOCK_NODES.filter((n) => n.project_id === prodProj.id);
+            const lbHtml = renderToStaticMarkup(createElement(LoadBalancerView, {
+                project: prodProj,
+                projectNodes: prodNodes,
+                isDemoMode: true,
+                onOpenConfig: noop,
+                onUpdateProjectLB: async () => prodProj,
+                onUpdateNode: async () => prodNodes[0],
+                onNotify: noop,
+            }));
+            assert.ok(lbHtml.includes("Luồng phân phối tải trực tiếp"));
+            assert.ok(lbHtml.includes("lb-connector-svg"));
+            assert.ok(lbHtml.includes("animateMotion"));
+            assert.ok(lbHtml.includes("SENTINELX LB HUB"));
+            assert.ok(lbHtml.includes("Round Robin"));
+            assert.ok(lbHtml.includes("Least In-Flight"));
+            assert.ok(lbHtml.includes("api-gateway-node"));
+            assert.ok(lbHtml.includes("HEALTHY"));
+            assert.ok(lbHtml.includes('role="switch"'));
+            assert.ok(lbHtml.includes("lb-slider-track is-on"));
+            assert.ok(lbHtml.includes("Ổn định"));
+
+            const dbProj = MOCK_PROJECTS[2];
+            const dbNodes = MOCK_NODES.filter((n) => n.project_id === dbProj.id);
+            const emptyLbHtml = renderToStaticMarkup(createElement(LoadBalancerView, {
+                project: dbProj,
+                projectNodes: dbNodes,
+                isDemoMode: true,
+                onOpenConfig: noop,
+                onUpdateProjectLB: async () => dbProj,
+                onUpdateNode: async () => dbNodes[0],
+            }));
+            assert.ok(emptyLbHtml.includes('role="switch"'));
+            assert.ok(emptyLbHtml.includes("Tắt"));
+            assert.ok(emptyLbHtml.includes("Luồng phân phối tải trực tiếp"));
+            assert.ok(emptyLbHtml.includes("Chẩn đoán Health Check"));
+        });
+
+        check("LB modals and node creation stay clean without duplicate LB fields", () => {
+            const addProjHtml = renderToStaticMarkup(createElement(AddProjectModal, {
+                isOpen: true,
+                onClose: noop,
+                onCreateProject: async () => MOCK_PROJECTS[0],
+            }));
+            assert.ok(addProjHtml.includes("Tên dự án"));
+            assert.ok(!addProjHtml.includes("Bật Load Balancer"));
+
+            const editLbHtml = renderToStaticMarkup(createElement(ProjectLBConfigModal, {
+                isOpen: true,
+                project: MOCK_PROJECTS[0],
+                mode: "lb",
+                onClose: noop,
+                onSave: async () => {},
+                isDemoMode: true,
+            }));
+            assert.ok(editLbHtml.includes("Endpoint LB riêng"));
+            assert.ok(editLbHtml.includes("Chu kỳ probe"));
+            assert.ok(!editLbHtml.includes("Bật Load Balancer"));
+            assert.ok(!editLbHtml.includes("Round Robin"));
+
+            const editProjInfoHtml = renderToStaticMarkup(createElement(ProjectLBConfigModal, {
+                isOpen: true,
+                project: MOCK_PROJECTS[0],
+                mode: "project",
+                onClose: noop,
+                onSave: async () => {},
+                isDemoMode: true,
+            }));
+            assert.ok(editProjInfoHtml.includes("Tên dự án"));
+            assert.ok(!editProjInfoHtml.includes("Endpoint LB riêng"));
+
+            const addNodeHtml = renderToStaticMarkup(createElement(AddNodeModal, {
+                projects: MOCK_PROJECTS,
+                selectedProjectId: MOCK_PROJECTS[0].id,
+                isOpen: true,
+                onClose: noop,
+                onNodeCreated: noop,
+                isDemoMode: true,
+            }));
+            assert.ok(addNodeHtml.includes("Đăng ký máy chủ"));
+            assert.ok(!addNodeHtml.includes("Vai trò trong cụm Load Balancer"));
+        });
+
+        check("KPICards renders LB metric card inline in 6-card row only when project LB is enabled", () => {
+            const prodProj = MOCK_PROJECTS[0];
+            const prodNodes = MOCK_NODES.filter((n) => n.project_id === prodProj.id);
+            const kpiWithLb = renderToStaticMarkup(createElement(KPICards, {
+                nodes: prodNodes,
+                activeProject: prodProj,
+                isLoading: false,
+                onOpenLoadBalancer: noop,
+            }));
+            assert.ok(kpiWithLb.includes("kpi-grid-6"));
+            assert.ok(kpiWithLb.includes("Cân bằng tải"));
+            assert.ok(kpiWithLb.includes("Round Robin"));
+
+            const dbProj = MOCK_PROJECTS[2];
+            const kpiWithoutLb = renderToStaticMarkup(createElement(KPICards, {
+                nodes: [node],
+                activeProject: dbProj,
+                isLoading: false,
+            }));
+            assert.ok(kpiWithoutLb.includes("kpi-grid-5"));
+            assert.ok(!kpiWithoutLb.includes("Cân bằng tải"));
         });
     } finally {
         globalThis.fetch = originalFetch;

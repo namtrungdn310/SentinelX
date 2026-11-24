@@ -25,6 +25,9 @@ class NodeRepository:
         ip_address: str,
         os_info: str | None = None,
         node_id: uuid.UUID | None = None,
+        lb_role: str = "standalone",
+        lb_backend_port: int = 8080,
+        lb_health_path: str | None = None,
     ) -> NodeModel:
         """Create a new Node record in database."""
         node = NodeModel(
@@ -33,6 +36,9 @@ class NodeRepository:
             hostname=hostname.strip(),
             ip_address=ip_address.strip(),
             os_info=os_info.strip() if os_info else None,
+            lb_role=lb_role,
+            lb_backend_port=lb_backend_port,
+            lb_health_path=lb_health_path.strip() if lb_health_path else None,
             status=NodeStatus.UNENROLLED.value,
         )
         self._session.add(node)

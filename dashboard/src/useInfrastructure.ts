@@ -7,6 +7,9 @@ import {
   fetchNodes,
   fetchProjects,
   createProject as apiCreateProject,
+  updateProject as apiUpdateProject,
+  updateNode as apiUpdateNode,
+  defaultProjectLBConfig,
 } from "./api";
 import { mergeEvents } from "./events";
 import {
@@ -22,8 +25,10 @@ import type {
   Incident,
   MetricSample,
   Node,
+  NodeLBRoleType,
   PresetProfileType,
   Project,
+  ProjectLBConfig,
   RealtimeMessage,
 } from "./types";
 import { useWebSocket } from "./useWebSocket";
@@ -472,7 +477,7 @@ export function useInfrastructure() {
                   attacker_ip: "198.51.100.19",
                   node_id: eventNode.id,
                   summary:
-                    "SYN: 750 · Port: 443 · Tỷ lệ SYN/ACK >= 3.0 · IP: 198.51.100.19",
+                    "SYN: 750 (>= 50/10s) · ACK: 0 · Tỷ lệ SYN/ACK: 750.0 (>= 3.0) · IP: 198.51.100.19 · Port: 443",
                 },
               }
             : {
@@ -495,7 +500,7 @@ export function useInfrastructure() {
               id: `toast-demo-${Date.now()}`,
               type: "incident",
               title: "Phát hiện sự cố an ninh mới",
-              message: "SYN: 750 · Port: 443 · Tỷ lệ SYN/ACK >= 3.0",
+              message: "SYN: 750 (>= 50/10s) · Tỷ lệ SYN/ACK >= 3.0 · Port: 443",
               attackerIp: "198.51.100.19",
               severity: "CRITICAL",
               targetView: "incidents",
@@ -622,12 +627,17 @@ export function useInfrastructure() {
       nodes: [node, ...previous.nodes],
     }));
 
-  const createProject = async (name: string, description?: string): Promise<Project> => {
+  const createProject = async (
+    name: string,
+    description?: string,
+    loadBalancer?: ProjectLBConfig,
+  ): Promise<Project> => {
     if (snapshot.isDemoMode) {
       const newProj: Project = {
         id: crypto.randomUUID(),
         name,
         description: description ?? null,
+        load_balancer: loadBalancer ?? defaultProjectLBConfig(),
         created_at: new Date().toISOString(),
       };
       setSnapshot((prev) => ({
@@ -636,12 +646,88 @@ export function useInfrastructure() {
       }));
       return newProj;
     }
-    const created = await apiCreateProject(name, description);
+    const created = await apiCreateProject(name, description, loadBalancer);
     setSnapshot((prev) => ({
       ...prev,
       projects: [...prev.projects, created],
     }));
     return created;
+  };
+
+  const updateProject = async (
+    projectId: string,
+    payload: { name?: string; description?: string | null; load_balancer?: ProjectLBConfig },
+  ): Promise<Project> => {
+    if (snapshot.isDemoMode) {
+      const existing = snapshot.projects.find((p) => p.id === projectId);
+      if (!existing) {
+        throw new Error("Không tìm thấy dự án");
+      }
+      const updatedProj: Project = {
+        ...existing,
+        name: payload.name ?? existing.name,
+        description:
+          payload.description !== undefined
+            ? payload.description
+            : existing.description,
+        load_balancer: payload.load_balancer ?? existing.load_balancer,
+      };
+      setSnapshot((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) => (p.id === projectId ? updatedProj : p)),
+      }));
+      return updatedProj;
+    }
+    const updated = await apiUpdateProject(projectId, payload);
+    setSnapshot((prev) => ({
+      ...prev,
+      projects: prev.projects.map((p) => (p.id === projectId ? updated : p)),
+    }));
+    return updated;
+  };
+
+  const syncProjectLocalLB = useCallback(
+    (projectId: string, loadBalancer: ProjectLBConfig) => {
+      setSnapshot((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) =>
+          p.id === projectId ? { ...p, load_balancer: loadBalancer } : p,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const updateNode = async (
+    nodeId: string,
+    payload: {
+      hostname?: string;
+      lb_role?: NodeLBRoleType;
+      lb_backend_port?: number;
+      lb_health_path?: string | null;
+    },
+  ): Promise<Node> => {
+    if (snapshot.isDemoMode) {
+      const existing = snapshot.nodes.find((n) => n.id === nodeId);
+      if (!existing) {
+        throw new Error("Không tìm thấy máy chủ");
+      }
+      const updatedNode: Node = {
+        ...existing,
+        ...payload,
+      };
+      setSnapshot((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) => (n.id === nodeId ? updatedNode : n)),
+      }));
+      return updatedNode;
+    }
+    const updated = await apiUpdateNode(nodeId, payload);
+    setSnapshot((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((n) => (n.id === nodeId ? { ...n, ...updated } : n)),
+    }));
+    return updated;
   };
 
   return {
@@ -663,6 +749,9 @@ export function useInfrastructure() {
     toggleDemo,
     addNode,
     createProject,
+    updateProject,
+    syncProjectLocalLB,
+    updateNode,
     syncProjectIncidents,
     syncProjectDefenseActions,
     syncNodeSettings,

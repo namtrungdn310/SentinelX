@@ -4,18 +4,24 @@ import {
   MemoryStick,
   ArrowDownUp,
   ShieldAlert,
+  ArrowLeftRight,
+  ChevronRight,
 } from "lucide-react";
-import type { Incident, Node } from "../types";
+import type { Incident, Node, Project } from "../types";
 import { formatBytes, getNodeHardware, validMetric } from "../presentation";
 
 export function KPICards({
   nodes,
   incidents = [],
+  activeProject = null,
   isLoading,
+  onOpenLoadBalancer,
 }: {
   nodes: Node[];
   incidents?: Incident[];
+  activeProject?: Project | null;
   isLoading: boolean;
+  onOpenLoadBalancer?: () => void;
 }) {
   const online = nodes.filter(
     (node) => node.status === "online" || node.status === "degraded",
@@ -49,10 +55,23 @@ export function KPICards({
   );
   const criticalIncidents = activeIncidents.filter((item) => item.severity === "CRITICAL").length;
   const highIncidents = activeIncidents.filter((item) => item.severity === "HIGH").length;
+  const lb = activeProject?.load_balancer;
+  const showLbCard = Boolean(lb?.enabled);
+  const lbNodes = nodes.filter((node) => node.lb_role === "lb_backend");
+  const lbBackends = lbNodes.length;
+  const lbReadyBackends = lbNodes.filter(
+    (node) => node.status === "online" || node.status === "degraded",
+  ).length;
+  const lbAvailabilityPct = lbBackends > 0 ? (lbReadyBackends / lbBackends) * 100 : 0;
+  const lbEndpointLabel = lb?.lb_url
+    ? lb.lb_url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+    : "LB Hệ thống";
+  const lbPortMatch = lbEndpointLabel.match(/:(\d+)$/);
+  const lbCompactTarget = lbPortMatch ? `:${lbPortMatch[1]}` : lbEndpointLabel;
 
   return (
     <section
-      className="kpi-grid"
+      className={`kpi-grid ${showLbCard ? "kpi-grid-6" : "kpi-grid-5"}`}
       aria-label="Chỉ số tổng quan"
       aria-busy={isLoading}
     >
@@ -98,7 +117,7 @@ export function KPICards({
               ? `${usedCpuCores.toFixed(1)} / ${totalCpuCores} vCPU`
               : "Chưa có dữ liệu CPU"}
           </span>
-          <span>{cpu.length ? "ngưỡng 75%" : ""}</span>
+          <span>{cpu.length ? "> 75%" : ""}</span>
         </div>
         <div className="stat-track">
           <i
@@ -123,7 +142,7 @@ export function KPICards({
               ? `${formatBytes(usedMemBytes)} / ${formatBytes(totalMemBytes)}`
               : "Chưa có dữ liệu RAM"}
           </span>
-          <span>{mem.length ? "ngưỡng 85%" : ""}</span>
+          <span>{mem.length ? "> 85%" : ""}</span>
         </div>
         <div className="stat-track">
           <i
@@ -146,6 +165,55 @@ export function KPICards({
           <span>TX {txNodes.length ? formatBytes(tx) : "—"}</span>
         </div>
       </article>
+      {showLbCard && lb && (
+        <article
+          className={`stat-card stat-lb ${
+            lbBackends > 0 && lbReadyBackends < lbBackends ? "stat-attention" : ""
+          } ${onOpenLoadBalancer ? "stat-card-interactive" : ""}`}
+          title={`Mở luồng chia tải (${lbEndpointLabel})`}
+          onClick={onOpenLoadBalancer}
+          role={onOpenLoadBalancer ? "button" : undefined}
+          tabIndex={onOpenLoadBalancer ? 0 : undefined}
+          onKeyDown={
+            onOpenLoadBalancer
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpenLoadBalancer();
+                  }
+                }
+              : undefined
+          }
+        >
+          <div className="stat-top">
+            <ArrowLeftRight size={14} />
+            <span>Cân bằng tải</span>
+          </div>
+          <div className="stat-value">
+            {lbReadyBackends}
+            <span>/ {lbBackends}</span>
+          </div>
+          <div className="stat-bottom">
+            <span>
+              {lb.algorithm === "least_in_flight"
+                ? "Least In-Flight"
+                : "Round Robin"}
+            </span>
+            <span className="font-mono stat-lb-endpoint">
+              {lbCompactTarget}
+              {onOpenLoadBalancer && <ChevronRight size={12} />}
+            </span>
+          </div>
+          <div className="stat-track">
+            <i
+              className={
+                lbBackends === 0 || lbReadyBackends < lbBackends ? "warn" : "lb"
+              }
+              style={{ width: `${lbAvailabilityPct}%` }}
+            />
+          </div>
+        </article>
+      )}
     </section>
   );
 }

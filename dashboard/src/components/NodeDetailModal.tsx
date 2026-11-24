@@ -20,7 +20,12 @@ interface Props {
   onClose: () => void;
   isDemoMode: boolean;
 }
-export function NodeDetailModal({ node, isOpen, onClose, isDemoMode }: Props) {
+export function NodeDetailModal({
+  node,
+  isOpen,
+  onClose,
+  isDemoMode,
+}: Props) {
   const id = useId();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -138,9 +139,19 @@ def _format_event_summary(event: DetectionEventContract) -> str:
     ip = details.source_ip
     ports_str = _format_port_list(details.targeted_ports)
     if attack == "SYN_FLOOD":
-        parts = [f"SYN: {details.syn_count}", f"ACK: {details.ack_count}"]
+        min_syn = extra.get("min_syn_threshold")
+        ratio_thr = extra.get("syn_ack_ratio_threshold")
+        syn_part = (
+            f"SYN: {details.syn_count} (>= {int(min_syn)}/10s)"
+            if isinstance(min_syn, int | float)
+            else f"SYN: {details.syn_count}"
+        )
+        parts = [syn_part, f"ACK: {details.ack_count}"]
         if details.metric_ratio is not None:
-            parts.append(f"Tỷ lệ SYN/ACK: {details.metric_ratio:.1f}")
+            ratio_part = f"Tỷ lệ SYN/ACK: {details.metric_ratio:.1f}"
+            if isinstance(ratio_thr, int | float):
+                ratio_part += f" (>= {float(ratio_thr):.1f})"
+            parts.append(ratio_part)
         parts.append(f"IP: {ip}")
         if ports_str:
             parts.append(f"Port: {ports_str}")
@@ -149,23 +160,41 @@ def _format_event_summary(event: DetectionEventContract) -> str:
     if attack == "PORT_SCAN":
         port_cnt = extra.get("ports_scanned_count") or len(details.targeted_ports)
         trunc = "+" if extra.get("ports_truncated") else ""
+        port_thr = extra.get("port_threshold")
+        port_label = f"{port_cnt}{trunc} cổng ({details.protocol.upper()})"
+        if isinstance(port_thr, int | float):
+            port_label += f" (>= {int(port_thr)}/10s)"
         return " · ".join(
             [
                 f"IP: {ip}",
-                f"{port_cnt}{trunc} cổng ({details.protocol.upper()})",
+                port_label,
                 f"{details.packet_count} pkt",
             ]
         )
 
     parts = [details.protocol.upper(), f"IP: {ip}"]
     pps = extra.get("packets_per_second")
+    pps_thr = extra.get("pps_threshold")
     bps = extra.get("bytes_per_second")
+    bps_thr = extra.get("bytes_per_second_threshold")
     if isinstance(pps, int | float):
-        parts.append(f"{pps:,.0f} pps".replace(",", "."))
+        pps_label = f"{pps:,.0f} pps".replace(",", ".")
+        if isinstance(pps_thr, int | float):
+            pps_thr_val = float(pps_thr)
+            pps_thr_txt = (
+                f"{pps_thr_val:,.0f}".replace(",", ".")
+                if pps_thr_val.is_integer()
+                else f"{pps_thr_val:.1f}"
+            )
+            pps_label += f" (>= {pps_thr_txt} pps)"
+        parts.append(pps_label)
     else:
         parts.append(f"{details.packet_count} pkt")
     if isinstance(bps, int | float):
-        parts.append(_format_rate(float(bps)))
+        bps_label = _format_rate(float(bps))
+        if isinstance(bps_thr, int | float):
+            bps_label += f" (>= {_format_rate(float(bps_thr))})"
+        parts.append(bps_label)
     if ports_str:
         parts.append(f"Port: {ports_str}")
     return " · ".join(parts)
@@ -204,12 +233,18 @@ class IncidentService:
         # 1. Tìm incident đang hoạt động gần nhất của project
         await self._repo.lock_node(node_id)
         correlation_key = (
-            "network:" + events[0].attacker_ip if events[0].attacker_ip else "resource"
+            f"network:{events[0].attacker_ip}"
+            if events[0].attacker_ip
+            else f"resource:{events[0].detector_name}"
         )
-        # Split different attacker contexts rather than grouping every project event together.
+        # Split different attacker/detector contexts rather than merging unrelated incidents.
         groups: dict[str, list[DetectionEventContract]] = {}
         for event in events:
-            key = "network:" + event.attacker_ip if event.attacker_ip else "resource"
+            key = (
+                f"network:{event.attacker_ip}"
+                if event.attacker_ip
+                else f"resource:{event.detector_name}"
+            )
             groups.setdefault(key, []).append(event)
         if len(groups) > 1:
             combined: list[tuple[IncidentResponse, list[DetectionEventContract]]] = []
@@ -452,6 +487,34 @@ class IncidentService:
             str(incident_id), IncidentUpdateRequest(status=IncidentStatus.RESOLVED)
         )
         return True
+
+    async def resolve_quiet_resource_incidents(
+        self,
+        project_id: uuid.UUID,
+        node_id: uuid.UUID,
+        *,
+        quiet_window_seconds: int = 120,
+        has_active_actions: Callable[[uuid.UUID], Awaitable[bool]] | None = None,
+    ) -> int:
+        """Auto-resolve open resource incidents once metrics remain healthy after quiet_window."""
+        if self._detection_service is None:
+            return 0
+        now = datetime.now(UTC)
+        quiet_after = now - timedelta(seconds=quiet_window_seconds)
+        resolved_count = 0
+        active = await self._repo.list_active_resource_incidents(project_id, node_id)
+        for inc in active:
+            if has_active_actions is not None and await has_active_actions(inc.id):
+                continue
+            ref_time = ensure_utc(inc.last_event_at or inc.started_at)
+            if ref_time > quiet_after:
+                continue
+            if await self._detection_service.observed_quiet(inc.id, quiet_after, network=False):
+                await self.update_incident(
+                    str(inc.id), IncidentUpdateRequest(status=IncidentStatus.RESOLVED)
+                )
+                resolved_count += 1
+        return resolved_count
 
     async def validate_action_context(self, incident_id: uuid.UUID, node_id: uuid.UUID) -> None:
         incident = await self._repo.get_by_id(incident_id)
