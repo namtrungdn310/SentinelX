@@ -97,3 +97,47 @@ def test_to_response_marks_stale_online_node_offline() -> None:
 
     assert NodeService._to_response(fresh).status == NodeStatus.ONLINE
     assert NodeService._to_response(stale).status == NodeStatus.OFFLINE
+
+
+@pytest.mark.asyncio
+async def test_sweep_stale_offline_nodes_transitions_and_broadcasts() -> None:
+    from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+
+    now = datetime.now(UTC)
+    fresh = NodeModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        hostname="fresh-01",
+        ip_address="10.0.0.10",
+        status=NodeStatus.ONLINE.value,
+        last_seen_at=now - timedelta(seconds=10),
+        created_at=now - timedelta(hours=1),
+    )
+    stale = NodeModel(
+        id=uuid.uuid4(),
+        project_id=uuid.uuid4(),
+        hostname="stale-01",
+        ip_address="10.0.0.11",
+        status=NodeStatus.ONLINE.value,
+        last_seen_at=now - timedelta(seconds=120),
+        created_at=now - timedelta(hours=1),
+    )
+    node_repo_mock = AsyncMock(spec=NodeRepository)
+    node_repo_mock.list_all.return_value = [fresh, stale]
+    project_service_mock = AsyncMock(spec=ProjectService)
+    hub_mock = AsyncMock(spec=RealtimeHub)
+
+    service = NodeService(
+        node_repo=node_repo_mock,
+        project_service=project_service_mock,
+        realtime_hub=hub_mock,
+    )
+    transitioned = await service.sweep_stale_offline_nodes(now=now)
+    assert transitioned == [str(stale.id)]
+    assert stale.status == NodeStatus.OFFLINE.value
+    assert fresh.status == NodeStatus.ONLINE.value
+    node_repo_mock.save.assert_awaited_once_with(stale)
+    hub_mock.broadcast.assert_awaited_once()
+    broadcast_msg = hub_mock.broadcast.await_args.args[0]
+    assert broadcast_msg.event == "node_status"
+    assert broadcast_msg.data["status"] == "offline"

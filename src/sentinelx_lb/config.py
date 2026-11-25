@@ -1,10 +1,11 @@
 """Configuration settings for SentinelX HTTP Load Balancer."""
 
+import json
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class LBAlgorithm(StrEnum):
@@ -85,7 +86,7 @@ class LBSettings(BaseSettings):
         default=LBAlgorithm.ROUND_ROBIN,
         description="Active routing strategy (round_robin or least_in_flight)",
     )
-    backends: list[BackendConfig] = Field(
+    backends: Annotated[list[BackendConfig], NoDecode] = Field(
         default_factory=list,
         description="List of upstream backend servers",
     )
@@ -107,8 +108,13 @@ class LBSettings(BaseSettings):
     @field_validator("backends", mode="before")
     @classmethod
     def parse_backends(cls, v: Any) -> Any:
-        """Support comma-separated string from env: 'http://h1:8000,http://h2:8000'."""
+        """Support comma-separated URLs or JSON arrays from env."""
         if isinstance(v, str):
-            urls = [item.strip() for item in v.split(",") if item.strip()]
+            trimmed = v.strip()
+            if not trimmed:
+                return []
+            if trimmed.startswith("["):
+                return json.loads(trimmed)
+            urls = [item.strip() for item in trimmed.split(",") if item.strip()]
             return [{"url": u} for u in urls]
         return v

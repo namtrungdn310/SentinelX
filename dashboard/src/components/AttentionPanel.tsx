@@ -23,13 +23,13 @@ export function AttentionPanel({ nodes, onOpenDetail }: Props) {
     const hw = getNodeHardware(node);
     const metrics = [
       (node.latestCpu ?? 0) > 75
-        ? `CPU ${node.latestCpu!.toFixed(1)}% (${formatCpuUsage(node.latestCpu, hw.cpuCores)}) > 75%`
+        ? `CPU ${node.latestCpu!.toFixed(1)}%${hw.cpuCores !== undefined ? ` (${formatCpuUsage(node.latestCpu, hw.cpuCores)})` : ""} > 75%`
         : "",
       (node.latestMemory ?? 0) > 85
-        ? `RAM ${node.latestMemory!.toFixed(1)}% (${formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}) > 85%`
+        ? `RAM ${node.latestMemory!.toFixed(1)}%${hw.totalMemoryBytes !== undefined ? ` (${formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)})` : ""} > 85%`
         : "",
     ].filter(Boolean);
-    return metrics.join(" · ") || "Agent báo trạng thái degraded";
+    return metrics.join(" · ") || "Cảnh báo hiệu năng máy chủ";
   };
   return (
     <section className="panel attention-panel" aria-label="Máy chủ cần xử lý">

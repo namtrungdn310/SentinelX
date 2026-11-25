@@ -11,7 +11,6 @@ interface Props {
   projectId: string;
   existingWhitelist?: IPWhitelist[];
   onWhitelistCreated: (item: IPWhitelist) => void;
-  isDemoMode: boolean;
 }
 
 export function AddWhitelistModal({
@@ -20,7 +19,6 @@ export function AddWhitelistModal({
   projectId,
   existingWhitelist = [],
   onWhitelistCreated,
-  isDemoMode,
 }: Props) {
   const id = useId();
   const [cidr, setCidr] = useState("");
@@ -52,19 +50,6 @@ export function AddWhitelistModal({
     setLoading(true);
     setError(null);
     try {
-      if (isDemoMode) {
-        const mockItem: IPWhitelist = {
-          id: `wl-${Date.now()}`,
-          project_id: projectId,
-          cidr: cidrCheck.normalized,
-          description: description.trim() || null,
-          created_at: new Date().toISOString(),
-        };
-        onWhitelistCreated(mockItem);
-        resetAndClose();
-        return;
-      }
-
       const res = await createWhitelist(
         projectId,
         cidrCheck.normalized,

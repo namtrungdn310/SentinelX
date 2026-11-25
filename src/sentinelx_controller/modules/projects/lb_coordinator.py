@@ -304,6 +304,9 @@ class ProjectLBCoordinator:
         project = await self._projects.get_project(project_id)
         lb_cfg = project.load_balancer
         if not lb_cfg.enabled:
+            target_lb_url = self._resolve_lb_url(lb_cfg)
+            if target_lb_url:
+                await self._clear_disabled_lb(project_id, lb_cfg, target_lb_url)
             return ProjectLBStatusResponse(
                 project_id=project_id,
                 enabled=False,
@@ -370,6 +373,47 @@ class ProjectLBCoordinator:
                 total_backends=len(fallback_items),
                 backends=fallback_items,
             )
+
+    async def _clear_disabled_lb(
+        self,
+        project_id: str,
+        lb_cfg: ProjectLBConfigContract,
+        target_lb_url: str,
+    ) -> None:
+        """Clear backends and pause probing on sentinelx_lb when this project disables LB."""
+        try:
+            backends_payload, _, _ = await self._build_desired_payload(project_id, lb_cfg)
+            project_urls = {str(b["url"]).rstrip("/") for b in backends_payload}
+            async with aiohttp.ClientSession(timeout=self._timeout) as session:
+                async with session.get(f"{target_lb_url}/lb/status") as status_resp:
+                    if status_resp.status >= 400:
+                        return
+                    raw = await status_resp.json(content_type=None)
+                raw_pool = raw.get("pool") if isinstance(raw, dict) else None
+                live_items = raw_pool.get("backends") if isinstance(raw_pool, dict) else None
+                live_urls = {
+                    str(item.get("url") or "").rstrip("/")
+                    for item in (live_items or [])
+                    if isinstance(item, dict)
+                }
+                if lb_cfg.lb_url or (live_urls and live_urls & project_urls):
+                    await session.put(
+                        f"{target_lb_url}/lb/admin/config",
+                        json={
+                            "algorithm": lb_cfg.algorithm,
+                            "backends": [],
+                            "health_check": {
+                                "enabled": False,
+                                "path": lb_cfg.health_path,
+                                "interval_seconds": lb_cfg.health_interval_seconds,
+                                "failure_threshold": lb_cfg.failure_threshold,
+                                "success_threshold": lb_cfg.success_threshold,
+                            },
+                        },
+                        headers=self._headers(),
+                    )
+        except (aiohttp.ClientError, TimeoutError, OSError, ValueError) as err:
+            logger.debug("LB disable cleanup skipped project=%s: %s", project_id, err)
 
     async def switch_algorithm(
         self,

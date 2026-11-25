@@ -12,14 +12,14 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Project, DefensePolicy, IPWhitelist } from "../types";
+import type { SecurityToastPayload } from "./SecurityToast";
 import {
-  createPolicy,
   fetchPolicies,
+  seedDefaultPolicies,
   updatePolicy,
   fetchWhitelist,
   deleteWhitelist,
 } from "../api";
-import { MOCK_POLICIES, MOCK_WHITELIST } from "../mockData";
 import { formatPolicyDuration } from "../presentation";
 import { AddWhitelistModal } from "./AddWhitelistModal";
 import { EditPolicyModal } from "./EditPolicyModal";
@@ -29,8 +29,10 @@ type TabType = "whitelist" | "policies";
 interface Props {
   selectedProjectId: string | null;
   projects: Project[];
-  isDemoMode: boolean;
   initialTab?: TabType;
+  onNotify?: (toast: SecurityToastPayload) => void;
+  initialPolicies?: DefensePolicy[];
+  initialWhitelist?: IPWhitelist[];
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -48,30 +50,23 @@ function formatRelativeTime(dateString: string): string {
 export function PoliciesView({
   selectedProjectId,
   projects,
-  isDemoMode,
   initialTab = "whitelist",
+  onNotify,
+  initialPolicies = [],
+  initialWhitelist = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const effectiveProjectId = selectedProjectId || projects[0]?.id || "";
 
   // Whitelist State
-  const [whitelist, setWhitelist] = useState<IPWhitelist[]>(() => {
-    if (isDemoMode) {
-      return selectedProjectId
-        ? MOCK_WHITELIST.filter((w) => w.project_id === selectedProjectId)
-        : MOCK_WHITELIST;
-    }
-    return [];
-  });
+  const [whitelist, setWhitelist] = useState<IPWhitelist[]>(initialWhitelist);
   const [isWhitelistModalOpen, setIsWhitelistModalOpen] = useState(false);
   const [whitelistSearch, setWhitelistSearch] = useState("");
   const [isWhitelistLoading, setIsWhitelistLoading] = useState(false);
   const [deletingWhitelistId, setDeletingWhitelistId] = useState<string | null>(null);
 
   // Policies State
-  const [policies, setPolicies] = useState<DefensePolicy[]>(() => {
-    return isDemoMode ? MOCK_POLICIES : [];
-  });
+  const [policies, setPolicies] = useState<DefensePolicy[]>(initialPolicies);
   const [isPoliciesLoading, setIsPoliciesLoading] = useState(false);
   const [togglingPolicyId, setTogglingPolicyId] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<DefensePolicy | null>(null);
@@ -80,6 +75,11 @@ export function PoliciesView({
   // Common UI State
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const toastSeqRef = useRef(0);
+  const nextToastId = (prefix: string) => {
+    toastSeqRef.current += 1;
+    return `${prefix}-${toastSeqRef.current}`;
+  };
 
   // Load Whitelist
   const loadWhitelist = useCallback(async () => {
@@ -90,14 +90,6 @@ export function PoliciesView({
     setIsWhitelistLoading(true);
     setError(null);
     try {
-      if (isDemoMode) {
-        let items = MOCK_WHITELIST;
-        if (selectedProjectId) {
-          items = items.filter((w) => w.project_id === selectedProjectId);
-        }
-        setWhitelist(items);
-        return;
-      }
       const data = await fetchWhitelist(effectiveProjectId);
       setWhitelist(data);
     } catch (err: unknown) {
@@ -105,17 +97,13 @@ export function PoliciesView({
     } finally {
       setIsWhitelistLoading(false);
     }
-  }, [effectiveProjectId, selectedProjectId, isDemoMode]);
+  }, [effectiveProjectId]);
 
-  // Load & ensure canonical system policies exist for the project
+  // Load & ensure canonical system policies exist for the project via Controller
   const loadPolicies = useCallback(async () => {
     setIsPoliciesLoading(true);
     setError(null);
     try {
-      if (isDemoMode) {
-        setPolicies(MOCK_POLICIES);
-        return;
-      }
       if (!effectiveProjectId) {
         setPolicies([]);
         return;
@@ -129,49 +117,18 @@ export function PoliciesView({
 
       const task = (async (): Promise<DefensePolicy[]> => {
         const loaded = await fetchPolicies(effectiveProjectId);
-        const existingEventTypes = new Set(loaded.map((p) => p.event_type));
-        const missingDefaults = MOCK_POLICIES.filter(
-          (tmpl) => !existingEventTypes.has(tmpl.event_type),
-        );
-        if (missingDefaults.length === 0) {
+        if (loaded.length > 0) {
           return loaded;
         }
-        const createdList: DefensePolicy[] = [];
-        for (const tmpl of missingDefaults) {
-          const created = await createPolicy(effectiveProjectId, {
-            name: tmpl.name,
-            event_type: tmpl.event_type,
-            action_type: tmpl.action_type,
-            target_params: tmpl.target_params,
-            cooldown_seconds: tmpl.cooldown_seconds,
-            block_duration_seconds: tmpl.block_duration_seconds,
-            is_auto_execute: tmpl.is_auto_execute,
-            is_active: tmpl.is_active,
-          });
-          createdList.push(created);
-        }
-        return [...loaded, ...createdList];
+        return seedDefaultPolicies(effectiveProjectId);
       })();
 
       seedingProjectRef.current.set(effectiveProjectId, task);
       try {
         const result = await task;
-        const orderIndex = new Map(
-          MOCK_POLICIES.map((p, idx) => [p.event_type, idx]),
+        const sorted = [...result].sort(
+          (a, b) => (a.priority ?? 100) - (b.priority ?? 100),
         );
-        const canonicalNames = new Map(
-          MOCK_POLICIES.map((p) => [p.event_type, p.name]),
-        );
-        const sorted = [...result]
-          .map((item) => ({
-            ...item,
-            name: canonicalNames.get(item.event_type) ?? item.name,
-          }))
-          .sort((a, b) => {
-            const idxA = orderIndex.get(a.event_type) ?? 999;
-            const idxB = orderIndex.get(b.event_type) ?? 999;
-            return idxA - idxB;
-          });
         setPolicies(sorted);
       } finally {
         seedingProjectRef.current.delete(effectiveProjectId);
@@ -181,7 +138,7 @@ export function PoliciesView({
     } finally {
       setIsPoliciesLoading(false);
     }
-  }, [effectiveProjectId, isDemoMode]);
+  }, [effectiveProjectId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -199,19 +156,15 @@ export function PoliciesView({
     setDeletingWhitelistId(item.id);
     setFeedback(null);
     try {
-      if (isDemoMode) {
-        setWhitelist((prev) => prev.filter((w) => w.id !== item.id));
-        setFeedback({
-          type: "success",
-          text: `Đã xóa IP ${item.cidr} khỏi danh sách an toàn.`,
-        });
-        return;
-      }
       await deleteWhitelist(item.id);
       setWhitelist((prev) => prev.filter((w) => w.id !== item.id));
-      setFeedback({
-        type: "success",
-        text: `Đã xóa IP ${item.cidr} thành công.`,
+      const msg = `Đã xóa IP ${item.cidr} khỏi danh sách an toàn.`;
+      setFeedback({ type: "success", text: msg });
+      onNotify?.({
+        id: nextToastId("wl-del"),
+        type: "defense",
+        title: "Đã cập nhật IP Whitelist",
+        message: msg,
       });
     } catch (err: unknown) {
       setFeedback({
@@ -225,9 +178,13 @@ export function PoliciesView({
 
   const handleWhitelistCreated = (newItem: IPWhitelist) => {
     setWhitelist((prev) => [newItem, ...prev]);
-    setFeedback({
-      type: "success",
-      text: `Đã thêm IP ${newItem.cidr} vào danh sách an toàn!`,
+    const msg = `Đã thêm IP ${newItem.cidr} vào danh sách an toàn!`;
+    setFeedback({ type: "success", text: msg });
+    onNotify?.({
+      id: nextToastId("wl-add"),
+      type: "defense",
+      title: "Đã thêm IP vào Whitelist",
+      message: msg,
     });
   };
 
@@ -236,21 +193,15 @@ export function PoliciesView({
     setTogglingPolicyId(policy.id);
     const nextVal = !policy.is_active;
     try {
-      if (isDemoMode) {
-        setPolicies((prev) =>
-          prev.map((p) => (p.id === policy.id ? { ...p, is_active: nextVal } : p))
-        );
-        setFeedback({
-          type: "success",
-          text: `Đã ${nextVal ? "bật" : "tắt"} chính sách "${policy.name}".`,
-        });
-        return;
-      }
       const updated = await updatePolicy(policy.id, { is_active: nextVal });
       setPolicies((prev) => prev.map((p) => (p.id === policy.id ? updated : p)));
-      setFeedback({
-        type: "success",
-        text: `Đã ${nextVal ? "bật" : "tắt"} chính sách "${policy.name}".`,
+      const msg = `Đã ${nextVal ? "bật" : "tắt"} chính sách "${policy.name}".`;
+      setFeedback({ type: "success", text: msg });
+      onNotify?.({
+        id: nextToastId("pol-toggle"),
+        type: "settings",
+        title: "Đã cập nhật chính sách",
+        message: msg,
       });
     } catch (err: unknown) {
       setFeedback({
@@ -264,9 +215,13 @@ export function PoliciesView({
 
   const handlePolicyUpdated = (updated: DefensePolicy) => {
     setPolicies((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    setFeedback({
-      type: "success",
-      text: `Đã cập nhật chính sách "${updated.name}" thành công!`,
+    const msg = `Đã cập nhật chính sách "${updated.name}" thành công!`;
+    setFeedback({ type: "success", text: msg });
+    onNotify?.({
+      id: nextToastId("pol-edit"),
+      type: "settings",
+      title: "Đã lưu chính sách bảo vệ",
+      message: msg,
     });
   };
 
@@ -589,7 +544,6 @@ export function PoliciesView({
         projectId={effectiveProjectId}
         existingWhitelist={whitelist}
         onWhitelistCreated={handleWhitelistCreated}
-        isDemoMode={isDemoMode}
       />
 
       {/* Edit Policy Modal */}
@@ -598,7 +552,6 @@ export function PoliciesView({
         onClose={() => setEditingPolicy(null)}
         policy={editingPolicy}
         onPolicyUpdated={handlePolicyUpdated}
-        isDemoMode={isDemoMode}
       />
     </div>
   );

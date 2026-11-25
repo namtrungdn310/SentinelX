@@ -2,8 +2,10 @@
 
 import logging
 from collections.abc import Mapping
+from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout, web
+from multidict import CIMultiDict
 
 from sentinelx_lb.balancer import LoadBalancer
 
@@ -34,19 +36,19 @@ def filter_forward_headers(request: web.Request) -> dict[str, str]:
     client_ip = request.remote or "unknown"
     existing_xff = request.headers.get("X-Forwarded-For")
     headers["X-Forwarded-For"] = f"{existing_xff}, {client_ip}" if existing_xff else client_ip
-    headers["X-Forwarded-Proto"] = request.scheme
-    headers["X-Forwarded-Host"] = request.host
+    headers["X-Forwarded-Proto"] = request.headers.get("X-Forwarded-Proto") or request.scheme
+    headers["X-Forwarded-Host"] = request.headers.get("X-Forwarded-Host") or request.host
 
     return headers
 
 
-def filter_response_headers(upstream_headers: Mapping[str, str]) -> dict[str, str]:
-    """Filter upstream response headers before relaying back to the client."""
-    return {
-        key: val
-        for key, val in upstream_headers.items()
-        if key.lower() not in HOP_BY_HOP_HEADERS
-    }
+def filter_response_headers(upstream_headers: Mapping[str, str]) -> CIMultiDict[str]:
+    """Filter upstream response headers while preserving multi-value headers like Set-Cookie."""
+    headers: CIMultiDict[str] = CIMultiDict()
+    for key, val in upstream_headers.items():
+        if key.lower() not in HOP_BY_HOP_HEADERS:
+            headers.add(key, val)
+    return headers
 
 
 class ReverseProxyHandler:
@@ -82,7 +84,8 @@ class ReverseProxyHandler:
         try:
             target_url = f"{backend.url}{request.rel_url}"
             fwd_headers = filter_forward_headers(request)
-            body = await request.read()
+            is_chunked = "chunked" in request.headers.get("Transfer-Encoding", "").lower()
+            body: Any = request.content if is_chunked else await request.read()
             timeout = ClientTimeout(total=self.client_timeout_seconds)
 
             async with self.session.request(

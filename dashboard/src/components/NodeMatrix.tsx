@@ -36,7 +36,7 @@ export function NodeMatrix({
   projects,
   nodes,
   selectedNodeId,
-  onSelectNode: _onSelectNode,
+  onSelectNode,
   isLoading,
   onOpenDetail,
   state,
@@ -154,13 +154,17 @@ export function NodeMatrix({
                   <tr
                     key={node.id}
                     className={`host-row ${selectedNodeId === node.id ? "selected" : ""}`}
-                    onClick={() => onOpenDetail?.(node)}
+                    onClick={() => {
+                      onSelectNode?.(node);
+                      onOpenDetail?.(node);
+                    }}
                     role="button"
                     tabIndex={0}
                     aria-label={`Chi tiết máy chủ ${node.hostname}`}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
+                        onSelectNode?.(node);
                         onOpenDetail?.(node);
                       }
                     }}
@@ -196,21 +200,21 @@ export function NodeMatrix({
                     <td>
                       <Metric
                         value={node.latestCpu}
-                        capacity={formatCpuUsage(node.latestCpu, hw.cpuCores)}
+                        capacity={hw.cpuCores !== undefined ? formatCpuUsage(node.latestCpu, hw.cpuCores) : undefined}
                         type="cpu"
                       />
                     </td>
                     <td>
                       <Metric
                         value={node.latestMemory}
-                        capacity={formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}
+                        capacity={hw.totalMemoryBytes !== undefined ? formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes) : undefined}
                         type="memory"
                       />
                     </td>
                     <td>
                       <Metric
                         value={node.latestDisk}
-                        capacity={formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}
+                        capacity={hw.totalDiskBytes !== undefined ? formatDiskUsage(node.latestDisk, hw.totalDiskBytes) : undefined}
                         type="disk"
                       />
                     </td>
@@ -231,7 +235,10 @@ export function NodeMatrix({
               >
                 <button
                   className="tile-select"
-                  onClick={() => onOpenDetail?.(node)}
+                  onClick={() => {
+                    onSelectNode?.(node);
+                    onOpenDetail?.(node);
+                  }}
                   aria-pressed={selectedNodeId === node.id}
                 >
                   <Server size={19} />
@@ -249,17 +256,23 @@ export function NodeMatrix({
                     <span>
                       <span className="tile-metric-label">CPU</span>
                       <b>{formatPercent(node.latestCpu)}</b>
-                      <small className="tile-spec">{formatCpuUsage(node.latestCpu, hw.cpuCores)}</small>
+                      {hw.cpuCores !== undefined && (
+                        <small className="tile-spec">{formatCpuUsage(node.latestCpu, hw.cpuCores)}</small>
+                      )}
                     </span>
                     <span>
                       <span className="tile-metric-label">RAM</span>
                       <b>{formatPercent(node.latestMemory)}</b>
-                      <small className="tile-spec">{formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}</small>
+                      {hw.totalMemoryBytes !== undefined && (
+                        <small className="tile-spec">{formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}</small>
+                      )}
                     </span>
                     <span>
                       <span className="tile-metric-label">Ổ đĩa</span>
                       <b>{formatPercent(node.latestDisk)}</b>
-                      <small className="tile-spec">{formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}</small>
+                      {hw.totalDiskBytes !== undefined && (
+                        <small className="tile-spec">{formatDiskUsage(node.latestDisk, hw.totalDiskBytes)}</small>
+                      )}
                     </span>
                   </span>
                 </button>

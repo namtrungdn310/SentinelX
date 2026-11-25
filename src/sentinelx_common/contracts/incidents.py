@@ -41,6 +41,14 @@ class IncidentResponse(SentinelXBaseModel):
         default=None,
         description="Trạng thái lỗi tải lệnh hoặc kích hoạt phòng thủ nếu có",
     )
+    attacker_ip: str | None = Field(
+        default=None,
+        description="IP nguồn tấn công chính liên kết với sự cố (nếu là sự cố mạng)",
+    )
+    targeted_ports: list[int] = Field(
+        default_factory=list,
+        description="Danh sách cổng đích bị tác động (nếu có)",
+    )
     event_count: int = Field(default=0, description="Tổng số detection events thuộc incident này")
 
 

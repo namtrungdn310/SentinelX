@@ -117,6 +117,7 @@ class IncidentRepository:
     async def query_incidents(
         self,
         project_id: uuid.UUID | None = None,
+        node_id: uuid.UUID | None = None,
         status: str | None = None,
         severity: str | None = None,
         start_time: datetime | None = None,
@@ -131,6 +132,9 @@ class IncidentRepository:
         if project_id is not None:
             stmt = stmt.where(IncidentModel.project_id == project_id)
             count_stmt = count_stmt.where(IncidentModel.project_id == project_id)
+        if node_id is not None:
+            stmt = stmt.where(IncidentModel.node_id == node_id)
+            count_stmt = count_stmt.where(IncidentModel.node_id == node_id)
         if status is not None:
             stmt = stmt.where(IncidentModel.status == status.upper())
             count_stmt = count_stmt.where(IncidentModel.status == status.upper())

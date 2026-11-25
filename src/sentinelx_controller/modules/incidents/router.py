@@ -50,6 +50,7 @@ def get_incident_service(
 async def list_incidents(
     service: Annotated[IncidentService, Depends(get_incident_service)],
     project_id: Annotated[str | None, Query(description="Filter by project UUID")] = None,
+    node_id: Annotated[str | None, Query(description="Filter by node UUID")] = None,
     status: Annotated[
         str | None,
         Query(description="Filter by status (DETECTED, MITIGATING, RESOLVED)"),
@@ -69,6 +70,7 @@ async def list_incidents(
     """Retrieve list of incidents."""
     return await service.list_incidents(
         project_id_str=project_id,
+        node_id_str=node_id,
         status=status,
         severity=severity,
         start_time=start_time,

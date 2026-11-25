@@ -12,14 +12,16 @@ Dùng cho:
 - repeatability trước khi mang sang nhiều máy;
 - fallback nếu network lab gặp sự cố.
 
-### Phase 2 (Mục tiêu demo nhiều máy): PC Windows ở nhà + Nhiều Laptop từ xa
-- **PC Windows ở nhà** đóng vai trò máy chủ trung tâm bật máy là chạy sẵn: bật Docker Desktop tự khởi động cùng Windows, tắt chế độ Sleep, chạy cụm `compose.yaml` với `restart: unless-stopped` (và bổ sung container Nginx phục vụ `dashboard/dist/` + proxy `/api` & `/api/v1/ws` sang `sentinelx_controller:8000`).
-- **Nhiều laptop từ xa** kết nối về PC ở nhà qua **Tailscale** (ưu tiên: giữ IP nội bộ cố định, dùng chung được cả Dashboard lẫn kết nối Agent từ VM/laptop Linux ngoài mà không cần mở port router) hoặc **Cloudflare Tunnel** kèm lớp xác thực truy cập cho trình duyệt bên ngoài.
+### Phase 2 (Mục tiêu demo nhiều máy): PC/Laptop Windows + Nhiều VM/Laptop Từ xa
+- **Laptop A (Windows — Control Plane & Gateway)**: bật cụm `--profile core` (`postgres_db`, `sentinelx_controller` kèm sẵn Agent Bundle download, `sentinelx_dashboard` Nginx SPA tại `:5174`) + chạy `sentinelx_lb` (`:8080`).
+- **Nhiều laptop & VM từ xa** kết nối về Laptop A qua **Tailscale** (ưu tiên: giữ IP `100.x.y.z` cố định, chạy VMware `NAT` bình thường qua Wi-Fi trường hay 5G Hotspot iPhone, không đụng cấu hình lab môn học khác) hoặc **Cloudflare Tunnel** kèm lớp xác thực truy cập cho trình duyệt bên ngoài.
+
+> Xem kế hoạch chi tiết 7 bước cho mô hình **2 Laptop + VMware Linked Clone + Tailscale** tại [LEVEL2_RUNBOOK.md](./LEVEL2_RUNBOOK.md).
 
 ### Phase 3 (Tùy chọn thực tế / Cloud VPS): Production Linux Hosts
 Chuyển Control Plane lên Linux VPS chạy 24/7 (Nginx HTTPS + xác thực truy cập; tạo ≥ 2 GB Swap nếu dùng Droplet 1 GB RAM), cài `sentinelx-agent` làm `systemd` service trên từng Linux server và khai báo `protected_cidrs` trước khi bật `nftables` thật.
 
-> Chi tiết hướng dẫn triển khai cho mạng LAN và PC Windows tại nhà xem thêm tại [MULTI_HOST_DEPLOYMENT.md](./MULTI_HOST_DEPLOYMENT.md).
+> Chi tiết tham chiếu kiến trúc mạng LAN đa máy xem thêm tại [MULTI_HOST_DEPLOYMENT.md](./MULTI_HOST_DEPLOYMENT.md) và runbook thực hành từng bước tại [LEVEL2_RUNBOOK.md](./LEVEL2_RUNBOOK.md).
 
 ### Final Network Profile (LAN / Multi-Host Chuẩn PBL4)
 Multi-host qua LAN/IP hoặc Tailscale VPN.

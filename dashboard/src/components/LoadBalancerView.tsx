@@ -1,30 +1,24 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Globe,
-  PauseCircle,
-  Play,
   Plus,
-  RefreshCw,
   Server,
   Settings2,
   ShieldAlert,
   Trash2,
-  Zap,
+  Users,
 } from "lucide-react";
 import {
   defaultProjectLBConfig,
   fetchProjectLBStatus,
   setProjectLBBackendState,
-  switchProjectLBAlgorithm,
-  syncProjectLB,
 } from "../api";
-import { buildMockProjectLBStatus } from "../mockData";
 import { healthLabels, nodeHealth } from "../presentation";
+import { LBPoolPickerModal } from "./LBPoolPickerModal";
 import type {
-  LBAlgorithmType,
   LBBackendRuntime,
   Node,
   NodeLBRoleType,
@@ -37,17 +31,12 @@ import type { SecurityToastPayload } from "./SecurityToast";
 interface Props {
   project: Project;
   projectNodes: Node[];
-  isDemoMode: boolean;
   onOpenConfig: () => void;
-  onOpenAddNode?: () => void;
+  onGoToHosts?: () => void;
   onUpdateProjectLB: (
     projectId: string,
     payload: { load_balancer: ProjectLBConfig },
   ) => Promise<Project | void>;
-  onSyncProjectLocalLB?: (
-    projectId: string,
-    loadBalancer: ProjectLBConfig,
-  ) => void;
   onUpdateNode: (
     nodeId: string,
     payload: {
@@ -57,57 +46,101 @@ interface Props {
     },
   ) => Promise<Node | void>;
   onNotify?: (toast: SecurityToastPayload) => void;
+  initialStatus?: ProjectLBStatus | null;
 }
 
 const BACKEND_SLOT_HEIGHT = 104;
 const BACKEND_SLOT_GAP = 12;
 const TOPOLOGY_PAD_Y = 0;
 
+function buildEmptyProjectLBStatus(
+  project: Project,
+  projectNodes: Node[],
+): ProjectLBStatus {
+  const lb = project.load_balancer ?? defaultProjectLBConfig();
+  const backendNodes = projectNodes.filter((n) => n.lb_role === "lb_backend");
+  const backends: LBBackendRuntime[] = backendNodes.map((n) => ({
+    name: n.hostname,
+    url: `http://${n.ip_address}:${n.lb_backend_port ?? 8080}`,
+    node_id: n.id,
+    weight: 1,
+    health_path: n.lb_health_path || lb.health_path || "/health",
+    is_healthy: false,
+    admin_enabled: true,
+    health_state: lb.enabled ? "unknown" : "disabled",
+    in_flight: 0,
+    total_requests: 0,
+    success_requests: 0,
+    error_requests: 0,
+    consecutive_successes: 0,
+    consecutive_failures: 0,
+    last_health_check_at: null,
+    last_health_error: null,
+  }));
+  return {
+    project_id: project.id,
+    enabled: Boolean(lb.enabled),
+    lb_url: lb.lb_url ?? null,
+    algorithm: lb.algorithm ?? "round_robin",
+    reachable: false,
+    sync_status: lb.enabled ? "syncing" : "disabled",
+    sync_message: null,
+    health_check: {
+      enabled: true,
+      path: lb.health_path || "/health",
+      interval_seconds: lb.health_interval_seconds ?? 3,
+      failure_threshold: lb.failure_threshold ?? 3,
+      success_threshold: lb.success_threshold ?? 2,
+    },
+    total_backends: backends.length,
+    healthy_backends: 0,
+    routable_backends: 0,
+    admin_disabled_backends: 0,
+    total_in_flight: 0,
+    total_requests: 0,
+    total_success: 0,
+    total_errors: 0,
+    backends,
+  };
+}
+
 export function LoadBalancerView({
   project,
   projectNodes,
-  isDemoMode,
   onOpenConfig,
-  onOpenAddNode,
+  onGoToHosts,
   onUpdateProjectLB,
-  onSyncProjectLocalLB,
   onUpdateNode,
   onNotify,
+  initialStatus = null,
 }: Props) {
   const headingId = useId();
-  const [liveStatus, setLiveStatus] = useState<ProjectLBStatus | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<ProjectLBStatus | null>(initialStatus);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Interactive Demo Mode simulation state
-  const [demoAutoFlow, setDemoAutoFlow] = useState(true);
-  const [demoOverrides, setDemoOverrides] = useState<
-    Record<string, Partial<LBBackendRuntime>>
-  >({});
-  const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
-  const rrCursorRef = useRef(0);
-
-  // Quick-add existing standalone node into LB pool
-  const standaloneNodes = useMemo(
-    () => projectNodes.filter((n) => n.lb_role !== "lb_backend"),
+  // Eligible already-registered & online project servers not yet in LB pool
+  const eligibleActiveNodes = useMemo(
+    () =>
+      projectNodes.filter(
+        (n) => n.lb_role !== "lb_backend" && n.status === "online",
+      ),
     [projectNodes],
   );
-  const [selectedAddNodeId, setSelectedAddNodeId] = useState<string>("");
-  const [addPort, setAddPort] = useState<number>(8080);
-
-  const effectiveAddNodeId = standaloneNodes.some(
-    (n) => n.id === selectedAddNodeId,
-  )
-    ? selectedAddNodeId
-    : (standaloneNodes[0]?.id ?? "");
+  const unavailableNodes = useMemo(
+    () =>
+      projectNodes.filter(
+        (n) => n.lb_role !== "lb_backend" && n.status !== "online",
+      ),
+    [projectNodes],
+  );
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const lbEnabled = Boolean(project.load_balancer?.enabled);
 
   const loadLiveStatus = useCallback(
     async (silent = false) => {
-      if (isDemoMode || !lbEnabled) return;
-      if (!silent) setLoading(true);
+      if (!lbEnabled) return;
       try {
         const res = await fetchProjectLBStatus(project.id);
         setLiveStatus(res);
@@ -120,16 +153,14 @@ export function LoadBalancerView({
               : "Không thể kết nối Controller để lấy trạng thái LB.",
           );
         }
-      } finally {
-        if (!silent) setLoading(false);
       }
     },
-    [isDemoMode, lbEnabled, project.id],
+    [lbEnabled, project.id],
   );
 
-  // Poll live status every 2.5s when enabled and connected
+  // Auto-reload live status & auto-reconcile LB pool every 2.5s when enabled
   useEffect(() => {
-    if (isDemoMode || !lbEnabled) {
+    if (!lbEnabled) {
       return;
     }
     let cancelled = false;
@@ -158,91 +189,29 @@ export function LoadBalancerView({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isDemoMode, lbEnabled, project.id]);
+  }, [
+    lbEnabled,
+    project.id,
+    project.load_balancer?.lb_url,
+    project.load_balancer?.algorithm,
+    project.load_balancer?.health_path,
+    project.load_balancer?.health_interval_seconds,
+    project.load_balancer?.failure_threshold,
+    project.load_balancer?.success_threshold,
+  ]);
 
-  const demoStatus = useMemo(
-    () => buildMockProjectLBStatus(project, projectNodes, demoOverrides),
-    [project, projectNodes, demoOverrides],
+  const fallbackStatus = useMemo(
+    () => buildEmptyProjectLBStatus(project, projectNodes),
+    [project, projectNodes],
   );
 
-  const status: ProjectLBStatus = isDemoMode
-    ? demoStatus
-    : lbEnabled && liveStatus?.project_id === project.id
-      ? liveStatus
-      : demoStatus;
+  const status: ProjectLBStatus =
+    lbEnabled && liveStatus?.project_id === project.id ? liveStatus : fallbackStatus;
 
   const nodeById = useMemo(
     () => new Map(projectNodes.map((n) => [n.id, n])),
     [projectNodes],
   );
-
-  // Simulated request routing tick in Demo Mode to power live animation & counters
-  const dispatchSimulatedRequests = useCallback(
-    (count: number) => {
-      if (!isDemoMode || !lbEnabled) return;
-      setDemoOverrides((prev) => {
-        const current = buildMockProjectLBStatus(project, projectNodes, prev);
-        const routable = current.backends.filter(
-          (b) => b.is_healthy && b.admin_enabled,
-        );
-        if (!routable.length) return prev;
-
-        const next = { ...prev };
-        let lastPickedUrl: string | null = null;
-        const algo = current.algorithm;
-
-        // Track mutable in_flight & totals across batch
-        const inflightMap = new Map(routable.map((b) => [b.url, b.in_flight]));
-        const totalMap = new Map(routable.map((b) => [b.url, b.total_requests]));
-
-        for (let step = 0; step < count; step++) {
-          let chosen: LBBackendRuntime;
-          if (algo === "least_in_flight") {
-            chosen = [...routable].sort(
-              (a, b) => (inflightMap.get(a.url) ?? 0) - (inflightMap.get(b.url) ?? 0),
-            )[0];
-          } else {
-            chosen = routable[rrCursorRef.current % routable.length];
-            rrCursorRef.current += 1;
-          }
-
-          const nodeId = chosen.node_id ?? chosen.url;
-          const nextTotal = (totalMap.get(chosen.url) ?? 0) + 1;
-          // Simulate natural completion so in_flight stays realistic (1..6)
-          const rawInflight = inflightMap.get(chosen.url) ?? 1;
-          const nextInflight =
-            count > 1
-              ? Math.min(8, Math.max(1, rawInflight + 1))
-              : (rawInflight % 5) + 1;
-
-          inflightMap.set(chosen.url, nextInflight);
-          totalMap.set(chosen.url, nextTotal);
-
-          next[nodeId] = {
-            ...(next[nodeId] ?? {}),
-            total_requests: nextTotal,
-            success_requests: nextTotal - (chosen.error_requests ?? 0),
-            in_flight: nextInflight,
-          };
-          lastPickedUrl = chosen.url;
-        }
-
-        if (lastPickedUrl) {
-          setActiveTargetId(lastPickedUrl);
-        }
-        return next;
-      });
-    },
-    [isDemoMode, lbEnabled, project, projectNodes],
-  );
-
-  useEffect(() => {
-    if (!isDemoMode || !lbEnabled || !demoAutoFlow) return;
-    const timer = window.setInterval(() => {
-      dispatchSimulatedRequests(1);
-    }, 1100);
-    return () => window.clearInterval(timer);
-  }, [isDemoMode, lbEnabled, demoAutoFlow, dispatchSimulatedRequests]);
 
   // Handlers
   const handleToggleLBEnabled = async (nextEnabled: boolean) => {
@@ -283,75 +252,6 @@ export function LoadBalancerView({
     }
   };
 
-  const handleSwitchAlgorithm = async (algo: LBAlgorithmType) => {
-    if (status.algorithm === algo || actionBusy) return;
-    setActionBusy("algorithm");
-    setError(null);
-    const nextConfig: ProjectLBConfig = {
-      ...(project.load_balancer ?? defaultProjectLBConfig()),
-      enabled: true,
-      algorithm: algo,
-    };
-    try {
-      if (isDemoMode) {
-        await onUpdateProjectLB(project.id, { load_balancer: nextConfig });
-      } else {
-        const res = await switchProjectLBAlgorithm(project.id, algo);
-        setLiveStatus(res);
-        if (onSyncProjectLocalLB) {
-          onSyncProjectLocalLB(project.id, nextConfig);
-        } else {
-          await onUpdateProjectLB(project.id, { load_balancer: nextConfig });
-        }
-      }
-      onNotify?.({
-        id: `lb-algo-${Date.now()}`,
-        type: "defense",
-        title: "Đã chuyển thuật toán chia tải",
-        message: `${project.name} đang dùng ${algo === "least_in_flight" ? "Least In-Flight" : "Round Robin"}.`,
-      });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Không thể đổi thuật toán chia tải.",
-      );
-    } finally {
-      setActionBusy(null);
-    }
-  };
-
-  const handleSyncLB = async () => {
-    if (actionBusy) return;
-    setActionBusy("sync");
-    setError(null);
-    try {
-      if (isDemoMode) {
-        onNotify?.({
-          id: `lb-sync-${Date.now()}`,
-          type: "defense",
-          title: "Đã đồng bộ cấu hình Pool",
-          message: `Demo Mode đã cập nhật ${status.total_backends} backend cho ${project.name}.`,
-        });
-      } else {
-        const res = await syncProjectLB(project.id);
-        setLiveStatus(res);
-        onNotify?.({
-          id: `lb-sync-${Date.now()}`,
-          type: "defense",
-          title: res.reachable ? "Đã đồng bộ Load Balancer" : "Chưa kết nối được LB",
-          message:
-            res.sync_message ||
-            `${res.routable_backends}/${res.total_backends} backend sẵn sàng.`,
-        });
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Đồng bộ Load Balancer thất bại.",
-      );
-    } finally {
-      setActionBusy(null);
-    }
-  };
-
   const handleToggleBackendAdminState = async (
     backend: LBBackendRuntime,
     nextEnabled: boolean,
@@ -360,31 +260,12 @@ export function LoadBalancerView({
     setActionBusy(`drain:${backend.node_id}`);
     setError(null);
     try {
-      if (isDemoMode) {
-        const routableOthers = status.backends.filter(
-          (b) => b.url !== backend.url && b.is_healthy && b.admin_enabled,
-        ).length;
-        if (!nextEnabled && routableOthers === 0) {
-          throw new Error(
-            "Không thể tạm rút backend hoạt động cuối cùng (sẽ gây gián đoạn toàn cụm).",
-          );
-        }
-        setDemoOverrides((prev) => ({
-          ...prev,
-          [backend.node_id!]: {
-            ...(prev[backend.node_id!] ?? {}),
-            admin_enabled: nextEnabled,
-            in_flight: nextEnabled ? 1 : 0,
-          },
-        }));
-      } else {
-        const res = await setProjectLBBackendState(
-          project.id,
-          backend.node_id,
-          nextEnabled,
-        );
-        setLiveStatus(res);
-      }
+      const res = await setProjectLBBackendState(
+        project.id,
+        backend.node_id,
+        nextEnabled,
+      );
+      setLiveStatus(res);
     } catch (err) {
       setError(
         err instanceof Error
@@ -396,51 +277,29 @@ export function LoadBalancerView({
     }
   };
 
-  const handleSimulateDemoHealthFlip = (backend: LBBackendRuntime) => {
-    if (!isDemoMode || !backend.node_id) return;
-    const nextHealthy = !backend.is_healthy;
-    setDemoOverrides((prev) => ({
-      ...prev,
-      [backend.node_id!]: {
-        ...(prev[backend.node_id!] ?? {}),
-        is_healthy: nextHealthy,
-        health_state: nextHealthy ? "healthy" : "unhealthy",
-        in_flight: nextHealthy ? 1 : 0,
-        consecutive_failures: nextHealthy
-          ? 0
-          : status.health_check.failure_threshold,
-        consecutive_successes: nextHealthy
-          ? status.health_check.success_threshold
-          : 0,
-        last_health_error: nextHealthy
-          ? null
-          : `GET ${backend.health_path || "/health"} timeout (simulated)`,
-      },
-    }));
-  };
-
-  const handleAssignNodeToPool = async () => {
-    if (!effectiveAddNodeId || actionBusy) return;
+  const handleAddPoolItems = async (
+    items: Array<{ nodeId: string; port: number }>,
+  ) => {
+    if (!items.length || actionBusy) return;
     setActionBusy("add-node");
     setError(null);
     try {
-      await onUpdateNode(effectiveAddNodeId, {
-        lb_role: "lb_backend",
-        lb_backend_port: Math.min(65535, Math.max(1, Number(addPort) || 8080)),
-      });
-      if (!isDemoMode) {
-        await loadLiveStatus(true);
+      for (const item of items) {
+        await onUpdateNode(item.nodeId, {
+          lb_role: "lb_backend",
+          lb_backend_port: item.port,
+        });
       }
+      await loadLiveStatus(true);
       onNotify?.({
         id: `lb-add-node-${Date.now()}`,
         type: "defense",
-        title: "Đã thêm backend vào Load Balancer",
-        message: `Cụm ${project.name} đã tự động đồng bộ máy chủ mới vào pool.`,
+        title: "Đã đưa máy chủ vào LB Pool",
+        message:
+          items.length === 1
+            ? `Đã thêm 1 máy chủ vào pool của ${project.name}.`
+            : `Đã thêm ${items.length} máy chủ vào pool của ${project.name}.`,
       });
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Không thêm được máy chủ vào pool.",
-      );
     } finally {
       setActionBusy(null);
     }
@@ -452,9 +311,7 @@ export function LoadBalancerView({
     setError(null);
     try {
       await onUpdateNode(backend.node_id, { lb_role: "standalone" });
-      if (!isDemoMode) {
-        await loadLiveStatus(true);
-      }
+      await loadLiveStatus(true);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Không thể gỡ backend khỏi pool.",
@@ -477,6 +334,9 @@ export function LoadBalancerView({
     status.total_requests > 0
       ? ((status.total_success / status.total_requests) * 100).toFixed(1)
       : "100.0";
+  const ingressTargetHost = (status.lb_url || "LB Hệ thống")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
 
   return (
     <section className="lb-view" aria-labelledby={headingId}>
@@ -504,13 +364,6 @@ export function LoadBalancerView({
               <Globe size={13} />
               {status.lb_url || "LB Hệ thống mặc định"}
             </span>
-            <span className="lb-sync-chip">
-              {!lbEnabled
-                ? "Chế độ tạm dừng chia tải"
-                : status.sync_status === "synced"
-                  ? "Pool đã đồng bộ"
-                  : status.sync_message || status.sync_status}
-            </span>
           </div>
           {lbEnabled && status.sync_message && status.sync_status !== "synced" && (
             <p className="lb-sync-warning">{status.sync_message}</p>
@@ -518,42 +371,6 @@ export function LoadBalancerView({
         </div>
 
         <div className="lb-header-actions">
-          <div
-            className="lb-algo-segmented"
-            role="group"
-            aria-label="Chọn thuật toán Load Balancer"
-          >
-            <button
-              type="button"
-              className={status.algorithm === "round_robin" ? "active" : ""}
-              onClick={() => void handleSwitchAlgorithm("round_robin")}
-              disabled={!lbEnabled || Boolean(actionBusy)}
-            >
-              Round Robin
-            </button>
-            <button
-              type="button"
-              className={status.algorithm === "least_in_flight" ? "active" : ""}
-              onClick={() => void handleSwitchAlgorithm("least_in_flight")}
-              disabled={!lbEnabled || Boolean(actionBusy)}
-            >
-              Least In-Flight
-            </button>
-          </div>
-
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => void handleSyncLB()}
-            disabled={!lbEnabled || Boolean(actionBusy) || loading}
-          >
-            <RefreshCw
-              size={14}
-              className={actionBusy === "sync" || loading ? "lb-spin" : ""}
-            />
-            Đồng bộ
-          </button>
-
           <button
             type="button"
             className="btn btn-outline"
@@ -610,35 +427,6 @@ export function LoadBalancerView({
               <code>{status.health_check.path}</code>.
             </p>
           </div>
-
-          {isDemoMode && (
-            <div className="lb-demo-controls">
-              <button
-                type="button"
-                className={`btn btn-outline ${demoAutoFlow ? "lb-auto-on" : ""}`}
-                onClick={() => setDemoAutoFlow((v) => !v)}
-                disabled={!lbEnabled}
-              >
-                {demoAutoFlow ? (
-                  <>
-                    <PauseCircle size={14} /> Dừng mô phỏng
-                  </>
-                ) : (
-                  <>
-                    <Play size={14} /> Tự động mô phỏng
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => dispatchSimulatedRequests(10)}
-                disabled={!lbEnabled || status.routable_backends === 0}
-              >
-                <Zap size={14} /> Gửi burst 10 req
-              </button>
-            </div>
-          )}
         </div>
 
         {backends.length === 0 ? (
@@ -647,31 +435,49 @@ export function LoadBalancerView({
             <div>
               <strong>Pool hiện chưa có Backend Server nào</strong>
               <p>
-                {standaloneNodes.length > 0
-                  ? "Chọn máy chủ có sẵn ở mục bên dưới để thêm ngay vào Load Balancer pool."
-                  : "Dự án chưa có máy chủ nào. Đăng ký máy chủ mới với vai trò Backend nhận tải LB."}
+                {eligibleActiveNodes.length > 0
+                  ? `Có ${eligibleActiveNodes.length} máy chủ đã đăng ký & đang hoạt động sẵn sàng đưa vào LB Pool.`
+                  : "Chưa có máy chủ đang hoạt động nào ngoài Pool. Hãy kiểm tra kết nối Agent tại trang Máy chủ."}
               </p>
             </div>
-            {standaloneNodes.length === 0 && onOpenAddNode && (
+            {eligibleActiveNodes.length > 0 ? (
               <button
                 type="button"
                 className="btn btn-primary"
                 style={{ marginLeft: "auto" }}
-                onClick={onOpenAddNode}
+                onClick={() => setIsPickerOpen(true)}
               >
-                <Plus size={14} /> Thêm máy chủ
+                <Plus size={14} /> Chọn máy chủ vào Pool
               </button>
+            ) : (
+              onGoToHosts && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ marginLeft: "auto" }}
+                  onClick={onGoToHosts}
+                >
+                  Mở trang Máy chủ <ArrowRight size={14} />
+                </button>
+              )
             )}
           </div>
         ) : (
           <div className="lb-flow-canvas">
             <div className="lb-flow-grid">
-              {/* Column 1: Client Ingress */}
+              {/* Column 1: External Client Origin */}
               <div className="lb-stage-col lb-ingress-col">
                 <div className="lb-node-card lb-ingress-card">
-                  <span className="lb-card-eyebrow">CLIENT TRAFFIC</span>
-                  <strong>Ingress Clients</strong>
-                  <small>HTTP Reverse Proxy</small>
+                  <span className="lb-card-eyebrow lb-card-eyebrow-icon">
+                    <Users size={11} /> NGUỒN TRUY CẬP
+                  </span>
+                  <strong>Client</strong>
+                  <small className="lb-ingress-origin">
+                    <span>Internet / LAN</span>
+                    <span className="lb-ingress-dest font-mono">
+                      → {ingressTargetHost}
+                    </span>
+                  </small>
                   <div className="lb-mini-stat">
                     <span>Tổng request</span>
                     <b className="font-mono">
@@ -681,7 +487,7 @@ export function LoadBalancerView({
                 </div>
               </div>
 
-              {/* Column 2: SVG Connector 1 (Ingress -> LB Hub) */}
+              {/* Column 2: SVG Connector 1 (Origin -> LB Hub) */}
               <div className="lb-connector-col" style={{ height: `${svgHeight}px` }}>
                 <svg
                   className="lb-connector-svg"
@@ -730,6 +536,7 @@ export function LoadBalancerView({
                         ? "Least In-Flight"
                         : "Round Robin"}
                   </strong>
+                  <small className="lb-hub-role">HTTP Reverse Proxy</small>
                   <div className="lb-hub-kpis">
                     <div>
                       <span>Đang xử lý</span>
@@ -766,8 +573,7 @@ export function LoadBalancerView({
                     const isRoutable =
                       lbEnabled && backend.is_healthy && backend.admin_enabled;
                     const isEjected = lbEnabled && !backend.is_healthy;
-                    const isActiveTarget =
-                      lbEnabled && activeTargetId === backend.url;
+                    const isActiveTarget = isRoutable && backend.in_flight > 0;
                     const packetDur =
                       backend.in_flight >= 4
                         ? "1.15s"
@@ -851,25 +657,33 @@ export function LoadBalancerView({
                 {backends.map((backend) => {
                   const isRoutable =
                     lbEnabled && backend.is_healthy && backend.admin_enabled;
+                  const isPendingSync =
+                    lbEnabled &&
+                    !status.reachable &&
+                    backend.health_state === "unknown";
                   const stateTone = !lbEnabled
                     ? "paused"
-                    : !backend.is_healthy
-                      ? "crit"
-                      : !backend.admin_enabled
-                        ? "paused"
-                        : backend.health_state === "recovering" ||
-                            backend.health_state === "degraded"
-                          ? "warn"
-                          : "ok";
+                    : isPendingSync
+                      ? "paused"
+                      : !backend.is_healthy
+                        ? "crit"
+                        : !backend.admin_enabled
+                          ? "paused"
+                          : backend.health_state === "recovering" ||
+                              backend.health_state === "degraded"
+                            ? "warn"
+                            : "ok";
                   const stateLabel = !lbEnabled
                     ? "ĐANG TẮT"
-                    : !backend.is_healthy
-                      ? "EJECTED"
-                      : !backend.admin_enabled
-                        ? "TẠM RÚT"
-                        : backend.health_state === "recovering"
-                          ? "ĐANG PHỤC HỒI"
-                          : "HEALTHY";
+                    : isPendingSync
+                      ? "CHỜ ĐỒNG BỘ"
+                      : !backend.is_healthy
+                        ? "EJECTED"
+                        : !backend.admin_enabled
+                          ? "TẠM RÚT"
+                          : backend.health_state === "recovering"
+                            ? "ĐANG PHỤC HỒI"
+                            : "HEALTHY";
                   const loadPercent = lbEnabled
                     ? Math.min(100, backend.in_flight * 14)
                     : 0;
@@ -880,7 +694,12 @@ export function LoadBalancerView({
                     <div
                       key={backend.url}
                       className={`lb-backend-card tone-${stateTone} ${
-                        lbEnabled && activeTargetId === backend.url ? "is-target" : ""
+                        lbEnabled &&
+                        backend.is_healthy &&
+                        backend.admin_enabled &&
+                        backend.in_flight > 0
+                          ? "is-target"
+                          : ""
                       }`}
                       style={{ height: `${BACKEND_SLOT_HEIGHT}px` }}
                     >
@@ -917,17 +736,6 @@ export function LoadBalancerView({
                         </div>
 
                         <div className="lb-card-actions">
-                          {isDemoMode && backend.node_id && (
-                            <button
-                              type="button"
-                              className="btn-xs btn-outline"
-                              title="Mô phỏng mất kết nối /health hoặc phục hồi backend này"
-                              onClick={() => handleSimulateDemoHealthFlip(backend)}
-                            >
-                              <Activity size={12} />
-                              {backend.is_healthy ? "Test Lỗi" : "Phục hồi"}
-                            </button>
-                          )}
                           {backend.node_id && (
                             <button
                               type="button"
@@ -987,77 +795,17 @@ export function LoadBalancerView({
               {status.health_check.success_threshold} lần OK.
             </p>
           </div>
-        </div>
-
-        {/* Always show Pool assignment bar so user sees how to add servers */}
-        <div className="lb-add-existing-bar">
-          {standaloneNodes.length > 0 ? (
-            <>
-              <div className="lb-add-existing-label">
-                <Plus size={15} />
-                <span>Thêm máy chủ đã đăng ký vào LB Pool:</span>
-              </div>
-              <div className="lb-add-existing-controls">
-                <select
-                  className="form-input"
-                  aria-label="Chọn máy chủ đưa vào Load Balancer"
-                  value={effectiveAddNodeId}
-                  onChange={(e) => setSelectedAddNodeId(e.target.value)}
-                  disabled={Boolean(actionBusy)}
-                >
-                  {standaloneNodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.hostname} ({n.ip_address})
-                    </option>
-                  ))}
-                </select>
-                <label className="lb-inline-port">
-                  <span>Cổng dịch vụ:</span>
-                  <input
-                    type="number"
-                    className="form-input font-mono"
-                    min={1}
-                    max={65535}
-                    value={addPort}
-                    onChange={(e) =>
-                      setAddPort(
-                        Math.max(1, Math.min(65535, Number(e.target.value) || 8080)),
-                      )
-                    }
-                    disabled={Boolean(actionBusy)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void handleAssignNodeToPool()}
-                  disabled={!effectiveAddNodeId || Boolean(actionBusy)}
-                >
-                  <Plus size={14} /> Thêm vào Pool
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="lb-add-existing-label lb-add-existing-empty">
-                <Server size={15} />
-                <span>
-                  {projectNodes.length === 0
-                    ? "Dự án chưa có máy chủ nào. Đăng ký máy chủ trước rồi thêm vào LB Pool tại đây."
-                    : "Tất cả máy chủ trong dự án đều đang nằm trong LB Pool."}
-                </span>
-              </div>
-              {onOpenAddNode && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={onOpenAddNode}
-                >
-                  <Plus size={14} /> Đăng ký thêm máy chủ
-                </button>
-              )}
-            </>
-          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setIsPickerOpen(true)}
+            disabled={Boolean(actionBusy)}
+          >
+            <Plus size={14} /> Chọn máy chủ vào Pool
+            {eligibleActiveNodes.length > 0 && (
+              <span className="lb-btn-count">{eligibleActiveNodes.length}</span>
+            )}
+          </button>
         </div>
 
         {backends.length > 0 && (
@@ -1140,6 +888,17 @@ export function LoadBalancerView({
           </div>
         )}
       </div>
+
+      <LBPoolPickerModal
+        key={isPickerOpen ? project.id : "picker-closed"}
+        isOpen={isPickerOpen}
+        projectName={project.name}
+        eligibleNodes={eligibleActiveNodes}
+        unavailableCount={unavailableNodes.length}
+        busy={actionBusy === "add-node"}
+        onClose={() => setIsPickerOpen(false)}
+        onConfirmAdd={handleAddPoolItems}
+      />
     </section>
   );
 }

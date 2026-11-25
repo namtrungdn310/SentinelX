@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,19 +12,19 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-import type { Node, DefenseAction, DefenseActionStatus } from "../types";
+import type { Node, DefenseAction } from "../types";
 import { cancelDefenseAction, fetchDefenseActions, revertDefenseAction } from "../api";
-import { MOCK_DEFENSE_ACTIONS } from "../mockData";
 import { isDeliveryFailureMessage } from "../presentation";
 import { ManualBlockModal } from "./ManualBlockModal";
 import type { SecurityToastPayload } from "./SecurityToast";
 
 interface Props {
+  selectedProjectId?: string | null;
   nodes: Node[];
-  isDemoMode: boolean;
   defenseRevision?: number;
   onActionsSynced?: (actions: DefenseAction[]) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
+  initialActions?: DefenseAction[];
 }
 
 const FIREWALL_ACTION_TYPES = new Set([
@@ -84,15 +84,14 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export function DefenseView({
+  selectedProjectId,
   nodes,
-  isDemoMode,
   defenseRevision = 0,
   onActionsSynced,
   onNotify,
+  initialActions = [],
 }: Props) {
-  const [actions, setActions] = useState<DefenseAction[]>(() => {
-    return isDemoMode ? MOCK_DEFENSE_ACTIONS : [];
-  });
+  const [actions, setActions] = useState<DefenseAction[]>(initialActions);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,6 +105,12 @@ export function DefenseView({
 
   const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const nodeIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
+  const nodeIdsRef = useRef(nodeIds);
+  const onActionsSyncedRef = useRef(onActionsSynced);
+  useEffect(() => {
+    nodeIdsRef.current = nodeIds;
+    onActionsSyncedRef.current = onActionsSynced;
+  }, [nodeIds, onActionsSynced]);
   const effectiveNodeFilter =
     nodeFilter === "all" || nodeIds.has(nodeFilter) ? nodeFilter : "all";
 
@@ -120,23 +125,19 @@ export function DefenseView({
   const loadActions = useCallback(async (quiet = false) => {
     if (!quiet) {
       setIsLoading(true);
+      setError(null);
     }
-    setError(null);
     try {
-      if (isDemoMode) {
-        const scopedDemo = MOCK_DEFENSE_ACTIONS.filter(
-          (act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id),
-        );
-        setActions(MOCK_DEFENSE_ACTIONS);
-        onActionsSynced?.(scopedDemo);
-        return;
-      }
-      const data = await fetchDefenseActions({ limit: 100 });
+      const data = await fetchDefenseActions({
+        projectId: selectedProjectId ?? undefined,
+        limit: 100,
+      });
+      const currentIds = nodeIdsRef.current;
       const scopedLive = data.filter(
-        (act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id),
+        (act) => FIREWALL_ACTION_TYPES.has(act.action_type) && currentIds.has(act.node_id),
       );
       setActions(data);
-      onActionsSynced?.(scopedLive);
+      onActionsSyncedRef.current?.(scopedLive);
     } catch (err: unknown) {
       if (!quiet) {
         setError(err instanceof Error ? err.message : "Lỗi tải danh sách lệnh tường lửa");
@@ -146,7 +147,7 @@ export function DefenseView({
         setIsLoading(false);
       }
     }
-  }, [isDemoMode, nodeIds, onActionsSynced]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -156,12 +157,12 @@ export function DefenseView({
   }, [loadActions]);
 
   useEffect(() => {
-    if (isDemoMode || defenseRevision === 0) return;
+    if (defenseRevision === 0) return;
     const timer = window.setTimeout(() => {
       void loadActions(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [defenseRevision, isDemoMode, loadActions]);
+  }, [defenseRevision, loadActions]);
 
   // Handle Unblocking
   const handleUnblock = async (action: DefenseAction) => {
@@ -169,28 +170,6 @@ export function DefenseView({
     setRevertingId(action.id);
     setFeedbackMessage(null);
     try {
-      if (isDemoMode) {
-        setActions((prev) => {
-          const next = prev.map((a) =>
-            a.id === action.id ? { ...a, status: "REVERTED" as DefenseActionStatus } : a,
-          );
-          onActionsSynced?.(
-            next.filter((act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id)),
-          );
-          return next;
-        });
-        const msg = `Đã gỡ chặn thành công IP ${action.target_ip ?? "mục tiêu"} khỏi tường lửa nftables!`;
-        setFeedbackMessage({ type: "success", text: msg });
-        onNotify?.({
-          id: `defense-unblock-${action.id}`,
-          type: "defense",
-          title: "Đã gỡ chặn tường lửa",
-          message: msg,
-          attackerIp: action.target_ip,
-          targetView: "defense",
-        });
-        return;
-      }
       await revertDefenseAction(action.id);
       await loadActions(true);
       const msg = `Đã xếp hàng lệnh gỡ IP ${action.target_ip ?? "mục tiêu"} khỏi bảng chặn nftables.`;
@@ -219,22 +198,6 @@ export function DefenseView({
     setCancellingId(action.id);
     setFeedbackMessage(null);
     try {
-      if (isDemoMode) {
-        setActions((prev) => {
-          const next = prev.map((a) =>
-            a.id === action.id ? { ...a, status: "CANCELLED" as DefenseActionStatus } : a,
-          );
-          onActionsSynced?.(
-            next.filter((act) => FIREWALL_ACTION_TYPES.has(act.action_type) && nodeIds.has(act.node_id)),
-          );
-          return next;
-        });
-        setFeedbackMessage({
-          type: "success",
-          text: `Đã hủy lệnh chờ cho IP ${action.target_ip ?? "mục tiêu"}.`,
-        });
-        return;
-      }
       await cancelDefenseAction(action.id);
       await loadActions(true);
       setFeedbackMessage({
@@ -622,7 +585,7 @@ export function DefenseView({
                       </td>
                       <td className="node-cell">
                         {(() => {
-                          const node = nodes.find((n) => n.id === act.node_id);
+                          const node = nodeMap.get(act.node_id);
                           if (node) {
                             return (
                               <div className="table-node-info">
@@ -722,6 +685,16 @@ export function DefenseView({
                             <i /> Đã hủy
                           </span>
                         )}
+                        {act.status === "SIMULATED" && (
+                          <span className="status-badge neutral">
+                            <i /> Mô phỏng
+                          </span>
+                        )}
+                        {act.status === "SKIPPED" && (
+                          <span className="status-badge neutral">
+                            <i /> Đã bỏ qua
+                          </span>
+                        )}
                       </td>
                       <td style={{ textAlign: "right" }}>
                         {isApplied && act.action_type === "BLOCK_IP_NFTABLES" ? (
@@ -780,12 +753,12 @@ export function DefenseView({
 
       {/* Manual Block Modal */}
       <ManualBlockModal
+        key={isManualModalOpen ? "manual-block-open" : "manual-block-closed"}
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
         nodes={nodes}
         existingActions={scopedActions}
         onActionCreated={handleActionCreated}
-        isDemoMode={isDemoMode}
       />
     </div>
   );

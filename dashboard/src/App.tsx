@@ -73,7 +73,6 @@ export function App() {
     histories,
     events,
     notableEvents,
-    isDemoMode,
     isRefreshing,
     connectionError,
     chartRequest,
@@ -81,11 +80,9 @@ export function App() {
     latencyMs,
     loadData,
     loadHistory,
-    toggleDemo,
     addNode,
     createProject,
     updateProject,
-    syncProjectLocalLB,
     updateNode,
     incidents,
     incidentRevision,
@@ -98,7 +95,7 @@ export function App() {
     dismissSecurityToast,
   } = useInfrastructure();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    () => getSavedProjectId() ?? projects[0]?.id ?? null,
+    () => getSavedProjectId(),
   );
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
@@ -201,11 +198,13 @@ export function App() {
       projects: "Dự án hạ tầng",
       overview: "Tổng quan hạ tầng",
       hosts: "Ma trận máy chủ",
+      "load-balancer": "Cân bằng tải",
       metrics: "Chỉ số đo lường",
       events: "Nhật ký sự kiện",
       incidents: "Sự cố an ninh",
       defense: "Tường lửa nftables",
       policies: "Chính sách bảo vệ",
+      settings: "Thiết lập cấu hình",
     };
     const subtitle =
       viewTitles[effectiveView] || "Giám sát hạ tầng & bảo vệ tự động";
@@ -249,9 +248,9 @@ export function App() {
     if (statusFacet !== "all" && nodeHealth(node) !== statusFacet) return false;
     const query = searchQuery.trim().toLowerCase();
     if (query.startsWith("host:"))
-      return node.hostname.toLowerCase().includes(query.slice(5));
+      return node.hostname.toLowerCase().includes(query.slice(5).trim());
     if (query.startsWith("ip:"))
-      return node.ip_address.toLowerCase().includes(query.slice(3));
+      return node.ip_address.toLowerCase().includes(query.slice(3).trim());
     return (
       !query ||
       [node.hostname, node.ip_address, node.status].some((value) =>
@@ -267,12 +266,13 @@ export function App() {
   const visibleNode = selectedNode;
   const detailNode = nodes.find((node) => node.id === detailNodeId) ?? null;
   useEffect(() => {
-    if (effectiveView === "metrics" && nodeId && !isDemoMode)
+    if (effectiveView === "metrics" && nodeId)
       void loadHistory(nodeId, sampleLimit);
-  }, [effectiveView, nodeId, isDemoMode, sampleLimit, loadHistory]);
+  }, [effectiveView, nodeId, sampleLimit, loadHistory]);
   const telemetrySamples = nodeId ? (histories[nodeId] ?? []) : [];
-  const isLoadingChart =
-    chartRequest?.nodeId === nodeId && chartRequest.loading;
+  const isLoadingChart = Boolean(
+    chartRequest && nodeId && chartRequest.nodeId === nodeId && chartRequest.loading,
+  );
   const isLoading = isRefreshing && nodes.length === 0;
   const filtered = Boolean(
     searchQuery ||
@@ -296,8 +296,14 @@ export function App() {
   };
   const matchesEventScope = (event: (typeof events)[number]) => {
     if (event.event === "pong") return false;
-    if (!event.data.node_id) return !selectedProjectId;
-    return projectNodes.some((node) => node.id === event.data.node_id);
+    if (!effectiveSelectedProjectId) return true;
+    if (event.data.node_id) {
+      return projectNodes.some((node) => node.id === event.data.node_id);
+    }
+    if (typeof event.data.project_id === "string") {
+      return event.data.project_id === effectiveSelectedProjectId;
+    }
+    return false;
   };
   const selectedEvents = events.filter(matchesEventScope);
   const recentEvents = notableEvents.filter(matchesEventScope);
@@ -342,7 +348,11 @@ export function App() {
         Đi đến nội dung
       </a>
       <aside className="app-sidebar">
-        <a className="brand" href={selectedProjectId ? "#overview" : "#projects"} aria-label="SentinelX dự án">
+        <a
+          className="brand"
+          href={effectiveSelectedProjectId ? "#overview" : "#projects"}
+          aria-label="SentinelX dự án"
+        >
           <span className="brand-mark">
             <img
               src={`${import.meta.env.BASE_URL}sentinelx-mark-v2.svg`}
@@ -381,6 +391,7 @@ export function App() {
             </span>
           )}
         </div>
+        <div className="sidebar-scroll">
         {selectedProject ? (
           <>
             <span className="nav-label">GIÁM SÁT HẠ TẦNG</span>
@@ -458,6 +469,7 @@ export function App() {
             </nav>
           </>
         )}
+        </div>
 
         {currentUser && (
           <div className="sidebar-user-footer">
@@ -499,8 +511,6 @@ export function App() {
           onSearchSubmit={() => navigate("hosts")}
           isConnected={isConnected}
           latencyMs={latencyMs}
-          isDemoMode={isDemoMode}
-          onToggleDemoMode={toggleDemo}
           onRefresh={loadData}
           isRefreshing={isRefreshing}
         />
@@ -510,6 +520,19 @@ export function App() {
           className="main-viewport"
           id="main-content"
         >
+          {connectionError && (
+            <div className="connection-error" role="alert">
+              <span>{connectionError}</span>
+              <button
+                className="text-button"
+                onClick={loadData}
+                disabled={isRefreshing}
+              >
+                Thử lại <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+
           {effectiveView === "projects" ? (
             <ProjectsView
               projects={displayedProjects}
@@ -536,30 +559,18 @@ export function App() {
                   </button>
                 </div>
               )}
-          {connectionError && (
-            <div className="connection-error" role="alert">
-              <span>{connectionError}</span>
-              <button
-                className="text-button"
-                onClick={loadData}
-                disabled={isRefreshing}
-              >
-                Thử lại <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
 
           {effectiveView === "overview" && (
             <>
               <KPICards
-                nodes={displayedNodes}
+                nodes={projectNodes}
                 incidents={projectIncidents}
                 activeProject={selectedProject}
                 isLoading={isLoading}
                 onOpenLoadBalancer={() => navigate("load-balancer")}
               />
               <InfrastructureOverview
-                nodes={displayedNodes}
+                nodes={projectNodes}
                 projects={projects}
                 selectedProjectId={effectiveSelectedProjectId}
                 onStatusSelect={(status) => {
@@ -579,12 +590,10 @@ export function App() {
                   selectedProjectId,
                   statusFacet,
                   searchQuery,
-                  isDemoMode,
                 ])}
                 events={recentEvents}
                 nodes={nodes}
-                isConnected={isConnected || isDemoMode}
-                isDemoMode={isDemoMode}
+                isConnected={isConnected}
                 preview
                 onOpenAll={() => navigate("events")}
               />
@@ -595,7 +604,7 @@ export function App() {
               projects={projects}
               nodes={displayedNodes}
               selectedNodeId={selectedNode?.id || null}
-              onSelectNode={handleSelectNode}
+              onSelectNode={(node) => setSelectedNodeId(node.id)}
               isLoading={isLoading}
               onOpenDetail={openDetail}
               state={tableState}
@@ -607,13 +616,11 @@ export function App() {
               key={selectedProject.id}
               project={selectedProject}
               projectNodes={projectNodes}
-              isDemoMode={isDemoMode}
               onOpenConfig={() =>
                 setEditingModal({ project: selectedProject, mode: "lb" })
               }
-              onOpenAddNode={() => setIsAddNodeOpen(true)}
+              onGoToHosts={() => navigate("hosts")}
               onUpdateProjectLB={updateProject}
-              onSyncProjectLocalLB={syncProjectLocalLB}
               onUpdateNode={updateNode}
               onNotify={pushSecurityToast}
             />
@@ -679,7 +686,9 @@ export function App() {
                   samples={telemetrySamples.slice(-sampleLimit)}
                   isLoading={isLoadingChart}
                   error={
-                    chartRequest?.nodeId === nodeId ? chartRequest.error : null
+                    chartRequest && nodeId && chartRequest.nodeId === nodeId
+                      ? chartRequest.error
+                      : null
                   }
                   onRetry={() =>
                     nodeId && void loadHistory(nodeId, sampleLimit)
@@ -730,19 +739,16 @@ export function App() {
                 selectedProjectId,
                 statusFacet,
                 searchQuery,
-                isDemoMode,
               ])}
               events={selectedEvents}
               nodes={nodes}
-              isConnected={isConnected || isDemoMode}
-              isDemoMode={isDemoMode}
+              isConnected={isConnected}
             />
           )}
           {effectiveView === "incidents" && (
             <IncidentsView
               selectedProjectId={effectiveSelectedProjectId}
               nodes={nodes}
-              isDemoMode={isDemoMode}
               incidentRevision={incidentRevision}
               onIncidentsSynced={handleIncidentsSynced}
               onNotify={pushSecurityToast}
@@ -750,8 +756,8 @@ export function App() {
           )}
           {effectiveView === "defense" && (
             <DefenseView
+              selectedProjectId={effectiveSelectedProjectId}
               nodes={projectNodes}
-              isDemoMode={isDemoMode}
               defenseRevision={incidentRevision}
               onActionsSynced={handleDefenseActionsSynced}
               onNotify={pushSecurityToast}
@@ -761,7 +767,7 @@ export function App() {
             <PoliciesView
               selectedProjectId={effectiveSelectedProjectId}
               projects={projects}
-              isDemoMode={isDemoMode}
+              onNotify={pushSecurityToast}
             />
           )}
           {effectiveView === "settings" && (
@@ -769,7 +775,6 @@ export function App() {
               selectedProjectId={effectiveSelectedProjectId}
               projects={projects}
               nodes={nodes}
-              isDemoMode={isDemoMode}
               onSettingsPersisted={syncNodeSettings}
               onNotify={pushSecurityToast}
             />
@@ -785,9 +790,9 @@ export function App() {
         isOpen={isAddNodeOpen}
         onClose={() => setIsAddNodeOpen(false)}
         onNodeCreated={handleNodeCreated}
-        isDemoMode={isDemoMode}
       />
       <AddProjectModal
+        key={isAddProjectOpen ? "add-proj-open" : "add-proj-closed"}
         isOpen={isAddProjectOpen}
         onClose={() => setIsAddProjectOpen(false)}
         onCreateProject={async (name, desc) => {
@@ -803,7 +808,6 @@ export function App() {
         isOpen={Boolean(editingModal)}
         project={editingModal?.project ?? null}
         mode={editingModal?.mode ?? "lb"}
-        isDemoMode={isDemoMode}
         onClose={() => setEditingModal(null)}
         onSave={async (projectId, payload) => {
           await updateProject(projectId, payload);
@@ -811,11 +815,14 @@ export function App() {
       />
       {detailNode && (
         <NodeDetailModal
-          isDemoMode={isDemoMode}
           key={detailNode.id}
           node={detailNode}
           isOpen={Boolean(detailNode)}
           onClose={() => setDetailNodeId(null)}
+          onInspectMetrics={(node) => {
+            setDetailNodeId(null);
+            handleSelectNode(node);
+          }}
         />
       )}
       {selectedProject && (

@@ -102,7 +102,7 @@ export function TelemetryChart({
                     <span>CPU</span>
                   </div>
                   <b>{formatPercent(cpu)}</b>
-                  {hw && validMetric(cpu) && (
+                  {hw?.cpuCores !== undefined && validMetric(cpu) && (
                     <span className="legend-capacity">({formatCpuUsage(cpu, hw.cpuCores)})</span>
                   )}
                 </button>
@@ -117,7 +117,7 @@ export function TelemetryChart({
                     <span>RAM</span>
                   </div>
                   <b>{formatPercent(memory)}</b>
-                  {hw && validMetric(memory) && (
+                  {hw?.totalMemoryBytes !== undefined && validMetric(memory) && (
                     <span className="legend-capacity">({formatMemoryUsage(memory, hw.totalMemoryBytes)})</span>
                   )}
                 </button>

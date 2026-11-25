@@ -209,3 +209,53 @@ async def test_proxy_unreachable_backend_returns_502() -> None:
         assert stats["total_in_flight"] == 0  # In-flight must still be 0!
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_proxy_preserves_multi_set_cookie_without_cross_client_leakage() -> None:
+    """Multiple Set-Cookie headers stay intact and proxy never shares cookies across clients."""
+    upstream_app = web.Application()
+
+    async def login(request: web.Request) -> web.Response:
+        resp = web.json_response(
+            {
+                "forwarded_proto": request.headers.get("X-Forwarded-Proto"),
+                "saw_cookie": request.headers.get("Cookie"),
+            }
+        )
+        resp.headers.add("Set-Cookie", "sid=abc123; Path=/; HttpOnly")
+        resp.headers.add("Set-Cookie", "csrf=xyz789; Path=/")
+        return resp
+
+    upstream_app.router.add_get("/login", login)
+    upstream_server = TestServer(upstream_app)
+    await upstream_server.start_server()
+
+    settings = LBSettings(
+        backends=[BackendConfig(url=f"http://127.0.0.1:{upstream_server.port}")],
+    )
+    app = create_app(settings=settings)
+    lb_server = TestServer(app)
+    client_a = TestClient(lb_server)
+    client_b = TestClient(lb_server)
+    await client_a.start_server()
+    await client_b.start_server()
+
+    try:
+        r1 = await client_a.get("/login", headers={"X-Forwarded-Proto": "https"})
+        assert r1.status == 200
+        cookies = r1.headers.getall("Set-Cookie")
+        assert len(cookies) == 2
+        assert any("sid=abc123" in c for c in cookies)
+        assert any("csrf=xyz789" in c for c in cookies)
+        data1 = await r1.json()
+        assert data1["forwarded_proto"] == "https"
+
+        # Independent client without Cookie header must NOT inherit client_a's cookies from LB
+        r2 = await client_b.get("/login")
+        data2 = await r2.json()
+        assert data2["saw_cookie"] is None
+    finally:
+        await client_b.close()
+        await client_a.close()
+        await upstream_server.close()

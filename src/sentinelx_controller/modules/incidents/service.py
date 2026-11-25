@@ -1,6 +1,7 @@
 """Application service layer for Incidents module."""
 
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -79,6 +80,40 @@ def _extract_defense_status(summary: str | None, status: str) -> IncidentDefense
     if _EXECUTION_FAILED_MARKER in summary:
         return IncidentDefenseStatus.EXECUTION_FAILED
     return None
+
+
+def _extract_attacker_ip(model: IncidentModel) -> str | None:
+    if model.correlation_key and model.correlation_key.startswith("network:"):
+        ip = model.correlation_key.removeprefix("network:").strip()
+        return ip or None
+    return None
+
+
+def _extract_ports_from_summary(summary: str | None) -> list[int]:
+    if not summary:
+        return []
+    match = re.search(r"Port:\s*([0-9,\s]+)", summary)
+    if not match:
+        return []
+    ports: list[int] = []
+    for token in match.group(1).split(","):
+        cleaned = token.strip()
+        if cleaned.isdigit():
+            port = int(cleaned)
+            if 1 <= port <= 65535 and port not in ports:
+                ports.append(port)
+    return ports
+
+
+def _extract_ports_from_events(events: list[DetectionEventResponse]) -> list[int]:
+    ports: list[int] = []
+    for ev in events:
+        raw_ports = ev.details.get("targeted_ports") or ev.details.get("target_ports")
+        if isinstance(raw_ports, list):
+            for p in raw_ports:
+                if isinstance(p, int) and 1 <= p <= 65535 and p not in ports:
+                    ports.append(p)
+    return ports
 
 
 def _expected_title(event: DetectionEventContract) -> str:
@@ -367,16 +402,28 @@ class IncidentService:
             if is_new
             else RealtimeEventType.INCIDENT_UPDATE.value
         )
+        cumulative_count = max(await self._event_count(active_incident.id), len(events))
+        ports = _extract_ports_from_summary(active_incident.summary)
+        for ev in events:
+            raw_ports = getattr(ev.details, "targeted_ports", None)
+            if isinstance(raw_ports, list):
+                for p in raw_ports:
+                    if isinstance(p, int) and 1 <= p <= 65535 and p not in ports:
+                        ports.append(p)
         msg = RealtimeMessage(
             event=event_type,
             data={
                 "id": str(active_incident.id),
                 "project_id": str(active_incident.project_id),
+                "node_id": str(active_incident.node_id) if active_incident.node_id else None,
                 "title": active_incident.title,
                 "status": active_incident.status,
                 "severity": active_incident.severity,
                 "started_at": active_incident.started_at.isoformat(),
-                "event_count": len(events),
+                "summary": active_incident.summary,
+                "attacker_ip": _extract_attacker_ip(active_incident),
+                "targeted_ports": ports,
+                "event_count": cumulative_count,
             },
             timestamp=now,
         )
@@ -396,19 +443,10 @@ class IncidentService:
 
         return [
             (
-                IncidentResponse(
-                    id=str(active_incident.id),
-                    project_id=str(active_incident.project_id),
-                    title=active_incident.title,
-                    status=IncidentStatus(active_incident.status),
-                    severity=DetectionSeverity(active_incident.severity),
-                    started_at=active_incident.started_at,
-                    resolved_at=active_incident.resolved_at,
-                    summary=active_incident.summary,
-                    defense_status=_extract_defense_status(
-                        active_incident.summary, active_incident.status
-                    ),
-                    event_count=len(events),
+                self._to_response(
+                    active_incident,
+                    event_count=cumulative_count,
+                    targeted_ports=ports,
                 ),
                 events,
             )
@@ -428,6 +466,25 @@ class IncidentService:
             else:
                 incident.summary = cleaned or None
             await self._repo.save(incident)
+            msg = RealtimeMessage(
+                event=RealtimeEventType.INCIDENT_UPDATE.value,
+                data={
+                    "id": str(incident.id),
+                    "project_id": str(incident.project_id),
+                    "node_id": str(incident.node_id) if incident.node_id else None,
+                    "title": incident.title,
+                    "status": incident.status,
+                    "severity": incident.severity,
+                    "defense_status": None,
+                    "attacker_ip": _extract_attacker_ip(incident),
+                    "summary": incident.summary,
+                },
+                timestamp=datetime.now(UTC),
+            )
+            if self._publisher is not None:
+                self._publisher.enqueue(msg)
+            elif self._realtime_hub is not None:
+                await self._realtime_hub.broadcast(msg)
 
     async def mark_defense_failed(
         self,
@@ -458,10 +515,12 @@ class IncidentService:
             data={
                 "id": str(incident.id),
                 "project_id": str(incident.project_id),
+                "node_id": str(incident.node_id) if incident.node_id else None,
                 "title": incident.title,
                 "status": incident.status,
                 "severity": incident.severity,
                 "defense_status": defense_status.value if defense_status else None,
+                "attacker_ip": _extract_attacker_ip(incident),
                 "summary": incident.summary,
             },
             timestamp=datetime.now(UTC),
@@ -534,9 +593,38 @@ class IncidentService:
             return int(val) if isinstance(val, int) else 0
         return 0
 
+    @staticmethod
+    def _to_response(
+        model: IncidentModel,
+        *,
+        event_count: int = 0,
+        targeted_ports: list[int] | None = None,
+    ) -> IncidentResponse:
+        ports = (
+            targeted_ports
+            if targeted_ports is not None
+            else _extract_ports_from_summary(model.summary)
+        )
+        return IncidentResponse(
+            id=str(model.id),
+            project_id=str(model.project_id),
+            node_id=str(model.node_id) if model.node_id else None,
+            title=model.title,
+            status=IncidentStatus(model.status),
+            severity=DetectionSeverity(model.severity),
+            started_at=model.started_at,
+            resolved_at=model.resolved_at,
+            summary=model.summary,
+            defense_status=_extract_defense_status(model.summary, model.status),
+            attacker_ip=_extract_attacker_ip(model),
+            targeted_ports=ports,
+            event_count=event_count,
+        )
+
     async def list_incidents(
         self,
         project_id_str: str | None = None,
+        node_id_str: str | None = None,
         status: str | None = None,
         severity: str | None = None,
         start_time: datetime | None = None,
@@ -555,8 +643,19 @@ class IncidentService:
                     detail="Invalid project UUID format",
                 ) from err
 
+        node_uuid: uuid.UUID | None = None
+        if node_id_str is not None:
+            try:
+                node_uuid = uuid.UUID(node_id_str)
+            except ValueError as err:
+                raise HTTPException(
+                    status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Invalid node UUID format",
+                ) from err
+
         total, models = await self._repo.query_incidents(
             project_id=project_uuid,
+            node_id=node_uuid,
             status=status,
             severity=severity,
             start_time=start_time,
@@ -573,21 +672,7 @@ class IncidentService:
         )
         for m in models:
             count = counts.get(m.id, 0)
-            items.append(
-                IncidentResponse(
-                    id=str(m.id),
-                    project_id=str(m.project_id),
-                    node_id=str(m.node_id) if m.node_id else None,
-                    title=m.title,
-                    status=IncidentStatus(m.status),
-                    severity=DetectionSeverity(m.severity),
-                    started_at=m.started_at,
-                    resolved_at=m.resolved_at,
-                    summary=m.summary,
-                    defense_status=_extract_defense_status(m.summary, m.status),
-                    event_count=count,
-                )
-            )
+            items.append(self._to_response(m, event_count=count))
 
         return IncidentListResponse(total=total, items=items)
 
@@ -617,6 +702,10 @@ class IncidentService:
             )
             events_list = events_resp.items
 
+        ports = _extract_ports_from_events(events_list)
+        if not ports:
+            ports = _extract_ports_from_summary(model.summary)
+
         return IncidentDetailResponse(
             id=str(model.id),
             project_id=str(model.project_id),
@@ -628,6 +717,8 @@ class IncidentService:
             resolved_at=model.resolved_at,
             summary=model.summary,
             defense_status=_extract_defense_status(model.summary, model.status),
+            attacker_ip=_extract_attacker_ip(model),
+            targeted_ports=ports,
             event_count=count,
             events=events_list,
         )
@@ -672,9 +763,12 @@ class IncidentService:
             data={
                 "id": str(model.id),
                 "project_id": str(model.project_id),
+                "node_id": str(model.node_id) if model.node_id else None,
                 "title": model.title,
                 "status": model.status,
                 "severity": model.severity,
+                "attacker_ip": _extract_attacker_ip(model),
+                "summary": model.summary,
                 "resolved_at": model.resolved_at.isoformat() if model.resolved_at else None,
             },
             timestamp=now,
@@ -685,19 +779,7 @@ class IncidentService:
             await self._realtime_hub.broadcast(msg)
 
         count = await self._event_count(model.id)
-        return IncidentResponse(
-            id=str(model.id),
-            project_id=str(model.project_id),
-            node_id=str(model.node_id) if model.node_id else None,
-            title=model.title,
-            status=IncidentStatus(model.status),
-            severity=DetectionSeverity(model.severity),
-            started_at=model.started_at,
-            resolved_at=model.resolved_at,
-            summary=model.summary,
-            defense_status=_extract_defense_status(model.summary, model.status),
-            event_count=count,
-        )
+        return self._to_response(model, event_count=count)
 
     async def delete_incident(self, incident_id_str: str) -> None:
         """Xóa vĩnh viễn một sự cố đã giải quyết / đã đóng khỏi danh sách theo dõi."""

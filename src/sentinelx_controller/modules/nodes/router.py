@@ -108,9 +108,9 @@ async def process_heartbeat(
     defense_service: Annotated[DefenseService, Depends(get_defense_service)],
     recovery_service: Annotated[RecoveryService, Depends(get_recovery_service)],
 ) -> HeartbeatResponse:
+    # Authenticate before scanning recovery state or claiming commands.
+    response = await service.process_heartbeat(request)
     try:
-        # Authenticate before scanning recovery state or claiming commands.
-        response = await service.process_heartbeat(request)
         node_uuid = uuid.UUID(request.node_id)
         await recovery_service.scan_and_revert_expired_actions(node_uuid)
         commands = (

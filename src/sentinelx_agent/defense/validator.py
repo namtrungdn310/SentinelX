@@ -92,6 +92,20 @@ class LocalSafetyValidator:
         if command.action_type == PolicyActionType.CLEAR_OS_CACHE.value:
             return True, None
 
+        if command.action_type == PolicyActionType.ADAPTIVE.value:
+            service_name = (
+                command.command_payload.get("service_name")
+                or command.command_payload.get("target")
+            )
+            if isinstance(service_name, str) and service_name.strip():
+                if is_protected_system_service(service_name):
+                    return (
+                        False,
+                        f"Service '{service_name}' is a protected system service and "
+                        "cannot be restarted",
+                    )
+            return True, None
+
         if command.action_type == PolicyActionType.RESTART_SERVICE.value:
             service_name = (
                 command.command_payload.get("service_name")

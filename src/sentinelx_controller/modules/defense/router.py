@@ -36,6 +36,7 @@ def get_defense_service(
 )
 async def list_defense_actions(
     service: Annotated[DefenseService, Depends(get_defense_service)],
+    project_id: str | None = Query(default=None, description="Filter by project UUID"),
     node_id: str | None = Query(default=None, description="Filter by node UUID"),
     incident_id: str | None = Query(default=None, description="Filter by incident UUID"),
     action_status: str | None = Query(default=None, alias="status", description="Filter by status"),
@@ -44,6 +45,7 @@ async def list_defense_actions(
 ) -> DefenseActionListResponse:
     return await service.list_actions(
         node_id_str=node_id,
+        project_id_str=project_id,
         incident_id_str=incident_id,
         status_filter=action_status,
         limit=limit,

@@ -2,7 +2,7 @@
  * Type definitions matching SentinelX Controller REST & WebSocket contracts.
  */
 
-export type NodeStatus = 'unenrolled' | 'online' | 'offline' | 'degraded';
+export type NodeStatus = 'unenrolled' | 'online' | 'offline';
 export type LBAlgorithmType = 'round_robin' | 'least_in_flight';
 export type NodeLBRoleType = 'standalone' | 'lb_backend';
 
@@ -30,6 +30,7 @@ export interface Node {
   hostname: string;
   ip_address: string;
   status: NodeStatus;
+  os_info?: string | null;
   last_seen: string | null;
   created_at: string;
   lb_role?: NodeLBRoleType;
@@ -76,9 +77,12 @@ export interface RealtimeMessage {
 
 export interface DetectionEvent {
   id: string;
+  incident_id?: string | null;
   node_id: string;
   detector_name: string;
   severity: 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  attacker_ip?: string | null;
+  confidence_score?: number;
   detected_at: string;
   details: Record<string, unknown>;
 }
@@ -199,6 +203,7 @@ export interface TelemetryDetectionPreset {
 
 export interface ProjectSettings {
   project_id: string;
+  node_id?: string | null;
   active_profile: PresetProfileType;
   updated_at: string;
   updated_by: string;
@@ -250,4 +255,14 @@ export interface ProjectLBStatus {
   total_errors: number;
   backends: LBBackendRuntime[];
 }
+
+export interface AgentBundleInfo {
+  available: boolean;
+  release: string | null;
+  filename: string | null;
+  sha256: string | null;
+  size_bytes: number | null;
+  download_path: string;
+}
+
 

@@ -2,7 +2,6 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { CheckCircle2, Flame, ShieldAlert, X } from "lucide-react";
 import type { DefenseAction, IPWhitelist, Node } from "../types";
 import { createManualDefenseAction, fetchWhitelist } from "../api";
-import { MOCK_WHITELIST } from "../mockData";
 import { validateManualBlockIp } from "../presentation";
 import { Modal } from "./Modal";
 
@@ -12,7 +11,6 @@ interface Props {
   nodes: Node[];
   existingActions?: DefenseAction[];
   onActionCreated: (action: DefenseAction) => void;
-  isDemoMode: boolean;
 }
 
 export function ManualBlockModal({
@@ -21,7 +19,6 @@ export function ManualBlockModal({
   nodes,
   existingActions = [],
   onActionCreated,
-  isDemoMode,
 }: Props) {
   const id = useId();
   const [nodeId, setNodeId] = useState(nodes[0]?.id || "");
@@ -29,7 +26,7 @@ export function ManualBlockModal({
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [liveWhitelist, setLiveWhitelist] = useState<IPWhitelist[]>([]);
+  const [effectiveWhitelist, setEffectiveWhitelist] = useState<IPWhitelist[]>([]);
 
   const effectiveNodeId = nodes.some((n) => n.id === nodeId) ? nodeId : nodes[0]?.id || "";
   const selectedNode = useMemo(
@@ -39,28 +36,19 @@ export function ManualBlockModal({
   const projectId = selectedNode?.project_id ?? nodes[0]?.project_id ?? null;
 
   useEffect(() => {
-    if (!isOpen || isDemoMode || !projectId) return;
+    if (!isOpen || !projectId) return;
     let cancelled = false;
     void fetchWhitelist(projectId)
       .then((items) => {
-        if (!cancelled) setLiveWhitelist(items);
+        if (!cancelled) setEffectiveWhitelist(items);
       })
       .catch(() => {
-        if (!cancelled) setLiveWhitelist([]);
+        if (!cancelled) setEffectiveWhitelist([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [isOpen, isDemoMode, projectId]);
-
-  const effectiveWhitelist = useMemo(() => {
-    if (isDemoMode) {
-      return projectId
-        ? MOCK_WHITELIST.filter((w) => w.project_id === projectId)
-        : MOCK_WHITELIST;
-    }
-    return liveWhitelist;
-  }, [isDemoMode, projectId, liveWhitelist]);
+  }, [isOpen, projectId]);
 
   const ipCheck = useMemo(
     () => validateManualBlockIp(targetIp, selectedNode, effectiveWhitelist, existingActions),
@@ -84,28 +72,6 @@ export function ManualBlockModal({
     setError(null);
     try {
       const durationSeconds = Math.max(60, Math.min(86400, durationMinutes * 60));
-      if (isDemoMode) {
-        const nowIso = new Date().toISOString();
-        const mockAction: DefenseAction = {
-          id: `def-man-${Date.now()}`,
-          incident_id: null,
-          policy_id: null,
-          node_id: effectiveNodeId,
-          action_type: "BLOCK_IP_NFTABLES",
-          target_ip: targetIp.trim(),
-          command_payload: { duration_seconds: durationSeconds, manual: true },
-          status: "APPLIED",
-          agent_ack_at: nowIso,
-          error_message: null,
-          created_at: nowIso,
-          applied_at: nowIso,
-          effective_until: new Date(Date.now() + durationSeconds * 1000).toISOString(),
-        };
-        onActionCreated(mockAction);
-        onClose();
-        return;
-      }
-
       const res = await createManualDefenseAction({
         node_id: effectiveNodeId,
         action_type: "BLOCK_IP_NFTABLES",

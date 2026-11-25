@@ -18,7 +18,6 @@ import {
   revertDefenseAction,
   updateIncident,
 } from "../api";
-import { MOCK_INCIDENT_DETAILS, MOCK_POLICIES } from "../mockData";
 import {
   classifyIncidentHandling,
   formatBytes,
@@ -35,7 +34,6 @@ interface Props {
   onClose: () => void;
   onIncidentUpdated?: (updated: Incident) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
-  isDemoMode: boolean;
   nodes?: Node[];
   policies?: DefensePolicy[];
   defenseActions?: DefenseAction[];
@@ -47,25 +45,19 @@ export function IncidentDetailModal({
   onClose,
   onIncidentUpdated,
   onNotify,
-  isDemoMode,
   nodes,
   policies,
   defenseActions,
 }: Props) {
   const id = useId();
-  const [detail, setDetail] = useState<IncidentDetail | null>(() => {
-    if (isDemoMode && incident) {
-      return MOCK_INCIDENT_DETAILS[incident.id] || { ...incident, events: [] };
-    }
-    return null;
-  });
+  const [detail, setDetail] = useState<IncidentDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isDemoMode || !incident) return;
+    if (!incident) return;
     let isMounted = true;
     const timer = window.setTimeout(() => {
       setLoading(true);
@@ -85,7 +77,7 @@ export function IncidentDetailModal({
       isMounted = false;
       window.clearTimeout(timer);
     };
-  }, [incident, isDemoMode]);
+  }, [incident]);
 
   if (!isOpen || !incident) return null;
 
@@ -93,26 +85,6 @@ export function IncidentDetailModal({
     try {
       setResolving(true);
       setError(null);
-      if (isDemoMode) {
-        const updated: Incident = {
-          ...incident,
-          status: "RESOLVED",
-          resolved_at: new Date().toISOString(),
-        };
-        setDetail((prev) => (prev ? { ...prev, ...updated } : null));
-        onIncidentUpdated?.(updated);
-        onNotify?.({
-          id: `incident-resolve-${incident.id}-${Date.now()}`,
-          type: "recovery",
-          title: "Đã đánh dấu giải quyết sự cố",
-          message:
-            incident.status === "MITIGATING"
-              ? `${incident.title}: đã đóng sự cố và chuyển sang trạng thái giải quyết.`
-              : `${incident.title}: đã xác nhận giải quyết thủ công.`,
-          targetView: "incidents",
-        });
-        return;
-      }
 
       const actions = await fetchDefenseActions({ incidentId: incident.id, limit: 100 });
       const sentActions = actions.filter((a) => a.status === "SENT");
@@ -168,7 +140,7 @@ export function IncidentDetailModal({
   const firstEvent = detail?.events?.[0];
   const handling = classifyIncidentHandling(
     incident,
-    policies ?? (isDemoMode ? MOCK_POLICIES : []),
+    policies ?? [],
     firstEvent?.detector_name,
   );
 

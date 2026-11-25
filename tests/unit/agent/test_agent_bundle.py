@@ -119,6 +119,20 @@ def test_build_contains_only_agent_common_and_locked_runtime(
     assert "--frozen" in commands[0] and "--no-dev" in commands[0]
     for dependency in ("fastapi", "uvicorn", "sqlalchemy", "asyncpg", "alembic"):
         assert dependency in commands[0]
+    sha_file = tmp_path / f"{archive.name}.sha256"
+    latest_file = tmp_path / "latest.json"
+    assert sha_file.is_file()
+    assert latest_file.is_file()
+    latest = json.loads(latest_file.read_text(encoding="utf-8"))
+    expected_sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+    assert latest["filename"] == archive.name
+    assert latest["sha256"] == expected_sha256
+    assert latest["size_bytes"] == archive.stat().st_size
+    assert sha_file.read_text(encoding="utf-8").strip() == f"{expected_sha256}  {archive.name}"
+    with pytest.raises(FileExistsError):
+        builder.build(ROOT, tmp_path)
+    reused = builder.build(ROOT, tmp_path, allow_existing=True)
+    assert reused == archive
 
 
 def test_defense_permission_profile_only_changes_its_own_override(

@@ -8,8 +8,12 @@ COPY src/ src/
 COPY migrations/ migrations/
 COPY alembic.ini ./
 COPY configs/ configs/
-RUN uv sync --frozen --no-dev
+COPY scripts/build_agent_bundle.py scripts/build_agent_bundle.py
+COPY deploy/agent/ deploy/agent/
+COPY docs/AGENT_INSTALLATION.md docs/AGENT_INSTALLATION.md
+RUN uv sync --frozen --no-dev \
+    && uv run --frozen --no-sync python scripts/build_agent_bundle.py --output /app/dist/agent
 USER 10001:10001
 EXPOSE 8000
-HEALTHCHECK --interval=5s --timeout=3s --retries=20 CMD ["/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/health', timeout=2)"]
+HEALTHCHECK --interval=5s --timeout=3s --retries=20 CMD ["/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/ready', timeout=2)"]
 CMD ["sh", "-c", "uv run --frozen --no-sync alembic upgrade head && exec uv run --frozen --no-sync python -m sentinelx_controller.main"]

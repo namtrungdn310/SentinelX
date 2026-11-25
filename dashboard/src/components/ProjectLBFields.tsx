@@ -1,23 +1,55 @@
-import type { ProjectLBConfig } from "../types";
+import type { LBAlgorithmType, ProjectLBConfig } from "../types";
 
 export function ProjectLBTechnicalFields({
   idPrefix,
   value,
   onChange,
+  currentAlgorithm,
   disabled = false,
 }: {
   idPrefix: string;
   value: ProjectLBConfig;
   onChange: (next: ProjectLBConfig) => void;
+  currentAlgorithm?: LBAlgorithmType;
   disabled?: boolean;
 }) {
   return (
     <div className="lb-advanced-panel">
+      <div className="form-group">
+        <label id={`${idPrefix}-lb-algo-label`}>Thuật toán chia tải</label>
+        <div
+          className="lb-algo-segmented lb-algo-segmented-full"
+          role="group"
+          aria-labelledby={`${idPrefix}-lb-algo-label`}
+        >
+          <button
+            type="button"
+            className={value.algorithm === "round_robin" ? "active" : ""}
+            aria-pressed={value.algorithm === "round_robin"}
+            onClick={() => onChange({ ...value, algorithm: "round_robin" })}
+            disabled={disabled}
+          >
+            {currentAlgorithm === "round_robin"
+              ? "Round Robin (hiện tại)"
+              : "Round Robin"}
+          </button>
+          <button
+            type="button"
+            className={value.algorithm === "least_in_flight" ? "active" : ""}
+            aria-pressed={value.algorithm === "least_in_flight"}
+            onClick={() => onChange({ ...value, algorithm: "least_in_flight" })}
+            disabled={disabled}
+          >
+            {currentAlgorithm === "least_in_flight"
+              ? "Least In-Flight (hiện tại)"
+              : "Least In-Flight"}
+          </button>
+        </div>
+      </div>
+
       <div className="lb-fields-grid">
         <div className="form-group">
-          <label htmlFor={`${idPrefix}-lb-url`}>
-            Endpoint LB riêng (Tùy chọn)
-          </label>
+          <label htmlFor={`${idPrefix}-lb-url`}>Endpoint LB</label>
           <input
             id={`${idPrefix}-lb-url`}
             type="url"
@@ -30,17 +62,23 @@ export function ProjectLBTechnicalFields({
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${idPrefix}-lb-health-path`}>
-            Đường dẫn Health Check
-          </label>
+          <label htmlFor={`${idPrefix}-lb-health-path`}>Health Check</label>
           <input
             id={`${idPrefix}-lb-health-path`}
             type="text"
             className="form-input font-mono"
             value={value.health_path}
             onChange={(e) =>
-              onChange({ ...value, health_path: e.target.value || "/health" })
+              onChange({ ...value, health_path: e.target.value })
             }
+            onBlur={(e) => {
+              const cleaned = e.target.value.trim();
+              if (!cleaned) {
+                onChange({ ...value, health_path: "/health" });
+              } else if (!cleaned.startsWith("/")) {
+                onChange({ ...value, health_path: `/${cleaned}` });
+              }
+            }}
             placeholder="/health"
             disabled={disabled}
           />
@@ -74,7 +112,7 @@ export function ProjectLBTechnicalFields({
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${idPrefix}-lb-fail`}>Ngưỡng eject (lỗi)</label>
+          <label htmlFor={`${idPrefix}-lb-fail`}>Ngưỡng eject</label>
           <input
             id={`${idPrefix}-lb-fail`}
             type="number"
@@ -93,7 +131,7 @@ export function ProjectLBTechnicalFields({
         </div>
 
         <div className="form-group">
-          <label htmlFor={`${idPrefix}-lb-succ`}>Ngưỡng hồi phục (OK)</label>
+          <label htmlFor={`${idPrefix}-lb-succ`}>Ngưỡng hồi phục</label>
           <input
             id={`${idPrefix}-lb-succ`}
             type="number"

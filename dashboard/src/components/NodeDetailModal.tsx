@@ -1,7 +1,8 @@
 import { useId, useState } from "react";
-import { Check, Copy, KeyRound, Server, X } from "lucide-react";
+import { Activity, KeyRound, Server, X } from "lucide-react";
 import type { Node } from "../types";
 import { createEnrollmentToken } from "../api";
+import { getDefaultAgentControllerUrl } from "../agentInstall";
 import {
   formatCpuUsage,
   formatDiskUsage,
@@ -12,25 +13,29 @@ import {
   formatPercent,
   validMetric,
 } from "../presentation";
+import { AgentInstallSection } from "./AgentInstallSection";
 import { Modal } from "./Modal";
+import { useAgentBundleInfo } from "./useAgentBundleInfo";
 
 interface Props {
   node: Node | null;
   isOpen: boolean;
   onClose: () => void;
-  isDemoMode: boolean;
+  onInspectMetrics?: (node: Node) => void;
 }
 export function NodeDetailModal({
   node,
   isOpen,
   onClose,
-  isDemoMode,
+  onInspectMetrics,
 }: Props) {
   const id = useId();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [controllerUrl, setControllerUrl] = useState(getDefaultAgentControllerUrl);
+  const { bundleInfo, bundleLoading } = useAgentBundleInfo(Boolean(isOpen && node));
+
   if (!isOpen || !node) return null;
   const close = () => {
     if (!loading) onClose();
@@ -39,22 +44,11 @@ export function NodeDetailModal({
     try {
       setLoading(true);
       setError(null);
-      setCopied(false);
       setToken(await createEnrollmentToken(node.id, 24));
     } catch {
       setError("Không cấp được token. Kiểm tra kết nối Controller và thử lại.");
     } finally {
       setLoading(false);
-    }
-  };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(token!);
-      setCopied(true);
-    } catch {
-      setError(
-        "Không truy cập được clipboard. Chọn token và sao chép thủ công.",
-      );
     }
   };
   return (
@@ -104,14 +98,14 @@ export function NodeDetailModal({
           <div>
             <span>CPU</span>
             <strong className="font-mono">{formatPercent(node.latestCpu)}</strong>
-            {validMetric(node.latestCpu) && (
+            {validMetric(node.latestCpu) && getNodeHardware(node).cpuCores !== undefined && (
               <small>{formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)}</small>
             )}
           </div>
           <div>
             <span>Bộ nhớ RAM</span>
             <strong className="font-mono">{formatPercent(node.latestMemory)}</strong>
-            {validMetric(node.latestMemory) && (
+            {validMetric(node.latestMemory) && getNodeHardware(node).totalMemoryBytes !== undefined && (
               <small>{formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)}</small>
             )}
           </div>
@@ -119,7 +113,9 @@ export function NodeDetailModal({
             <span>Dung lượng ổ đĩa</span>
             <strong className="font-mono">{formatPercent(node.latestDisk)}</strong>
             {validMetric(node.latestDisk) ? (
-              <small>{formatDiskUsage(node.latestDisk, getNodeHardware(node).totalDiskBytes)}</small>
+              getNodeHardware(node).totalDiskBytes !== undefined && (
+                <small>{formatDiskUsage(node.latestDisk, getNodeHardware(node).totalDiskBytes)}</small>
+              )
             ) : (
               <small>Không có dữ liệu ổ đĩa</small>
             )}
@@ -134,8 +130,7 @@ export function NodeDetailModal({
               type="button"
               className="btn btn-primary"
               onClick={generate}
-              disabled={loading || isDemoMode}
-              title={isDemoMode ? "Cần kết nối Controller để tạo token" : undefined}
+              disabled={loading}
             >
               {loading ? "Đang cấp token…" : token ? "Cấp lại token" : "Tạo token"}
             </button>
@@ -146,22 +141,29 @@ export function NodeDetailModal({
             </p>
           )}
           {token && (
-            <div className="token-result">
-              <div className="code-box">{token}</div>
-              <button
-                type="button"
-                className="btn btn-outline"
-                aria-label="Sao chép token đăng ký"
-                onClick={copy}
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? "Đã sao chép" : "Sao chép token"}
-              </button>
-            </div>
+            <AgentInstallSection
+              nodeId={node.id}
+              token={token}
+              controllerUrl={controllerUrl}
+              onControllerUrlChange={setControllerUrl}
+              bundleInfo={bundleInfo}
+              bundleLoading={bundleLoading}
+            />
           )}
         </div>
       </div>
       <div className="modal-actions">
+        {onInspectMetrics && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => onInspectMetrics(node)}
+            disabled={loading}
+          >
+            <Activity size={15} />
+            Xem mẫu dữ liệu
+          </button>
+        )}
         <button
           type="button"
           className="btn btn-outline"

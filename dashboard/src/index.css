@@ -675,6 +675,85 @@ textarea:focus-visible,
 .token-result button {
     justify-self: start;
 }
+.agent-install-section {
+    display: grid;
+    gap: 12px;
+}
+.install-mode-tabs {
+    margin-top: 2px;
+}
+.install-mode-tabs button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+}
+.install-mode-panel {
+    display: grid;
+    gap: 10px;
+}
+.bundle-meta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-canvas);
+    border: 1px solid var(--border-subtle);
+}
+.bundle-meta-info {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+.bundle-meta-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+.bundle-meta-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.install-bundle-warning {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--status-warn-bg);
+    color: var(--status-warn);
+    border: 1px solid var(--status-warn-border);
+}
+.install-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.install-token-panel {
+    display: grid;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+}
+.install-token-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.install-token-box {
+    margin-top: 0;
+    overflow-wrap: anywhere;
+}
+.install-dev-lead {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.install-dev-lead svg {
+    flex-shrink: 0;
+    margin-top: 3px;
+}
 .help-modal p {
     color: var(--text-secondary);
 }
@@ -714,6 +793,16 @@ kbd {
     }
     .token-section-header > button {
         margin-left: 0;
+        width: 100%;
+    }
+    .bundle-meta-bar,
+    .install-token-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .bundle-meta-bar > a,
+    .install-token-header > button,
+    .install-actions-row > button {
         width: 100%;
     }
 }
