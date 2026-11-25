@@ -427,7 +427,7 @@ export function App() {
                 </a>
               ))}
             </nav>
-            <span className="nav-label" style={{ marginTop: 16 }}>BẢO MẬT & TƯỜNG LỬA</span>
+            <span className="nav-label nav-label-section">BẢO MẬT & TƯỜNG LỬA</span>
             <nav aria-label="Điều hướng bảo mật và tường lửa">
               {[
                 { id: "incidents", label: "Sự cố an ninh", Icon: ShieldAlert, count: activeIncidentsCount, tone: "crit" },
