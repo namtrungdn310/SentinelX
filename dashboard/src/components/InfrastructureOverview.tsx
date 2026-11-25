@@ -37,7 +37,7 @@ export function InfrastructureOverview({
   const ranked = nodes
     .filter(
       (node) =>
-        (node.status === "online" || node.status === "degraded") &&
+        node.status === "online" &&
         validMetric(node[resource]),
     )
     .sort((a, b) => b[resource]! - a[resource]!)
@@ -157,11 +157,21 @@ export function InfrastructureOverview({
                     </span>
                   <div className="ranked-metric-values">
                     <b>{node[resource]!.toFixed(1)}%</b>
-                    <small className="metric-capacity">
-                      {resource === "latestCpu"
-                        ? formatCpuUsage(node.latestCpu, getNodeHardware(node).cpuCores)
-                        : formatMemoryUsage(node.latestMemory, getNodeHardware(node).totalMemoryBytes)}
-                    </small>
+                    {(() => {
+                      const hw = getNodeHardware(node);
+                      const hasCap =
+                        resource === "latestCpu"
+                          ? hw.cpuCores !== undefined
+                          : hw.totalMemoryBytes !== undefined;
+                      if (!hasCap) return null;
+                      return (
+                        <small className="metric-capacity">
+                          {resource === "latestCpu"
+                            ? formatCpuUsage(node.latestCpu, hw.cpuCores)
+                            : formatMemoryUsage(node.latestMemory, hw.totalMemoryBytes)}
+                        </small>
+                      );
+                    })()}
                   </div>
                   <span className={`ranking-state ${node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "warning" : ""}`}>
                     {node[resource]! > (resource === "latestCpu" ? 75 : 85) ? "Vượt ngưỡng" : "Trong ngưỡng"}

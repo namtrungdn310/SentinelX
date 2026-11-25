@@ -6,20 +6,12 @@ import {
   fetchNodeMetrics,
   fetchNodes,
   fetchProjects,
+  seedDefaultPolicies,
   createProject as apiCreateProject,
   updateProject as apiUpdateProject,
   updateNode as apiUpdateNode,
-  defaultProjectLBConfig,
 } from "./api";
 import { mergeEvents } from "./events";
-import {
-  generateMockTelemetryHistory,
-  MOCK_INITIAL_EVENTS,
-  MOCK_INCIDENTS,
-  MOCK_DEFENSE_ACTIONS,
-  MOCK_NODES,
-  MOCK_PROJECTS,
-} from "./mockData";
 import type {
   DefenseAction,
   Incident,
@@ -41,39 +33,29 @@ interface Snapshot {
   events: RealtimeMessage[];
   notableEvents: RealtimeMessage[];
   histories: Record<string, MetricSample[]>;
-  isDemoMode: boolean;
 }
 
-function demoSnapshot(): Snapshot {
-  return {
-    projects: MOCK_PROJECTS,
-    nodes: MOCK_NODES,
-    events: MOCK_INITIAL_EVENTS,
-    notableEvents: MOCK_INITIAL_EVENTS.filter(
-      (event) => event.event !== "metric_update" && event.event !== "pong",
-    ),
-    histories: Object.fromEntries(
-      MOCK_NODES.map((node) => [
-        node.id,
-        node.status === "online" ? generateMockTelemetryHistory(node, 120) : [],
-      ]),
-    ),
-    isDemoMode: true,
-  };
-}
+const EMPTY_SNAPSHOT: Snapshot = {
+  projects: [],
+  nodes: [],
+  events: [],
+  notableEvents: [],
+  histories: {},
+};
 
 export function useInfrastructure() {
-  const [snapshot, setSnapshot] = useState<Snapshot>(demoSnapshot);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY_SNAPSHOT);
+  const [isRefreshing, setIsRefreshing] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [chartRequest, setChartRequest] = useState<{
     nodeId: string;
     loading: boolean;
     error: string | null;
   } | null>(null);
-  const [incidents, setIncidents] = useState<Incident[]>(() => MOCK_INCIDENTS);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [incidentRevision, setIncidentRevision] = useState(0);
-  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>(() => MOCK_DEFENSE_ACTIONS);
+  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>([]);
   const activeBlocksCount = defenseActions.filter(
     (a) => a.status === "APPLIED" && a.action_type === "BLOCK_IP_NFTABLES",
   ).length;
@@ -81,8 +63,6 @@ export function useInfrastructure() {
 
   const requestId = useRef(0);
   const historyRequestId = useRef(0);
-  const modeRef = useRef(true);
-  const demoTickRef = useRef(0);
 
   const pushSecurityToast = useCallback((toast: SecurityToastPayload) => {
     setSecurityToasts((previous) => {
@@ -102,12 +82,10 @@ export function useInfrastructure() {
     setSecurityToasts((previous) => previous.filter((item) => item.id !== toastId));
   }, []);
 
-  const handleMessage = useCallback((message: RealtimeMessage) => {
-    // Ping/Pong check
-    if (message.event === "pong") return;
+  const handleMessage = useCallback(
+    (message: RealtimeMessage) => {
+      if (message.event === "pong") return;
 
-    // In live mode, handle security events
-    if (!modeRef.current) {
       if (message.event === "incident_alert") {
         setIncidentRevision((r) => r + 1);
         void fetchIncidents({ limit: 100 })
@@ -117,9 +95,19 @@ export function useInfrastructure() {
           id: `toast-inc-${Date.now()}`,
           type: "incident",
           title: "Phát hiện sự cố an ninh mới",
-          message: String(message.data.summary || message.data.title || "Tấn công bất thường được ghi nhận"),
-          attackerIp: typeof message.data.attacker_ip === "string" ? message.data.attacker_ip : null,
-          severity: typeof message.data.severity === "string" ? message.data.severity : "CRITICAL",
+          message: String(
+            message.data.summary ||
+              message.data.title ||
+              "Tấn công bất thường được ghi nhận",
+          ),
+          attackerIp:
+            typeof message.data.attacker_ip === "string"
+              ? message.data.attacker_ip
+              : null,
+          severity:
+            typeof message.data.severity === "string"
+              ? message.data.severity
+              : "CRITICAL",
           targetView: "incidents",
         });
       } else if (message.event === "incident_update") {
@@ -143,6 +131,16 @@ export function useInfrastructure() {
                       typeof message.data.summary === "string"
                         ? message.data.summary
                         : item.summary,
+                    attacker_ip:
+                      typeof message.data.attacker_ip === "string"
+                        ? message.data.attacker_ip
+                        : item.attacker_ip,
+                    resolved_at:
+                      typeof message.data.resolved_at === "string"
+                        ? message.data.resolved_at
+                        : message.data.resolved_at === null
+                          ? null
+                          : item.resolved_at,
                     defense_status:
                       message.data.defense_status === "DELIVERY_FAILED" ||
                       message.data.defense_status === "EXECUTION_FAILED"
@@ -151,20 +149,19 @@ export function useInfrastructure() {
                           ? null
                           : item.defense_status,
                   }
-                : item
-            )
+                : item,
+            ),
           );
         }
       } else if (message.event === "defense_action_created") {
         setIncidentRevision((r) => r + 1);
-        if (!modeRef.current) {
-          void fetchDefenseActions({ limit: 100 })
-            .then((items) => setDefenseActions(items))
-            .catch(() => null);
-        }
+        void fetchDefenseActions({ limit: 100 })
+          .then((items) => setDefenseActions(items))
+          .catch(() => null);
         const actionType = String(message.data.action_type ?? "");
         const actionStatus = String(message.data.status ?? "PENDING");
-        const targetIp = typeof message.data.target_ip === "string" ? message.data.target_ip : null;
+        const targetIp =
+          typeof message.data.target_ip === "string" ? message.data.target_ip : null;
         if (actionType === "UNBLOCK_IP_NFTABLES") {
           pushSecurityToast({
             id: `toast-def-${Date.now()}`,
@@ -197,11 +194,9 @@ export function useInfrastructure() {
         }
       } else if (message.event === "defense_action_updated") {
         setIncidentRevision((r) => r + 1);
-        if (!modeRef.current) {
-          void fetchDefenseActions({ limit: 100 })
-            .then((items) => setDefenseActions(items))
-            .catch(() => null);
-        }
+        void fetchDefenseActions({ limit: 100 })
+          .then((items) => setDefenseActions(items))
+          .catch(() => null);
         const actionType = String(message.data.action_type ?? "");
         const actionStatus = String(message.data.status ?? "");
         if (actionStatus === "APPLIED" && actionType === "BLOCK_IP_NFTABLES") {
@@ -210,7 +205,8 @@ export function useInfrastructure() {
             type: "defense",
             title: "Tường lửa đã kích hoạt",
             message: "Agent đã áp dụng lệnh chặn IP vào nftables",
-            attackerIp: typeof message.data.target_ip === "string" ? message.data.target_ip : null,
+            attackerIp:
+              typeof message.data.target_ip === "string" ? message.data.target_ip : null,
             targetView: "defense",
           });
         }
@@ -219,66 +215,77 @@ export function useInfrastructure() {
         message.event === "recovery_completed"
       ) {
         setIncidentRevision((r) => r + 1);
-        if (!modeRef.current) {
-          void fetchDefenseActions({ limit: 100 })
-            .then((items) => setDefenseActions(items))
-            .catch(() => null);
-        }
+        void fetchDefenseActions({ limit: 100 })
+          .then((items) => setDefenseActions(items))
+          .catch(() => null);
       }
-    }
 
-    if (modeRef.current || message.event === "network_feature_update") return;
+      if (message.event === "network_feature_update") return;
 
-    setSnapshot((previous) => {
-      const { node_id: nodeId, samples } = message.data;
-      const latest = nodeId && samples?.length ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1) : undefined;
-      const nodes = previous.nodes.map((node) => {
-        if (node.id !== nodeId) return node;
-        if (message.event === "metric_update" && latest)
-          return {
-            ...node,
-            latestCpu: latest.cpu_percent,
-            latestMemory: latest.memory_percent,
-            latestDisk: latest.disk_percent ?? undefined,
-            latestRxBytes: latest.network_rx_bytes ?? undefined,
-            latestTxBytes: latest.network_tx_bytes ?? undefined,
-          };
-        const status = message.data.status;
-        if (
-          message.event === "node_status" &&
-          ["online", "offline", "unenrolled", "degraded"].includes(
-            String(status),
-          )
-        ) {
-          return { ...node, status: status as Node["status"] };
-        }
-        return node;
-      });
-      return {
-        ...previous,
-        nodes,
-        events: mergeEvents([message], previous.events),
-        notableEvents:
-          message.event === "metric_update"
-            ? previous.notableEvents
-            : mergeEvents([message], previous.notableEvents).slice(0, 20),
-        histories:
+      setSnapshot((previous) => {
+        const { node_id: nodeId, samples } = message.data;
+        const latest =
           nodeId && samples?.length
-            ? {
-                ...previous.histories,
-                [nodeId]: mergeSamples(
-                  previous.histories[nodeId] ?? [],
-                  samples,
-                ),
-              }
-            : previous.histories,
-      };
-    });
-  }, [pushSecurityToast]);
+            ? mergeSamples(previous.histories[nodeId] ?? [], samples).at(-1)
+            : undefined;
+        const nodes = previous.nodes.map((node) => {
+          if (node.id !== nodeId) return node;
+          if (message.event === "metric_update" && latest) {
+            return {
+              ...node,
+              status: "online" as const,
+              last_seen:
+                typeof message.data.received_at === "string"
+                  ? message.data.received_at
+                  : message.timestamp,
+              latestCpu: latest.cpu_percent,
+              latestMemory: latest.memory_percent,
+              latestDisk: latest.disk_percent ?? undefined,
+              latestRxBytes: latest.network_rx_bytes ?? undefined,
+              latestTxBytes: latest.network_tx_bytes ?? undefined,
+            };
+          }
+          const rawStatus = message.data.status;
+          if (
+            message.event === "node_status" &&
+            (rawStatus === "online" || rawStatus === "offline" || rawStatus === "unenrolled")
+          ) {
+            const nextStatus = rawStatus as Node["status"];
+            return {
+              ...node,
+              status: nextStatus,
+              last_seen:
+                typeof message.data.last_seen === "string"
+                  ? message.data.last_seen
+                  : node.last_seen,
+            };
+          }
+          return node;
+        });
+        const isMetricUpdate = message.event === "metric_update";
+        return {
+          ...previous,
+          nodes,
+          events: mergeEvents([message], previous.events),
+          notableEvents: isMetricUpdate
+            ? previous.notableEvents
+            : mergeEvents([message], previous.notableEvents).slice(0, 50),
+          histories:
+            nodeId && samples?.length
+              ? {
+                  ...previous.histories,
+                  [nodeId]: mergeSamples(previous.histories[nodeId] ?? [], samples),
+                }
+              : previous.histories,
+        };
+      });
+    },
+    [pushSecurityToast],
+  );
 
   const { isConnected, latencyMs } = useWebSocket({
     onMessage: handleMessage,
-    enabled: !snapshot.isDemoMode,
+    enabled: true,
   });
 
   const loadData = useCallback(async (quiet = false) => {
@@ -286,27 +293,27 @@ export function useInfrastructure() {
     setIsRefreshing(true);
     setConnectionError(null);
     try {
-      const [projects, nodes] = await Promise.all([
-        fetchProjects(),
-        fetchNodes(),
-      ]);
+      const [projects, nodes] = await Promise.all([fetchProjects(), fetchNodes()]);
       if (ticket !== requestId.current) return;
       const [metrics, detections, loadedIncidents, loadedDefenseActions] = await Promise.all([
         Promise.allSettled(nodes.map((node) => fetchNodeMetrics(node.id, 1))),
         fetchDetectionEvents().catch(() => null),
-        fetchIncidents({ limit: 100 }).catch(() => []),
-        fetchDefenseActions({ limit: 100 }).catch(() => []),
+        fetchIncidents({ limit: 100 }).catch(() => null),
+        fetchDefenseActions({ limit: 100 }).catch(() => null),
       ]);
       if (ticket !== requestId.current) return;
 
-      setIncidents(loadedIncidents);
-      setDefenseActions(loadedDefenseActions);
+      if (loadedIncidents !== null) {
+        setIncidents(loadedIncidents);
+      }
+      if (loadedDefenseActions !== null) {
+        setDefenseActions(loadedDefenseActions);
+      }
 
       const histories: Record<string, MetricSample[]> = {};
       const hydratedNodes = nodes.map((node, index) => {
         const result = metrics[index];
-        const samples =
-          result.status === "fulfilled" ? result.value.samples : [];
+        const samples = result.status === "fulfilled" ? result.value.samples : [];
         histories[node.id] = samples;
         const latest = samples.at(0);
         return latest
@@ -320,58 +327,91 @@ export function useInfrastructure() {
             }
           : node;
       });
-      const wasDemoMode = modeRef.current;
-      modeRef.current = false;
       setSnapshot((previous) => ({
         projects,
         nodes: hydratedNodes,
         histories: Object.fromEntries(
           nodes.map((node) => [
             node.id,
-            mergeSamples(
-              wasDemoMode ? [] : (previous.histories[node.id] ?? []),
-              histories[node.id],
-            ),
+            mergeSamples(previous.histories[node.id] ?? [], histories[node.id]),
           ]),
         ),
-        events: mergeEvents(detections ?? [], wasDemoMode ? [] : previous.events),
-        notableEvents: mergeEvents(detections ?? [], wasDemoMode ? [] : previous.notableEvents).slice(0, 20),
-        isDemoMode: false,
+        events: mergeEvents(detections ?? [], previous.events),
+        notableEvents: mergeEvents(detections ?? [], previous.notableEvents).slice(0, 50),
       }));
-      if (detections === null) setConnectionError("Đã kết nối Controller nhưng chưa tải được lịch sử cảnh báo. Thử làm mới.");
-    } catch {
-      if (ticket === requestId.current && !quiet)
+      setHasLoadedOnce(true);
+      if (detections === null || loadedIncidents === null || loadedDefenseActions === null) {
         setConnectionError(
-          "Chưa thể kết nối Controller tại http://127.0.0.1:8000. Kiểm tra dịch vụ backend rồi thử lại.",
+          "Đã kết nối Controller nhưng một phần dữ liệu bảo mật chưa tải được. Nhấn Thử lại để đồng bộ.",
         );
+      }
+    } catch (err) {
+      if (ticket === requestId.current && !quiet) {
+        const detail = err instanceof Error ? ` (${err.message})` : "";
+        setConnectionError(
+          `Chưa thể kết nối Controller.${detail} Kiểm tra dịch vụ backend rồi thử lại.`,
+        );
+      }
     } finally {
       if (ticket === requestId.current) setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    // Tự động thử kết nối Controller ngay khi tải trang
     const timer = window.setTimeout(() => {
-      void loadData(true);
+      void loadData(false);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
   useEffect(() => {
-    if (!isConnected || snapshot.isDemoMode) return;
+    if (!isConnected) return;
     let disposed = false;
-    void fetchDetectionEvents().then((events) => {
-      if (disposed || modeRef.current) return;
+    void Promise.allSettled([
+      fetchDetectionEvents(),
+      fetchNodes(),
+      fetchIncidents({ limit: 100 }),
+      fetchDefenseActions({ limit: 100 }),
+    ]).then(([detRes, nodesRes, incRes, defRes]) => {
+      if (disposed) return;
+      if (incRes.status === "fulfilled") {
+        setIncidents(incRes.value);
+      }
+      if (defRes.status === "fulfilled") {
+        setDefenseActions(defRes.value);
+      }
       setSnapshot((previous) => ({
         ...previous,
-        events: mergeEvents(events, previous.events),
-        notableEvents: mergeEvents(events, previous.notableEvents).slice(0, 20),
+        nodes:
+          nodesRes.status === "fulfilled"
+            ? nodesRes.value.map((fresh) => {
+                const prevNode = previous.nodes.find((n) => n.id === fresh.id);
+                return prevNode
+                  ? {
+                      ...fresh,
+                      latestCpu: prevNode.latestCpu,
+                      latestMemory: prevNode.latestMemory,
+                      latestDisk: prevNode.latestDisk,
+                      latestRxBytes: prevNode.latestRxBytes,
+                      latestTxBytes: prevNode.latestTxBytes,
+                    }
+                  : fresh;
+              })
+            : previous.nodes,
+        events:
+          detRes.status === "fulfilled"
+            ? mergeEvents(detRes.value, previous.events)
+            : previous.events,
+        notableEvents:
+          detRes.status === "fulfilled"
+            ? mergeEvents(detRes.value, previous.notableEvents).slice(0, 50)
+            : previous.notableEvents,
       }));
     });
     return () => {
       disposed = true;
     };
-  }, [isConnected, snapshot.isDemoMode]);
+  }, [isConnected]);
 
   const cancelRequests = useCallback(() => {
     requestId.current++;
@@ -396,141 +436,7 @@ export function useInfrastructure() {
     };
   }, [loadData, cancelRequests]);
 
-  // Demo mode real-time simulation
-  useEffect(() => {
-    if (!snapshot.isDemoMode) return;
-    const interval = window.setInterval(() => {
-      setSnapshot((previous) => {
-        if (!previous.isDemoMode) return previous;
-        demoTickRef.current += 1;
-        const now = new Date().toISOString();
-        const histories = { ...previous.histories };
-        const nodes = previous.nodes.map((node) => {
-          if (node.status !== "online") return node;
-          const cpu =
-            Math.round(
-              Math.max(
-                8,
-                Math.min(
-                  97,
-                  (node.latestCpu ?? 30) + (Math.random() - 0.5) * 4,
-                ),
-              ) * 10,
-            ) / 10;
-          const memory =
-            Math.round(
-              Math.max(
-                15,
-                Math.min(98, (node.latestMemory ?? 50) + (Math.random() - 0.5)),
-              ) * 10,
-            ) / 10;
-          const sample: MetricSample = {
-            observed_at: now,
-            cpu_percent: cpu,
-            memory_percent: memory,
-            disk_percent: node.latestDisk ?? null,
-            network_rx_bytes: Math.round(250000 + Math.random() * 500000),
-            network_tx_bytes: Math.round(150000 + Math.random() * 300000),
-          };
-          histories[node.id] = [
-            ...(histories[node.id] ?? []).slice(-119),
-            sample,
-          ];
-          return {
-            ...node,
-            latestCpu: cpu,
-            latestMemory: memory,
-            latestRxBytes: sample.network_rx_bytes!,
-            latestTxBytes: sample.network_tx_bytes!,
-            last_seen: now,
-          };
-        });
-        const active = nodes.filter((node) => node.status === "online");
-        const eventNode =
-          active[Math.floor(Date.now() / 2400) % Math.max(1, active.length)];
-        const event: RealtimeMessage | null = eventNode
-          ? {
-              event: "metric_update",
-              timestamp: now,
-              data: {
-                node_id: eventNode.id,
-                samples: histories[eventNode.id].slice(-1),
-                received_at: now,
-              },
-            }
-          : null;
-
-        let newEvents = event ? [event, ...previous.events].slice(0, 50) : previous.events;
-        let newNotable = previous.notableEvents;
-
-        // Every 8 ticks (~19.2s), generate a simulated security event in Demo Mode
-        if (demoTickRef.current % 8 === 0 && eventNode) {
-          const isAttack = demoTickRef.current % 16 === 0;
-          const secEvent: RealtimeMessage = isAttack
-            ? {
-                event: "incident_alert",
-                timestamp: now,
-                data: {
-                  id: `inc-demo-${Date.now()}`,
-                  title: "Tấn công SYN Flood",
-                  severity: "CRITICAL",
-                  attacker_ip: "198.51.100.19",
-                  node_id: eventNode.id,
-                  summary:
-                    "SYN: 750 (>= 50/10s) · ACK: 0 · Tỷ lệ SYN/ACK: 750.0 (>= 3.0) · IP: 198.51.100.19 · Port: 443",
-                },
-              }
-            : {
-                event: "defense_action_created",
-                timestamp: now,
-                data: {
-                  id: `def-demo-${Date.now()}`,
-                  action_type: "BLOCK_IP_NFTABLES",
-                  target_ip: "198.51.100.19",
-                  node_id: eventNode.id,
-                  duration_seconds: 1800,
-                },
-              };
-
-          newEvents = [secEvent, ...newEvents].slice(0, 50);
-          newNotable = [secEvent, ...newNotable].slice(0, 20);
-
-          if (isAttack) {
-            pushSecurityToast({
-              id: `toast-demo-${Date.now()}`,
-              type: "incident",
-              title: "Phát hiện sự cố an ninh mới",
-              message: "SYN: 750 (>= 50/10s) · Tỷ lệ SYN/ACK >= 3.0 · Port: 443",
-              attackerIp: "198.51.100.19",
-              severity: "CRITICAL",
-              targetView: "incidents",
-            });
-          } else {
-            pushSecurityToast({
-              id: `toast-demo-${Date.now()}`,
-              type: "defense",
-              title: "Tường lửa đã kích hoạt",
-              message: "Đã khóa địa chỉ IP nguồn tấn công",
-              attackerIp: "198.51.100.19",
-              targetView: "defense",
-            });
-          }
-        }
-
-        return {
-          ...previous,
-          nodes,
-          histories,
-          events: newEvents,
-          notableEvents: newNotable,
-        };
-      });
-    }, 2400);
-    return () => window.clearInterval(interval);
-  }, [snapshot.isDemoMode, pushSecurityToast]);
-
   const loadHistory = useCallback(async (nodeId: string, limit: number) => {
-    if (modeRef.current) return;
     const ticket = ++historyRequestId.current;
     setChartRequest({ nodeId, loading: true, error: null });
     try {
@@ -540,39 +446,23 @@ export function useInfrastructure() {
         ...previous,
         histories: {
           ...previous.histories,
-          [nodeId]: mergeSamples(
-            previous.histories[nodeId] ?? [],
-            response.samples,
-          ),
+          [nodeId]: mergeSamples(previous.histories[nodeId] ?? [], response.samples),
         },
       }));
       setChartRequest(null);
-    } catch {
-      if (ticket === historyRequestId.current)
+    } catch (err) {
+      if (ticket === historyRequestId.current) {
         setChartRequest({
           nodeId,
           loading: false,
-          error: "Không tải được lịch sử mẫu dữ liệu. Vui lòng thử lại.",
+          error:
+            err instanceof Error
+              ? err.message
+              : "Không tải được lịch sử mẫu dữ liệu. Vui lòng thử lại.",
         });
+      }
     }
   }, []);
-
-  const toggleDemo = () => {
-    if (snapshot.isDemoMode) {
-      void loadData();
-      return;
-    }
-    requestId.current++;
-    historyRequestId.current++;
-    modeRef.current = true;
-    demoTickRef.current = 0;
-    setIsRefreshing(false);
-    setConnectionError(null);
-    setChartRequest(null);
-    setSnapshot(demoSnapshot());
-    setIncidents(MOCK_INCIDENTS);
-    setDefenseActions(MOCK_DEFENSE_ACTIONS);
-  };
 
   const syncProjectDefenseActions = useCallback(
     (nodeIds: string[], items: DefenseAction[]) => {
@@ -610,7 +500,7 @@ export function useInfrastructure() {
                   settings: {
                     active_profile: profile,
                     updated_at: updatedAt,
-                    updated_by: "admin@sentinelx.com",
+                    updated_by: "operator@sentinelx.local",
                   },
                 },
               }
@@ -632,21 +522,8 @@ export function useInfrastructure() {
     description?: string,
     loadBalancer?: ProjectLBConfig,
   ): Promise<Project> => {
-    if (snapshot.isDemoMode) {
-      const newProj: Project = {
-        id: crypto.randomUUID(),
-        name,
-        description: description ?? null,
-        load_balancer: loadBalancer ?? defaultProjectLBConfig(),
-        created_at: new Date().toISOString(),
-      };
-      setSnapshot((prev) => ({
-        ...prev,
-        projects: [...prev.projects, newProj],
-      }));
-      return newProj;
-    }
     const created = await apiCreateProject(name, description, loadBalancer);
+    await seedDefaultPolicies(created.id).catch(() => null);
     setSnapshot((prev) => ({
       ...prev,
       projects: [...prev.projects, created],
@@ -658,26 +535,6 @@ export function useInfrastructure() {
     projectId: string,
     payload: { name?: string; description?: string | null; load_balancer?: ProjectLBConfig },
   ): Promise<Project> => {
-    if (snapshot.isDemoMode) {
-      const existing = snapshot.projects.find((p) => p.id === projectId);
-      if (!existing) {
-        throw new Error("Không tìm thấy dự án");
-      }
-      const updatedProj: Project = {
-        ...existing,
-        name: payload.name ?? existing.name,
-        description:
-          payload.description !== undefined
-            ? payload.description
-            : existing.description,
-        load_balancer: payload.load_balancer ?? existing.load_balancer,
-      };
-      setSnapshot((prev) => ({
-        ...prev,
-        projects: prev.projects.map((p) => (p.id === projectId ? updatedProj : p)),
-      }));
-      return updatedProj;
-    }
     const updated = await apiUpdateProject(projectId, payload);
     setSnapshot((prev) => ({
       ...prev,
@@ -685,18 +542,6 @@ export function useInfrastructure() {
     }));
     return updated;
   };
-
-  const syncProjectLocalLB = useCallback(
-    (projectId: string, loadBalancer: ProjectLBConfig) => {
-      setSnapshot((prev) => ({
-        ...prev,
-        projects: prev.projects.map((p) =>
-          p.id === projectId ? { ...p, load_balancer: loadBalancer } : p,
-        ),
-      }));
-    },
-    [],
-  );
 
   const updateNode = async (
     nodeId: string,
@@ -707,21 +552,6 @@ export function useInfrastructure() {
       lb_health_path?: string | null;
     },
   ): Promise<Node> => {
-    if (snapshot.isDemoMode) {
-      const existing = snapshot.nodes.find((n) => n.id === nodeId);
-      if (!existing) {
-        throw new Error("Không tìm thấy máy chủ");
-      }
-      const updatedNode: Node = {
-        ...existing,
-        ...payload,
-      };
-      setSnapshot((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) => (n.id === nodeId ? updatedNode : n)),
-      }));
-      return updatedNode;
-    }
     const updated = await apiUpdateNode(nodeId, payload);
     setSnapshot((prev) => ({
       ...prev,
@@ -733,6 +563,7 @@ export function useInfrastructure() {
   return {
     ...snapshot,
     isRefreshing,
+    hasLoadedOnce,
     connectionError,
     chartRequest,
     isConnected,
@@ -746,11 +577,9 @@ export function useInfrastructure() {
     dismissSecurityToast,
     loadData: () => loadData(),
     loadHistory,
-    toggleDemo,
     addNode,
     createProject,
     updateProject,
-    syncProjectLocalLB,
     updateNode,
     syncProjectIncidents,
     syncProjectDefenseActions,

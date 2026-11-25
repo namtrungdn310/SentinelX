@@ -3,6 +3,7 @@
  */
 
 import type {
+  AgentBundleInfo,
   DefenseAction,
   DefensePolicy,
   DetectionEvent,
@@ -21,15 +22,40 @@ import type {
   ProjectSettings,
   RealtimeMessage,
 } from "./types";
-import { MOCK_PROJECT_SETTINGS } from "./mockData";
 
 const API_BASE = "/api/v1";
+
+async function extractApiError(res: Response, fallback: string): Promise<string> {
+  let detail = res.statusText || `HTTP ${res.status}`;
+  try {
+    const errBody = await res.json();
+    if (typeof errBody?.detail === "string" && errBody.detail.trim()) {
+      detail = errBody.detail;
+    } else if (Array.isArray(errBody?.detail) && errBody.detail.length > 0) {
+      const msgs = errBody.detail
+        .map((item: { msg?: unknown; loc?: unknown[] }) => {
+          const msg = typeof item?.msg === "string" ? item.msg : "";
+          const field = Array.isArray(item?.loc) ? item.loc[item.loc.length - 1] : null;
+          return field && msg ? `${String(field)}: ${msg}` : msg;
+        })
+        .filter(Boolean);
+      if (msgs.length > 0) detail = msgs.join("; ");
+    } else if (typeof errBody?.error === "string" && errBody.error.trim()) {
+      detail = errBody.error;
+    }
+  } catch {
+    // ignore non-JSON body
+  }
+  return `${fallback}: ${detail}`;
+}
 
 export async function fetchDetectionEvents(): Promise<RealtimeMessage[]> {
   const response = await fetch(`${API_BASE}/detection-events?limit=50`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!response.ok) throw new Error("Không tải được lịch sử cảnh báo");
+  if (!response.ok) {
+    throw new Error(await extractApiError(response, "Không tải được lịch sử cảnh báo"));
+  }
   const data: { items: DetectionEvent[] } = await response.json();
   return data.items.map((item) => ({
     event: "detection_alert",
@@ -61,18 +87,43 @@ function normalizeProject(data: Record<string, unknown>): Project {
 }
 
 function normalizeNode(data: Record<string, unknown>): Node {
+  const rawCaps =
+    data.agent_capabilities && typeof data.agent_capabilities === "object"
+      ? (data.agent_capabilities as Record<string, unknown>)
+      : undefined;
+  const hw =
+    rawCaps && typeof rawCaps.hardware === "object" && rawCaps.hardware !== null
+      ? (rawCaps.hardware as Record<string, unknown>)
+      : undefined;
+  const rawStatus = String(data.status ?? "unenrolled");
+  const status: Node["status"] =
+    rawStatus === "online" || rawStatus === "offline" || rawStatus === "unenrolled"
+      ? rawStatus
+      : "offline";
+
   return {
     id: String(data.node_id ?? data.id),
     project_id: String(data.project_id ?? ""),
     hostname: String(data.hostname ?? ""),
     ip_address: String(data.ip_address ?? ""),
-    status: (data.status as Node["status"]) ?? "unenrolled",
+    status,
+    os_info: (data.os_info as string | null | undefined) ?? null,
     last_seen: (data.last_seen ?? data.last_seen_at ?? null) as string | null,
     created_at: String(data.created_at ?? ""),
     lb_role: (data.lb_role as NodeLBRoleType | undefined) ?? "standalone",
     lb_backend_port: typeof data.lb_backend_port === "number" ? data.lb_backend_port : 8080,
     lb_health_path: (data.lb_health_path as string | null | undefined) ?? null,
-    agent_capabilities: (data.agent_capabilities as Record<string, unknown> | undefined) ?? undefined,
+    agent_capabilities: rawCaps,
+    cpuCores:
+      typeof hw?.cpu_cores === "number" && hw.cpu_cores > 0 ? hw.cpu_cores : undefined,
+    totalMemoryBytes:
+      typeof hw?.total_memory_bytes === "number" && hw.total_memory_bytes > 0
+        ? hw.total_memory_bytes
+        : undefined,
+    totalDiskBytes:
+      typeof hw?.total_disk_bytes === "number" && hw.total_disk_bytes > 0
+        ? hw.total_disk_bytes
+        : undefined,
   };
 }
 
@@ -80,7 +131,7 @@ export async function fetchProjects(): Promise<Project[]> {
   const res = await fetch(`${API_BASE}/projects`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`Lỗi tải dự án: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải dự án"));
   const data = await res.json();
   return data.map((project: Record<string, unknown>) => normalizeProject(project));
 }
@@ -90,7 +141,10 @@ export async function createProject(
   description?: string,
   loadBalancer?: ProjectLBConfig,
 ): Promise<Project> {
-  const payload: Record<string, unknown> = { name, description };
+  const payload: Record<string, unknown> = {
+    name: name.trim(),
+    description: description?.trim() ? description.trim() : null,
+  };
   if (loadBalancer) {
     payload.load_balancer = loadBalancer;
   }
@@ -99,10 +153,7 @@ export async function createProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi tạo dự án: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tạo dự án"));
   return normalizeProject(await res.json());
 }
 
@@ -115,10 +166,7 @@ export async function updateProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi cập nhật dự án: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi cập nhật dự án"));
   return normalizeProject(await res.json());
 }
 
@@ -127,7 +175,7 @@ export async function fetchNodes(projectId?: string): Promise<Node[]> {
     ? `${API_BASE}/nodes?project_id=${projectId}`
     : `${API_BASE}/nodes`;
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Lỗi tải máy chủ: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải máy chủ"));
   const data = await res.json();
   return data.map((n: Record<string, unknown>) => normalizeNode(n));
 }
@@ -143,15 +191,12 @@ export async function createNode(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       project_id: projectId,
-      hostname,
-      ip_address: ipAddress,
+      hostname: hostname.trim(),
+      ip_address: ipAddress.trim(),
       ...(lbConfig ? lbConfig : {}),
     }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi đăng ký node: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi đăng ký máy chủ"));
   return normalizeNode(await res.json());
 }
 
@@ -169,10 +214,7 @@ export async function updateNode(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi cập nhật máy chủ: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi cập nhật máy chủ"));
   return normalizeNode(await res.json());
 }
 
@@ -185,8 +227,9 @@ export async function createEnrollmentToken(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ expires_in_hours: hours }),
   });
-  if (!res.ok)
-    throw new Error(`Lỗi tạo mã enrollment token: ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(await extractApiError(res, "Lỗi tạo mã enrollment token"));
+  }
   const data = await res.json();
   return data.enrollment_token;
 }
@@ -199,7 +242,7 @@ export async function fetchNodeMetrics(
     `${API_BASE}/telemetry/nodes/${nodeId}/metrics?limit=${limit}`,
     { signal: AbortSignal.timeout(10000) },
   );
-  if (!res.ok) throw new Error(`Lỗi tải số liệu node: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải số liệu node"));
   return res.json();
 }
 
@@ -224,7 +267,7 @@ export async function fetchIncidents(params?: {
   const res = await fetch(`${API_BASE}/incidents?${query.toString()}`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`Lỗi tải danh sách sự cố: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải danh sách sự cố"));
   const data = await res.json();
   return data.items || [];
 }
@@ -233,7 +276,7 @@ export async function fetchIncidentDetail(incidentId: string): Promise<IncidentD
   const res = await fetch(`${API_BASE}/incidents/${incidentId}`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`Lỗi tải chi tiết sự cố: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải chi tiết sự cố"));
   return res.json();
 }
 
@@ -246,7 +289,7 @@ export async function updateIncident(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(update),
   });
-  if (!res.ok) throw new Error(`Lỗi cập nhật sự cố: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi cập nhật sự cố"));
   return res.json();
 }
 
@@ -254,7 +297,7 @@ export async function deleteIncident(incidentId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/incidents/${incidentId}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(`Lỗi xóa sự cố: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi xóa sự cố"));
 }
 
 // ----------------------------------------------------
@@ -262,12 +305,14 @@ export async function deleteIncident(incidentId: string): Promise<void> {
 // ----------------------------------------------------
 
 export async function fetchDefenseActions(params?: {
+  projectId?: string;
   nodeId?: string;
   incidentId?: string;
   status?: string;
   limit?: number;
 }): Promise<DefenseAction[]> {
   const query = new URLSearchParams();
+  if (params?.projectId) query.set("project_id", params.projectId);
   if (params?.nodeId) query.set("node_id", params.nodeId);
   if (params?.incidentId) query.set("incident_id", params.incidentId);
   if (params?.status && params.status !== "all") query.set("status", params.status);
@@ -276,7 +321,7 @@ export async function fetchDefenseActions(params?: {
   const res = await fetch(`${API_BASE}/defense/actions?${query.toString()}`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) throw new Error(`Lỗi tải danh sách lệnh phòng thủ: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải danh sách lệnh phòng thủ"));
   const data = await res.json();
   return data.items || [];
 }
@@ -293,18 +338,7 @@ export async function createManualDefenseAction(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const errBody = await res.json();
-      if (typeof errBody?.detail === "string") {
-        detail = errBody.detail;
-      }
-    } catch {
-      // ignore non-JSON error body
-    }
-    throw new Error(`Lỗi thực hiện lệnh phòng thủ: ${detail}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi thực hiện lệnh phòng thủ"));
   return res.json();
 }
 
@@ -314,33 +348,20 @@ export async function revertDefenseAction(actionId: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason: "MANUAL_UNBLOCK" }),
   });
-  if (!res.ok) throw new Error(`Lỗi gỡ bỏ lệnh chặn IP: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi gỡ bỏ lệnh chặn IP"));
 }
 
 export async function cancelDefenseAction(actionId: string): Promise<DefenseAction> {
   const res = await fetch(`${API_BASE}/defense/actions/${actionId}/cancel`, {
     method: "POST",
   });
-  if (!res.ok) throw new Error(`Lỗi hủy lệnh phòng thủ chờ gửi: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi hủy lệnh phòng thủ chờ gửi"));
   return res.json();
 }
 
 // ----------------------------------------------------
 // Policies & Whitelist API (M5)
 // ----------------------------------------------------
-
-async function extractApiError(res: Response, fallback: string): Promise<string> {
-  let detail = res.statusText || fallback;
-  try {
-    const errBody = await res.json();
-    if (typeof errBody?.detail === "string") {
-      detail = errBody.detail;
-    }
-  } catch {
-    // ignore non-JSON body
-  }
-  return `${fallback}: ${detail}`;
-}
 
 function normalizePolicyResponse(
   raw: DefensePolicy & { enabled?: boolean },
@@ -357,6 +378,19 @@ export async function fetchPolicies(projectId?: string): Promise<DefensePolicy[]
     : `${API_BASE}/defense-policies`;
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải danh mục chính sách"));
+  const data = await res.json();
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.map((item: DefensePolicy & { enabled?: boolean }) =>
+    normalizePolicyResponse(item),
+  );
+}
+
+export async function seedDefaultPolicies(projectId: string): Promise<DefensePolicy[]> {
+  const res = await fetch(
+    `${API_BASE}/projects/${projectId}/defense-policies/seed-defaults`,
+    { method: "POST" },
+  );
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi khởi tạo chính sách mặc định"));
   const data = await res.json();
   const items = Array.isArray(data.items) ? data.items : [];
   return items.map((item: DefensePolicy & { enabled?: boolean }) =>
@@ -476,119 +510,54 @@ export async function deleteWhitelist(whitelistId: string): Promise<void> {
 }
 
 // ----------------------------------------------------
-// Project Settings & Guardrailed Presets API
+// Project & Node Settings API
 // ----------------------------------------------------
 
 export async function fetchProjectSettings(projectId: string): Promise<ProjectSettings> {
-  const localKey = `sentinelx_settings_${projectId}`;
-  try {
-    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      try {
-        localStorage.setItem(localKey, JSON.stringify(data));
-      } catch {
-        // storage fallback
-      }
-      return data;
-    }
-  } catch {
-    // fallback to local storage or mock
-  }
-
-  try {
-    const saved = localStorage.getItem(localKey);
-    if (saved) return JSON.parse(saved);
-  } catch {
-    // storage fallback
-  }
-
-  return (
-    MOCK_PROJECT_SETTINGS[projectId] || {
-      project_id: projectId,
-      active_profile: "balanced",
-      updated_at: new Date().toISOString(),
-      updated_by: "system",
-    }
-  );
+  const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải cấu hình dự án"));
+  return res.json();
 }
 
 export async function updateProjectSettings(
   projectId: string,
   profile: PresetProfileType,
-  updatedBy = "admin@sentinelx.com",
-  strict = false,
+  updatedBy = "operator@sentinelx.local",
 ): Promise<ProjectSettings> {
-  const localKey = `sentinelx_settings_${projectId}`;
-  const updated: ProjectSettings = {
-    project_id: projectId,
-    active_profile: profile,
-    updated_at: new Date().toISOString(),
-    updated_by: updatedBy,
-  };
-
-  if (strict) {
-    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
-    });
-    if (!res.ok) throw new Error(`Lỗi lưu cấu hình dự án: ${res.statusText}`);
-    const saved: ProjectSettings = await res.json();
-    try {
-      localStorage.setItem(localKey, JSON.stringify(saved));
-    } catch {
-      // storage fallback
-    }
-    return saved;
-  }
-
-  try {
-    localStorage.setItem(localKey, JSON.stringify(updated));
-  } catch {
-    // storage fallback
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {
-    // fallback to local updated
-  }
-
-  return updated;
+  const res = await fetch(`${API_BASE}/projects/${projectId}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
+  });
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi lưu cấu hình dự án"));
+  return res.json();
 }
 
 export async function updateNodeSettings(
   nodeId: string,
   profile: PresetProfileType,
-  updatedBy = "admin@sentinelx.com",
+  updatedBy = "operator@sentinelx.local",
 ): Promise<ProjectSettings> {
   const res = await fetch(`${API_BASE}/nodes/${nodeId}/settings`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ active_profile: profile, updated_by: updatedBy }),
   });
-  if (!res.ok) throw new Error(`Lỗi lưu cấu hình máy chủ: ${res.statusText}`);
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi lưu cấu hình máy chủ"));
   return res.json();
 }
+
+// ----------------------------------------------------
+// Load Balancer API
+// ----------------------------------------------------
 
 export async function fetchProjectLBStatus(projectId: string): Promise<ProjectLBStatus> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer`, {
     signal: AbortSignal.timeout(10000),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi tải trạng thái Load Balancer: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi tải trạng thái Load Balancer"));
   return res.json();
 }
 
@@ -601,10 +570,7 @@ export async function updateProjectLBConfig(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi lưu cấu hình Load Balancer: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi lưu cấu hình Load Balancer"));
   return res.json();
 }
 
@@ -617,21 +583,7 @@ export async function switchProjectLBAlgorithm(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ algorithm }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi đổi thuật toán: ${res.statusText}`);
-  }
-  return res.json();
-}
-
-export async function syncProjectLB(projectId: string): Promise<ProjectLBStatus> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/load-balancer/sync`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi đồng bộ Load Balancer: ${res.statusText}`);
-  }
+  if (!res.ok) throw new Error(await extractApiError(res, "Lỗi đổi thuật toán"));
   return res.json();
 }
 
@@ -650,8 +602,17 @@ export async function setProjectLBBackendState(
     },
   );
   if (!res.ok) {
-    const err = await res.json().catch(() => null);
-    throw new Error(err?.detail || `Lỗi cập nhật trạng thái backend: ${res.statusText}`);
+    throw new Error(await extractApiError(res, "Lỗi cập nhật trạng thái backend"));
+  }
+  return res.json();
+}
+
+export async function fetchAgentBundleInfo(): Promise<AgentBundleInfo> {
+  const res = await fetch(`${API_BASE}/system/agent-bundle`, {
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) {
+    throw new Error(await extractApiError(res, "Lỗi kiểm tra gói cài đặt Agent"));
   }
   return res.json();
 }

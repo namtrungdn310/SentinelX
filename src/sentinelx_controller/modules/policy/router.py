@@ -70,6 +70,20 @@ async def create_policy(
     return await service.create_policy(project_id, request)
 
 
+@router.post(
+    "/projects/{project_id}/defense-policies/seed-defaults",
+    response_model=DefensePolicyListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Idempotently seed default defense policies for a project",
+)
+async def seed_default_policies(
+    project_id: str,
+    service: Annotated[PolicyService, Depends(get_policy_service)],
+) -> DefensePolicyListResponse:
+    """Seed canonical system defense policies if missing."""
+    return await service.seed_default_policies(project_id)
+
+
 @router.get(
     "/defense-policies",
     response_model=DefensePolicyListResponse,

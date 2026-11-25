@@ -86,6 +86,7 @@ uv run python -m sentinelx_lb.main
 > **Điều khiển Load Balancer động từ Dashboard**: Controller đồng bộ pool & thuật toán xuống LB thông qua Admin API (`PUT /lb/admin/config`, `PATCH /lb/admin/algorithm`, `POST /lb/admin/backends/state`). Hãy đặt cùng giá trị `SENTINELX_LB_ADMIN_TOKEN` trên cả `sentinelx_controller` và `sentinelx_lb`, đồng thời cấu hình `SENTINELX_DEFAULT_LB_URL` trên Controller (ví dụ `http://sentinelx_lb:8080` trong Docker Compose hoặc `http://192.168.1.10:8080` khi chạy LAN) để người dùng tạo Project chỉ cần bật Load Balancer mà không cần nhập tay URL.
 
 ### 1.5 Khởi động Dashboard UI
+Khởi chạy qua container `sentinelx_dashboard` (đã tích hợp Nginx proxy `/api` + WebSocket trong `docker compose --profile core up -d`) hoặc chế độ dev:
 ```bash
 cd dashboard
 npm run dev -- --host 0.0.0.0
@@ -97,26 +98,31 @@ Truy cập giao diện từ bất kỳ thiết bị nào qua: `http://192.168.1.
 ## 3. Bước 2: Thiết lập Machine B và Machine C (Worker Nodes)
 
 ### 2.1 Cài đặt Workload Backend
-Trên Machine B (192.168.1.20) và Machine C (192.168.1.30), chạy dịch vụ web ứng dụng (hoặc backend mẫu của lab):
+Trên Machine B (`192.168.1.20`) và Machine C (`192.168.1.30`), chạy dịch vụ web ứng dụng (hoặc backend mẫu `lab/backend/app.py` của repo chỉ cần `aiohttp`):
 ```bash
 # Machine B:
-NODE_NAME=backend01 PORT=8080 uv run python deploy/mock_backend.py
+NODE_NAME=backend01 PORT=8080 uv run python lab/backend/app.py
 
 # Machine C:
-NODE_NAME=backend02 PORT=8080 uv run python deploy/mock_backend.py
+NODE_NAME=backend02 PORT=8080 uv run python lab/backend/app.py
 ```
 
 ### 2.2 Cài đặt & Chạy SentinelX Agent Daemon
-Agent trên Machine B và Machine C tự động thực hiện outbound HTTP tới Machine A:
+- **Cách chuẩn (Self-Service Bundle + `systemd`)**: Tạo node trên Dashboard → copy lệnh tải gói `.tar.gz` từ `/api/v1/system/agent-bundle/download` + kiểm tra SHA-256 + chạy `sudo python3 manage.py install` / `enroll` / `restart` (chi tiết xem [AGENT_INSTALLATION.md](./AGENT_INSTALLATION.md) và [LEVEL2_RUNBOOK.md](./LEVEL2_RUNBOOK.md)).
+- **Cách nhanh (nếu máy đích đã có sẵn repo & `uv`)**: Agent trên Machine B và Machine C thực hiện outbound HTTP tới Machine A theo `node_id` & `token` được cấp trên Dashboard:
 ```bash
 # Trên Machine B:
 SENTINELX_CONTROLLER_URL="http://192.168.1.10:8000" \
-SENTINELX_NODE_HOSTNAME="machine-b-node" \
+SENTINELX_NODE_ID="<UUID_NODE_B>" \
+SENTINELX_ENROLLMENT_TOKEN="<ONE_TIME_TOKEN_B>" \
+SENTINELX_HOSTNAME="machine-b-node" \
 uv run python -m sentinelx_agent.main
 
 # Trên Machine C:
 SENTINELX_CONTROLLER_URL="http://192.168.1.10:8000" \
-SENTINELX_NODE_HOSTNAME="machine-c-node" \
+SENTINELX_NODE_ID="<UUID_NODE_C>" \
+SENTINELX_ENROLLMENT_TOKEN="<ONE_TIME_TOKEN_C>" \
+SENTINELX_HOSTNAME="machine-c-node" \
 uv run python -m sentinelx_agent.main
 ```
 
@@ -183,15 +189,15 @@ Toàn bộ các tiêu chí nghiệm thu của **FOUNDATION FREEZE** đã đượ
   - `docker compose --profile lab up -d --build` (thêm Load Balancer + 2 Backend + 2 Agent Linux)
   - `docker compose --profile attack up -d` (thêm container mô phỏng lưu lượng / tấn công)
 
-### Giai đoạn 2: Deploy trên PC Windows ở Nhà (Bật máy là chạy + Nhiều Laptop Demo Từ Xa)
-Mô hình:
-- **PC Windows ở nhà (Always-ready Control Plane khi bật máy)**:
+### Giai đoạn 2: Deploy trên Laptop/PC Windows + Nhiều VM/Laptop Demo Từ Xa
+Mô hình (chi tiết từng bước xem tại [LEVEL2_RUNBOOK.md](./LEVEL2_RUNBOOK.md)):
+- **Laptop/PC Windows (Control Plane & Gateway)**:
   1. Bật tùy chọn **Start Docker Desktop when you sign in to your computer** trong Docker Desktop và tắt chế độ **Sleep** của Windows khi cắm điện.
-  2. Toàn bộ các service trong [compose.yaml](../compose.yaml) giữ chính sách `restart: unless-stopped` để tự khởi động lại mỗi khi mở PC.
-  3. **Hạng mục cần bổ sung trước khi bật Giai đoạn 2**: Thêm service `sentinelx_dashboard` (Nginx build sẵn `dashboard/dist/` + reverse proxy `/api` và WebSocket `/api/v1/ws` sang `sentinelx_controller:8000`) vào `compose.yaml` để mọi máy truy cập thẳng Dashboard qua cùng 1 cổng web mà không cần chạy `vite` dev server.
-- **Kết nối từ nhiều laptop ở xa**:
-  - **Phương án ưu tiên — Tailscale**: Cài Tailscale chạy nền trên PC ở nhà và các laptop demo. Các laptop truy cập Dashboard/LB qua IP Tailscale cố định của PC (không cần mở port modem/router), đồng thời các VM/laptop Linux ở xa có thể trỏ `SENTINELX_CONTROLLER_URL` về IP Tailscale này để chạy multi-host thật.
-  - **Phương án bổ sung — Cloudflare Tunnel (`cloudflared`)**: Chạy dưới dạng Windows Service trỏ về cổng Nginx Dashboard khi cần chia sẻ link HTTPS cho trình duyệt ngoài không cài Tailscale; **bắt buộc** bật Cloudflare Access hoặc Nginx Basic Auth vì Controller hiện chưa có lớp JWT auth ở các API dashboard.
+  2. Toàn bộ các service trong [compose.yaml](../compose.yaml) giữ chính sách `restart: unless-stopped` để tự khởi động lại mỗi khi mở máy.
+  3. **Đã hoàn thiện**: Service `sentinelx_dashboard` (Nginx build sẵn `dashboard/dist/` + reverse proxy `/api` và WebSocket `/api/v1/ws` sang `sentinelx_controller:8000`) và endpoint tải Agent Bundle (`/api/v1/system/agent-bundle/download`) đã được tích hợp sẵn trong `--profile core`; chỉ cần chạy thêm `sentinelx_lb` trên Windows host để định tuyến trực tiếp tới IP Tailscale của các VM Linux.
+- **Kết nối từ nhiều laptop/VM ở xa**:
+  - **Phương án ưu tiên — Tailscale**: Cài Tailscale chạy nền trên Laptop A và các VM Ubuntu (`Linked Clone` chế độ `NAT`). Các máy truy cập Dashboard/LB qua IP Tailscale cố định `100.x.y.z` (dùng được qua Wi-Fi trường lẫn 5G Hotspot iPhone mà không cần mở port router hay chỉnh card mạng Bridged).
+  - **Phương án bổ sung — Cloudflare Tunnel (`cloudflared`)**: Chạy dưới dạng Windows Service trỏ về cổng Nginx Dashboard khi cần chia sẻ link HTTPS cho trình duyệt ngoài không cài Tailscale; **bắt buộc** bật Cloudflare Access hoặc lớp xác thực trước khi mở công khai ra Internet.
 
 ### Giai đoạn 3 (Tùy chọn ngoài thực tế — Cloud VPS / Linux Server)
 - Có thể nâng cấp phần Control Plane lên Linux VPS chạy 24/7 (ví dụ DigitalOcean Droplet ≥ 1 GB RAM + tạo 2 GB Swap) đặt sau Nginx HTTPS có xác thực, và cài `sentinelx-agent` dạng `systemd` service lên từng máy chủ Linux đích (luôn điền `protected_cidrs` cho IP quản trị / Controller / SSH trước khi chuyển `defense_executor_type` sang `nftables`).

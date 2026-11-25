@@ -94,3 +94,18 @@ def test_load_balancer_runtime_algorithm_switch() -> None:
     lb.set_algorithm(LBAlgorithm.LEAST_IN_FLIGHT)
     assert lb.algorithm.value == "least_in_flight"
     assert lb.select_backend() == b2
+
+
+def test_lb_settings_parses_comma_separated_env_backends(monkeypatch: object) -> None:
+    """SENTINELX_LB_BACKENDS accepts comma-separated URLs without JSON decode errors."""
+    import pytest
+
+    from sentinelx_lb.config import LBSettings
+
+    assert isinstance(monkeypatch, pytest.MonkeyPatch)
+    monkeypatch.setenv("SENTINELX_LB_BACKENDS", "http://172.28.2.31:8080,http://172.28.2.32:8080")
+    settings = LBSettings()
+    assert [b.url for b in settings.backends] == [
+        "http://172.28.2.31:8080",
+        "http://172.28.2.32:8080",
+    ]

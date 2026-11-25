@@ -23,17 +23,28 @@ class ProjectService:
 
     async def create_project(self, request: ProjectCreateRequest) -> ProjectResponse:
         """Create a new project and check for duplicate name."""
-        existing = await self._repo.get_by_name(request.name)
+        name = request.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Project name cannot be empty",
+            )
+        existing = await self._repo.get_by_name(name)
         if existing is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Project with name '{request.name}' already exists",
+                detail=f"Project with name '{name}' already exists",
             )
 
         lb_cfg = request.load_balancer or ProjectLBConfigContract()
+        description = (
+            request.description.strip() or None
+            if request.description is not None
+            else None
+        )
         model = await self._repo.create(
-            name=request.name,
-            description=request.description,
+            name=name,
+            description=description,
             lb_config=lb_cfg.model_dump(mode="json"),
         )
         return self._to_response(model)
@@ -51,16 +62,23 @@ class ProjectService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project '{project_id_str}' not found",
             )
-        if request.name is not None and request.name.strip() != model.name:
-            duplicate = await self._repo.get_by_name(request.name)
-            if duplicate is not None and duplicate.id != model.id:
+        if request.name is not None:
+            cleaned_name = request.name.strip()
+            if not cleaned_name:
                 raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Project with name '{request.name}' already exists",
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Project name cannot be empty",
                 )
-            model.name = request.name.strip()
-        if request.description is not None:
-            model.description = request.description.strip() or None
+            if cleaned_name != model.name:
+                duplicate = await self._repo.get_by_name(cleaned_name)
+                if duplicate is not None and duplicate.id != model.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Project with name '{cleaned_name}' already exists",
+                    )
+                model.name = cleaned_name
+        if "description" in request.model_fields_set:
+            model.description = (request.description or "").strip() or None
         if request.load_balancer is not None:
             model.lb_config = request.load_balancer.model_dump(mode="json")
 

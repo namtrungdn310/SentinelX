@@ -173,3 +173,11 @@ class ActiveHealthChecker:
             await self.start()
         elif config.enabled and self._task is None:
             await self.start()
+
+    def trigger_probe_now(self) -> None:
+        """Kick off an asynchronous immediate probe pass when active probing is enabled."""
+        if not self.config.enabled or self._stopped:
+            return
+        if self._session is None or self._session.closed:
+            return
+        asyncio.create_task(self.probe_all())

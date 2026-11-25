@@ -29,3 +29,17 @@ class SystemReadinessResponse(BaseModel):
         description="Current UTC time",
     )
 
+
+class AgentBundleMetadataResponse(BaseModel):
+    """Metadata for downloading the standalone Linux Agent release tarball."""
+
+    available: bool = Field(description="Whether a built Agent tarball is ready for download")
+    release: str | None = Field(default=None, description="Deterministic Agent release identifier")
+    filename: str | None = Field(default=None, description="Tarball archive filename")
+    sha256: str | None = Field(default=None, description="Lowercase SHA-256 hex digest")
+    size_bytes: int | None = Field(default=None, description="Archive byte size")
+    download_path: str = Field(
+        default="/api/v1/system/agent-bundle/download",
+        description="Controller relative path to download the tarball",
+    )
+

@@ -9,10 +9,10 @@ interface Props {
   onClose: () => void;
   policy: DefensePolicy | null;
   onPolicyUpdated: (updated: DefensePolicy) => void;
-  isDemoMode: boolean;
 }
 
 const MEMORY_ACTION_OPTIONS = new Set(["ADAPTIVE", "CLEAR_OS_CACHE", "RESTART_SERVICE"]);
+const RESOURCE_ACTION_OPTIONS = new Set(["ALERT_ONLY", "RESTART_SERVICE"]);
 
 function isNetworkEventType(eventType: string): boolean {
   return (
@@ -33,7 +33,7 @@ function resolveInitialAction(policy: DefensePolicy): string {
   if (isMemoryEventType(policy.event_type)) {
     return MEMORY_ACTION_OPTIONS.has(policy.action_type) ? policy.action_type : "ADAPTIVE";
   }
-  return "RESTART_SERVICE";
+  return RESOURCE_ACTION_OPTIONS.has(policy.action_type) ? policy.action_type : "ALERT_ONLY";
 }
 
 export function EditPolicyModal({
@@ -41,7 +41,6 @@ export function EditPolicyModal({
   onClose,
   policy,
   onPolicyUpdated,
-  isDemoMode,
 }: Props) {
   if (!isOpen || !policy) return null;
 
@@ -51,7 +50,6 @@ export function EditPolicyModal({
       onClose={onClose}
       policy={policy}
       onPolicyUpdated={onPolicyUpdated}
-      isDemoMode={isDemoMode}
     />
   );
 }
@@ -60,15 +58,15 @@ function EditPolicyModalForm({
   onClose,
   policy,
   onPolicyUpdated,
-  isDemoMode,
 }: {
   onClose: () => void;
   policy: DefensePolicy;
   onPolicyUpdated: (updated: DefensePolicy) => void;
-  isDemoMode: boolean;
 }) {
   const id = useId();
-  const hasMultipleActions = isMemoryEventType(policy.event_type);
+  const isMemoryPolicy = isMemoryEventType(policy.event_type);
+  const isResourceOtherPolicy = !isNetworkEventType(policy.event_type) && !isMemoryPolicy;
+  const hasMultipleActions = isMemoryPolicy || isResourceOtherPolicy;
 
   const [actionType, setActionType] = useState(() => resolveInitialAction(policy));
   const [serviceName, setServiceName] = useState(
@@ -83,6 +81,12 @@ function EditPolicyModalForm({
   const [error, setError] = useState<string | null>(null);
 
   const needsBlockDuration = actionType === "BLOCK_IP_NFTABLES";
+  const blockDurationOptions = Array.from(
+    new Set([5, 10, 15, 30, 60, 360, 1440, blockDurationMinutes]),
+  ).sort((a, b) => a - b);
+  const cooldownOptions = Array.from(
+    new Set([30, 60, 120, 300, 600, cooldownSeconds]),
+  ).sort((a, b) => a - b);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +105,9 @@ function EditPolicyModalForm({
       } else {
         delete nextTargetParams.service_name;
       }
+    } else {
+      delete nextTargetParams.service_name;
+      delete nextTargetParams.target;
     }
 
     const updatePayload = {
@@ -113,16 +120,6 @@ function EditPolicyModalForm({
     };
 
     try {
-      if (isDemoMode) {
-        const updatedPolicy: DefensePolicy = {
-          ...policy,
-          ...updatePayload,
-        };
-        onPolicyUpdated(updatedPolicy);
-        onClose();
-        return;
-      }
-
       const res = await updatePolicy(policy.id, updatePayload);
       onPolicyUpdated(res);
       onClose();
@@ -177,15 +174,26 @@ function EditPolicyModalForm({
                 onChange={(e) => setActionType(e.target.value)}
                 disabled={loading}
               >
-                <option value="ADAPTIVE">Tự động thích ứng</option>
-                <option value="CLEAR_OS_CACHE">Giải phóng bộ nhớ đệm hệ điều hành</option>
-                <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
+                {isMemoryPolicy ? (
+                  <>
+                    <option value="ADAPTIVE">Tự động thích ứng</option>
+                    <option value="CLEAR_OS_CACHE">Giải phóng bộ nhớ đệm hệ điều hành</option>
+                    <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="ALERT_ONLY">Chỉ ghi nhận cảnh báo</option>
+                    <option value="RESTART_SERVICE">Khởi động lại dịch vụ</option>
+                  </>
+                )}
               </select>
               <small className="field-hint">
                 {actionType === "ADAPTIVE" &&
                   "Hệ thống tự kiểm tra: nếu có dịch vụ ứng dụng chiếm >= 40% lượng RAM đang sử dụng sẽ tự động khởi động lại dịch vụ đó; ngược lại (tải phân tán, dịch vụ lõi hoặc bộ nhớ đệm) sẽ giải phóng bộ nhớ đệm an toàn."}
                 {actionType === "CLEAR_OS_CACHE" &&
                   "Chạy sync và giải phóng bộ nhớ đệm hệ điều hành (Page Cache, dentries, inodes) mà không làm gián đoạn dịch vụ."}
+                {actionType === "ALERT_ONLY" &&
+                  "Chỉ ghi nhận cảnh báo và mở sự cố trên Dashboard mà không tự động can thiệp máy chủ."}
                 {actionType === "RESTART_SERVICE" &&
                   "Khởi động lại dịch vụ chiếm >= 40% tài nguyên quá tải qua systemd (hoặc dịch vụ dự phòng bên dưới); từ chối tự restart dịch vụ lõi hệ thống."}
               </small>
@@ -204,7 +212,7 @@ function EditPolicyModalForm({
                 placeholder="Để trống để tự xác định dịch vụ tương ứng (vd: nginx)"
                 disabled={loading}
               />
-              {!hasMultipleActions && (
+              {!isMemoryPolicy && (
                 <small className="field-hint">
                   Ưu tiên dịch vụ chiếm &gt;= 40% tải CPU đang quá tải; nếu tải phân tán hoặc là dịch vụ lõi sẽ tự động từ chối restart.
                 </small>
@@ -221,13 +229,15 @@ function EditPolicyModalForm({
                 onChange={(e) => setBlockDurationMinutes(Number(e.target.value))}
                 disabled={loading}
               >
-                <option value={5}>5 phút</option>
-                <option value={10}>10 phút</option>
-                <option value={15}>15 phút</option>
-                <option value={30}>30 phút</option>
-                <option value={60}>1 giờ</option>
-                <option value={360}>6 giờ</option>
-                <option value={1440}>24 giờ (tối đa)</option>
+                {blockDurationOptions.map((mins) => (
+                  <option key={mins} value={mins}>
+                    {mins >= 60 && mins % 60 === 0
+                      ? mins === 1440
+                        ? "24 giờ (tối đa)"
+                        : `${mins / 60} giờ`
+                      : `${mins} phút`}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -240,11 +250,13 @@ function EditPolicyModalForm({
               onChange={(e) => setCooldownSeconds(Number(e.target.value))}
               disabled={loading}
             >
-              <option value={30}>30 giây</option>
-              <option value={60}>1 phút</option>
-              <option value={120}>2 phút</option>
-              <option value={300}>5 phút</option>
-              <option value={600}>10 phút</option>
+              {cooldownOptions.map((sec) => (
+                <option key={sec} value={sec}>
+                  {sec >= 60 && sec % 60 === 0
+                    ? `${sec / 60} phút`
+                    : `${sec} giây`}
+                </option>
+              ))}
             </select>
             <small className="field-hint">
               Khoảng thời gian nghỉ tối thiểu trước khi cho phép kích hoạt lại để tránh lặp lệnh dồn dập.

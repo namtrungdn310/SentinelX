@@ -21,6 +21,13 @@ class RealResourceCollector:
         self._disk_path = disk_path or self._detect_default_mount()
 
         self._prev_network = self._read_network()
+        # Best-effort prime of psutil process CPU baseline so the first high-CPU
+        # spike reports accurate per-process CPU attribution.
+        try:
+            for _ in psutil.process_iter(["pid", "cpu_percent"]):
+                pass
+        except (OSError, psutil.Error):
+            pass
 
     @staticmethod
     def _read_network() -> tuple[int, int] | None:

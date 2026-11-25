@@ -51,6 +51,7 @@ class DefenseRepository:
     async def list_actions(
         self,
         node_id: uuid.UUID | None = None,
+        node_ids: list[uuid.UUID] | None = None,
         incident_id: uuid.UUID | None = None,
         status: str | None = None,
         limit: int = 50,
@@ -63,6 +64,11 @@ class DefenseRepository:
         if node_id is not None:
             base_query = base_query.where(DefenseActionModel.node_id == node_id)
             count_query = count_query.where(DefenseActionModel.node_id == node_id)
+        elif node_ids is not None:
+            if not node_ids:
+                return 0, []
+            base_query = base_query.where(DefenseActionModel.node_id.in_(node_ids))
+            count_query = count_query.where(DefenseActionModel.node_id.in_(node_ids))
 
         if incident_id is not None:
             base_query = base_query.where(DefenseActionModel.incident_id == incident_id)

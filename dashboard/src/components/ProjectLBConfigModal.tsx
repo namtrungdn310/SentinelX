@@ -18,7 +18,6 @@ interface Props {
       load_balancer?: ProjectLBConfig;
     },
   ) => Promise<void>;
-  isDemoMode?: boolean;
 }
 
 export function ProjectLBConfigModal({
@@ -47,6 +46,12 @@ export function ProjectLBConfigModal({
     setSaving(true);
     setError(null);
     const trimmedUrl = (lbConfig.lb_url ?? "").trim();
+    const rawHealthPath = lbConfig.health_path.trim();
+    const normalizedHealthPath = !rawHealthPath
+      ? "/health"
+      : rawHealthPath.startsWith("/")
+        ? rawHealthPath
+        : `/${rawHealthPath}`;
     try {
       if (isProjectMode) {
         await onSave(project.id, {
@@ -58,6 +63,7 @@ export function ProjectLBConfigModal({
           load_balancer: {
             ...lbConfig,
             lb_url: trimmedUrl ? trimmedUrl : null,
+            health_path: normalizedHealthPath,
           },
         });
       }
@@ -145,6 +151,7 @@ export function ProjectLBConfigModal({
               idPrefix={id}
               value={lbConfig}
               onChange={setLbConfig}
+              currentAlgorithm={project.load_balancer?.algorithm ?? "round_robin"}
               disabled={saving}
             />
           )}

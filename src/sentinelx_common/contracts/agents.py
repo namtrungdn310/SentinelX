@@ -100,6 +100,10 @@ class AgentEnrollRequest(SentinelXBaseModel):
         max_length=255,
         description="Operating system description",
     )
+    hardware_info: dict[str, int] | None = Field(
+        default=None,
+        description="Host hardware capacity (cpu_cores, total_memory_bytes, total_disk_bytes)",
+    )
 
 
 class AgentEnrollResponse(SentinelXBaseModel):
@@ -161,6 +165,10 @@ class HeartbeatRequest(SentinelXBaseModel):
     supported_actions: list[str] = Field(default_factory=list, max_length=16)
     executor_mode: str = Field(default="unknown", max_length=20)
     command_protocol_version: int = Field(default=1, ge=1, le=2)
+    hardware_info: dict[str, int] | None = Field(
+        default=None,
+        description="Optional host hardware capacity snapshot",
+    )
 
 
 class HeartbeatResponse(SentinelXBaseModel):

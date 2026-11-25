@@ -28,7 +28,6 @@ export function nodeHealth(node: Node): Health {
   if (node.status === "unenrolled") return "unenrolled";
   if (node.status === "offline") return "crit";
   if (
-    node.status === "degraded" ||
     (validMetric(node.latestCpu) && node.latestCpu > 75) ||
     (validMetric(node.latestMemory) && node.latestMemory > 85)
   )
@@ -42,14 +41,10 @@ export const healthLabels: Record<Health, string> = {
   unenrolled: "Chờ đăng ký",
   unknown: "Chưa có mẫu",
 };
-// A degraded Agent is not necessarily over a resource threshold.
 export function nodeHealthLabel(node: Node): string {
   const health = nodeHealth(node);
   if (health !== "warn") return healthLabels[health];
-  return (validMetric(node.latestCpu) && node.latestCpu > 75) ||
-    (validMetric(node.latestMemory) && node.latestMemory > 85)
-    ? "Vượt ngưỡng"
-    : "Suy giảm";
+  return "Vượt ngưỡng";
 }
 export function nodeRole(hostname: string): string {
   const name = hostname.toLowerCase();
@@ -66,37 +61,39 @@ export function formatBytes(bytes: number): string {
 }
 
 export function getNodeHardware(node: Partial<Node>): {
-  cpuCores: number;
-  totalMemoryBytes: number;
-  totalDiskBytes: number;
+  cpuCores?: number;
+  totalMemoryBytes?: number;
+  totalDiskBytes?: number;
 } {
-  const name = (node.hostname || "").toLowerCase();
-  let defaultCores = 4;
-  let defaultMemGb = 2; // Default 2 GB RAM (matching user reference)
-  let defaultDiskGb = 80;
+  const rawCaps = node.agent_capabilities;
+  const hw =
+    rawCaps && typeof rawCaps === "object" && "hardware" in rawCaps
+      ? (rawCaps.hardware as Record<string, unknown> | undefined)
+      : undefined;
 
-  if (/ingress|gateway|edge/.test(name)) {
-    defaultCores = 2;
-    defaultMemGb = 2;
-    defaultDiskGb = 50;
-  } else if (/db|pg|primary|postgres/.test(name)) {
-    defaultCores = 8;
-    defaultMemGb = 8;
-    defaultDiskGb = 200;
-  } else if (/worker|celery/.test(name)) {
-    defaultCores = 4;
-    defaultMemGb = 2;
-    defaultDiskGb = 100;
-  } else if (/storage|nas|backup/.test(name)) {
-    defaultCores = 2;
-    defaultMemGb = 4;
-    defaultDiskGb = 500;
-  }
+  const capCores =
+    typeof node.cpuCores === "number" && node.cpuCores > 0
+      ? node.cpuCores
+      : typeof hw?.cpu_cores === "number" && hw.cpu_cores > 0
+        ? hw.cpu_cores
+        : undefined;
+  const capMem =
+    typeof node.totalMemoryBytes === "number" && node.totalMemoryBytes > 0
+      ? node.totalMemoryBytes
+      : typeof hw?.total_memory_bytes === "number" && hw.total_memory_bytes > 0
+        ? hw.total_memory_bytes
+        : undefined;
+  const capDisk =
+    typeof node.totalDiskBytes === "number" && node.totalDiskBytes > 0
+      ? node.totalDiskBytes
+      : typeof hw?.total_disk_bytes === "number" && hw.total_disk_bytes > 0
+        ? hw.total_disk_bytes
+        : undefined;
 
   return {
-    cpuCores: node.cpuCores ?? defaultCores,
-    totalMemoryBytes: node.totalMemoryBytes ?? defaultMemGb * 1024 * 1024 * 1024,
-    totalDiskBytes: node.totalDiskBytes ?? defaultDiskGb * 1024 * 1024 * 1024,
+    cpuCores: capCores,
+    totalMemoryBytes: capMem,
+    totalDiskBytes: capDisk,
   };
 }
 
@@ -112,23 +109,23 @@ export function formatCapacityPair(usedBytes: number, totalBytes: number): strin
 
 export function formatMemoryUsage(percent?: number, totalBytes?: number): string {
   if (!validMetric(percent)) return "—";
-  const total = totalBytes ?? 2 * 1024 * 1024 * 1024;
-  const usedBytes = (percent / 100) * total;
-  return formatCapacityPair(usedBytes, total);
+  if (!validMetric(totalBytes) || totalBytes <= 0) return formatPercent(percent);
+  const usedBytes = (percent / 100) * totalBytes;
+  return formatCapacityPair(usedBytes, totalBytes);
 }
 
 export function formatCpuUsage(percent?: number, cores?: number): string {
   if (!validMetric(percent)) return "—";
-  const totalCores = cores ?? 4;
-  const usedCores = ((percent / 100) * totalCores).toFixed(1);
-  return `${usedCores} / ${totalCores} vCPU`;
+  if (!validMetric(cores) || cores <= 0) return formatPercent(percent);
+  const usedCores = ((percent / 100) * cores).toFixed(1);
+  return `${usedCores} / ${cores} vCPU`;
 }
 
 export function formatDiskUsage(percent?: number, totalBytes?: number): string {
   if (!validMetric(percent)) return "—";
-  const total = totalBytes ?? 100 * 1024 * 1024 * 1024;
-  const usedBytes = (percent / 100) * total;
-  return formatCapacityPair(usedBytes, total);
+  if (!validMetric(totalBytes) || totalBytes <= 0) return formatPercent(percent);
+  const usedBytes = (percent / 100) * totalBytes;
+  return formatCapacityPair(usedBytes, totalBytes);
 }
 
 /**
@@ -825,6 +822,7 @@ export function validateWhitelistCidr(
     };
   }
 
+  let canonicalPrefix = "";
   if (slashIdx >= 0) {
     const prefixStr = trimmed.slice(slashIdx + 1).trim();
     const maxPrefix = parsedBase.family === 4 ? 32 : 128;
@@ -845,9 +843,18 @@ export function validateWhitelistCidr(
         message: `Tiền tố CIDR phải nằm trong khoảng 0..${maxPrefix}.`,
       };
     }
+    canonicalPrefix = `/${prefix}`;
   }
 
-  const normalized = trimmed;
+  const normalized = `${baseStr}${canonicalPrefix}`;
+  if (normalized.length < 3) {
+    return {
+      status: "invalid",
+      valid: false,
+      normalized,
+      message: "Định dạng IP hoặc CIDR quá ngắn hoặc không hợp lệ.",
+    };
+  }
   const dup = existingWhitelist.find((entry) => entry.cidr.trim().toLowerCase() === normalized.toLowerCase());
   if (dup) {
     return {

@@ -1,8 +1,11 @@
 import { useId, useState } from "react";
-import { ArrowRight, Check, Copy, Server, X } from "lucide-react";
+import { ArrowRight, Check, Server, X } from "lucide-react";
 import type { Node, Project } from "../types";
-import { createNode, createEnrollmentToken } from "../api";
+import { createEnrollmentToken, createNode } from "../api";
+import { getDefaultAgentControllerUrl } from "../agentInstall";
+import { AgentInstallSection } from "./AgentInstallSection";
 import { Modal } from "./Modal";
+import { useAgentBundleInfo } from "./useAgentBundleInfo";
 
 interface Props {
   projects: Project[];
@@ -10,7 +13,6 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onNodeCreated: (node: Node) => void;
-  isDemoMode: boolean;
 }
 export function AddNodeModal({
   projects,
@@ -18,7 +20,6 @@ export function AddNodeModal({
   isOpen,
   onClose,
   onNodeCreated,
-  isDemoMode,
 }: Props) {
   const id = useId();
   const [projectId, setProjectId] = useState(
@@ -26,19 +27,13 @@ export function AddNodeModal({
   );
   const [hostname, setHostname] = useState("");
   const [ipAddress, setIpAddress] = useState("");
-  const [controllerUrl, setControllerUrl] = useState(() => {
-    if (import.meta.env.VITE_AGENT_CONTROLLER_URL) {
-      return import.meta.env.VITE_AGENT_CONTROLLER_URL;
-    }
-    const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
-    const hostname = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
-    return `${protocol}//${hostname}:8000`;
-  });
+  const [controllerUrl, setControllerUrl] = useState(getDefaultAgentControllerUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdNode, setCreatedNode] = useState<Node | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { bundleInfo, bundleLoading } = useAgentBundleInfo(isOpen);
+
   if (!isOpen) return null;
   const close = () => {
     if (!loading) onClose();
@@ -63,21 +58,14 @@ export function AddNodeModal({
     setLoading(true);
     setError(null);
     try {
-      const node: Node = isDemoMode
-        ? {
-            id: crypto.randomUUID(),
-            project_id: targetProjectId,
-            hostname: hostname.trim(),
-            ip_address: ipAddress.trim(),
-            status: "unenrolled",
-            last_seen: null,
-            created_at: new Date().toISOString(),
-            lb_role: "standalone",
-          }
-        : await createNode(targetProjectId, hostname.trim(), ipAddress.trim());
+      const node: Node = await createNode(
+        targetProjectId,
+        hostname.trim(),
+        ipAddress.trim(),
+      );
       setCreatedNode(node);
       onNodeCreated(node);
-      if (!isDemoMode) await issueToken(node.id);
+      await issueToken(node.id);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -86,27 +74,6 @@ export function AddNodeModal({
       );
     } finally {
       setLoading(false);
-    }
-  };
-  const shellQuote = (value: string) =>
-    "'" + value.replaceAll("'", "'\\''") + "'";
-  const command =
-    createdNode && token
-      ? [
-          `export SENTINELX_CONTROLLER_URL=${shellQuote(controllerUrl)}`,
-          `export SENTINELX_NODE_ID=${shellQuote(createdNode.id)}`,
-          `export SENTINELX_ENROLLMENT_TOKEN=${shellQuote(token)}`,
-          "uv run python -m sentinelx_agent.main",
-        ].join("\n")
-      : "";
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-    } catch {
-      setError(
-        "Không truy cập được clipboard. Bạn có thể chọn và sao chép lệnh bên dưới.",
-      );
     }
   };
 
@@ -175,7 +142,7 @@ export function AddNodeModal({
                 onChange={(event) => setHostname(event.target.value)}
                 required
                 pattern={".*\\S.*"}
-                maxLength={253}
+                maxLength={36}
                 disabled={loading}
               />
             </div>
@@ -191,26 +158,26 @@ export function AddNodeModal({
                 onChange={(event) => setIpAddress(event.target.value)}
                 required
                 pattern={".*\\S.*"}
+                minLength={7}
+                maxLength={45}
                 disabled={loading}
               />
             </div>
-            {!isDemoMode && (
-              <div className="form-group">
-                <label htmlFor={`${id}-url`}>Controller URL</label>
-                <input
-                  id={`${id}-url`}
-                  className="form-input font-mono"
-                  type="url"
-                  value={controllerUrl}
-                  onChange={(event) => setControllerUrl(event.target.value)}
-                  required
-                  disabled={loading}
-                />
-                <small className="field-hint">
-                  Địa chỉ IP hoặc URL của Controller mà Agent trên Linux sẽ gửi dữ liệu về (mặc định cổng 8000).
-                </small>
-              </div>
-            )}
+            <div className="form-group">
+              <label htmlFor={`${id}-url`}>Controller URL</label>
+              <input
+                id={`${id}-url`}
+                className="form-input font-mono"
+                type="url"
+                value={controllerUrl}
+                onChange={(event) => setControllerUrl(event.target.value)}
+                required
+                disabled={loading}
+              />
+              <small className="field-hint">
+                Địa chỉ IP hoặc URL của Controller mà Agent trên Linux sẽ gửi dữ liệu về (mặc định cổng 8000).
+              </small>
+            </div>
             {!projects.length && (
               <p className="form-error">
                 Hệ thống chưa có dự án. Tạo dự án trên Controller trước khi thêm
@@ -232,11 +199,7 @@ export function AddNodeModal({
               className="btn btn-primary"
               disabled={loading || !projects.length}
             >
-              {loading
-                ? "Đang đăng ký…"
-                : isDemoMode
-                  ? "Tạo máy chủ mẫu"
-                  : "Đăng ký & cấp token"}
+              {loading ? "Đang đăng ký…" : "Đăng ký & cấp token"}
               <ArrowRight size={15} />
             </button>
           </div>
@@ -248,28 +211,20 @@ export function AddNodeModal({
               <Check size={20} />
               <div>
                 <strong>{createdNode.hostname}</strong>
-                <p>
-                  {isDemoMode
-                    ? "Máy chủ mẫu đã được thêm vào hệ thống."
-                    : "Đã đăng ký máy chủ với Controller."}
-                </p>
+                <p>Đã đăng ký máy chủ với Controller.</p>
               </div>
             </div>
-            {command && (
-              <>
-                <p className="text-body">
-                  Chạy các lệnh sau trên terminal của máy chủ Linux (Máy B / Máy C). Token có hiệu lực 24 giờ:
-                </p>
-                <div className="code-box">
-                  <pre>{command}</pre>
-                </div>
-                <button className="btn btn-outline" onClick={copy}>
-                  {copied ? <Check size={15} /> : <Copy size={15} />}
-                  {copied ? "Đã sao chép" : "Sao chép lệnh chạy Agent"}
-                </button>
-              </>
+            {createdNode && token && (
+              <AgentInstallSection
+                nodeId={createdNode.id}
+                token={token}
+                controllerUrl={controllerUrl}
+                onControllerUrlChange={setControllerUrl}
+                bundleInfo={bundleInfo}
+                bundleLoading={bundleLoading}
+              />
             )}
-            {!token && !isDemoMode && (
+            {!token && (
               <button
                 className="btn btn-outline"
                 onClick={() => void issueToken(createdNode.id)}

@@ -2,12 +2,12 @@ name: sentinelx
 
 # ==============================================================================
 # SentinelX — Docker Compose Lab Environment
-# Fulfills Milestone F11 (Docker PBL Lab) & PBL4 multi-node simulation.
+# Level-1 Full-Stack Deployment & PBL4 Multi-Node Simulation
 #
 # Profiles available:
-#   1. core   -> Controller + PostgreSQL (Dev control plane)
-#   2. lab    -> core + Load Balancer + 2 Backend Nodes + 2 Agents
-#   3. attack -> lab + Traffic Generator / Attacker container
+#   1. core   -> PostgreSQL + Controller + Dashboard
+#   2. lab    -> core + Load Balancer + 2 Backend Nodes + 2 Real Agents
+#   3. attack -> lab + Traffic Generator / Attack Simulator
 # ==============================================================================
 
 networks:
@@ -83,13 +83,36 @@ services:
       SENTINELX_LOGGING__JSON_FORMAT: "true"
       SENTINELX_LB_ADMIN_TOKEN: ${SENTINELX_LB_ADMIN_TOKEN:-sentinelx_dev_lb_token}
       SENTINELX_DEFAULT_LB_URL: ${SENTINELX_DEFAULT_LB_URL:-http://sentinelx_lb:8080}
+      SENTINELX_SAFETY__PROTECTED_CIDRS: '["172.28.2.10/32","172.28.2.20/32","172.28.2.25/32","172.28.1.100/32"]'
     networks:
       sentinelx_public:
       sentinelx_internal:
         ipv4_address: 172.28.2.20
 
   # ----------------------------------------------------------------------------
-  # 3. SentinelX Custom HTTP Load Balancer (aiohttp Reverse Proxy)
+  # 3. SentinelX Dashboard Web UI (React + Vite SPA behind Nginx proxy)
+  # ----------------------------------------------------------------------------
+  sentinelx_dashboard:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.dashboard
+    image: sentinelx-dashboard:latest
+    container_name: sentinelx_dashboard
+    restart: unless-stopped
+    profiles: [core, lab, attack]
+    depends_on:
+      sentinelx_controller:
+        condition: service_healthy
+    ports:
+      - "${SENTINELX_DASHBOARD_PORT:-5174}:80"
+    environment:
+      SENTINELX_CONTROLLER_UPSTREAM: sentinelx_controller:8000
+    networks:
+      sentinelx_public:
+      sentinelx_internal:
+
+  # ----------------------------------------------------------------------------
+  # 4. SentinelX Custom HTTP Load Balancer (aiohttp Reverse Proxy)
   # ----------------------------------------------------------------------------
   sentinelx_lb:
     build:
@@ -99,25 +122,30 @@ services:
     container_name: sentinelx_lb
     restart: unless-stopped
     profiles: [lab, attack]
+    depends_on:
+      backend01:
+        condition: service_started
+      backend02:
+        condition: service_started
     ports:
       - "${SENTINELX_LB_PORT:-8080}:8080"
     environment:
       SENTINELX_LB_HOST: 0.0.0.0
       SENTINELX_LB_PORT: 8080
-      SENTINELX_LB_BACKENDS: "http://backend01:8080,http://backend02:8080"
+      SENTINELX_LB_BACKENDS: "http://172.28.2.31:8080,http://172.28.2.32:8080"
       SENTINELX_LB_ALGORITHM: round_robin
       SENTINELX_LB_HEALTH_CHECK__ENABLED: "true"
       SENTINELX_LB_HEALTH_CHECK__PATH: "/health"
       SENTINELX_LB_HEALTH_CHECK__INTERVAL_SECONDS: "3.0"
       SENTINELX_LB_ADMIN_TOKEN: ${SENTINELX_LB_ADMIN_TOKEN:-sentinelx_dev_lb_token}
-      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
     networks:
       sentinelx_public:
         ipv4_address: 172.28.1.100
       sentinelx_internal:
+        ipv4_address: 172.28.2.25
 
   # ----------------------------------------------------------------------------
-  # 4. Backend Workload Nodes (Node A & Node B)
+  # 5. Backend Workload Nodes (Node A & Node B)
   # ----------------------------------------------------------------------------
   backend01:
     build:
@@ -150,7 +178,7 @@ services:
         ipv4_address: 172.28.2.32
 
   # ----------------------------------------------------------------------------
-  # 5. SentinelX Agents (Node A & Node B Daemons)
+  # 6. SentinelX Agents (Node A & Node B Daemons)
   # ----------------------------------------------------------------------------
   agent01:
     build:
@@ -172,9 +200,19 @@ services:
     environment:
       SENTINELX_LAB_BOOTSTRAP: "1"
       SENTINELX_LAB_NODE_IP: 172.28.2.31
+      SENTINELX_LAB_LB_ROLE: lb_backend
+      SENTINELX_LAB_LB_PORT: "8080"
+      SENTINELX_LAB_LB_HEALTH_PATH: /health
+      SENTINELX_LAB_ENABLE_PROJECT_LB: "1"
       SENTINELX_HOSTNAME: backend01
-      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
+      SENTINELX_CONTROLLER_URL: http://172.28.2.20:8000
       SENTINELX_HEARTBEAT_INTERVAL_SECONDS: 5
+      SENTINELX_TELEMETRY_INTERVAL_SECONDS: 5
+      SENTINELX_TELEMETRY_BATCH_SIZE: 2
+      SENTINELX_DEFENSE_EXECUTOR_TYPE: ${SENTINELX_LAB_EXECUTOR:-nftables}
+      SENTINELX_NETWORK_CAPTURE_ENABLED: ${SENTINELX_LAB_CAPTURE:-true}
+      SENTINELX_NETWORK_INTERFACE: ${SENTINELX_LAB_NET_IFACE:-eth0}
+      SENTINELX_PROTECTED_CIDRS: '["172.28.2.20/32","172.28.1.100/32","172.28.2.25/32"]'
 
   agent02:
     build:
@@ -196,12 +234,22 @@ services:
     environment:
       SENTINELX_LAB_BOOTSTRAP: "1"
       SENTINELX_LAB_NODE_IP: 172.28.2.32
+      SENTINELX_LAB_LB_ROLE: lb_backend
+      SENTINELX_LAB_LB_PORT: "8080"
+      SENTINELX_LAB_LB_HEALTH_PATH: /health
+      SENTINELX_LAB_ENABLE_PROJECT_LB: "1"
       SENTINELX_HOSTNAME: backend02
-      SENTINELX_CONTROLLER_URL: http://sentinelx_controller:8000
+      SENTINELX_CONTROLLER_URL: http://172.28.2.20:8000
       SENTINELX_HEARTBEAT_INTERVAL_SECONDS: 5
+      SENTINELX_TELEMETRY_INTERVAL_SECONDS: 5
+      SENTINELX_TELEMETRY_BATCH_SIZE: 2
+      SENTINELX_DEFENSE_EXECUTOR_TYPE: ${SENTINELX_LAB_EXECUTOR:-nftables}
+      SENTINELX_NETWORK_CAPTURE_ENABLED: ${SENTINELX_LAB_CAPTURE:-true}
+      SENTINELX_NETWORK_INTERFACE: ${SENTINELX_LAB_NET_IFACE:-eth0}
+      SENTINELX_PROTECTED_CIDRS: '["172.28.2.20/32","172.28.1.100/32","172.28.2.25/32"]'
 
   # ----------------------------------------------------------------------------
-  # 6. Attacker & Traffic Generator
+  # 7. Attacker & Traffic Generator
   # ----------------------------------------------------------------------------
   traffic_sim:
     build:
@@ -212,6 +260,9 @@ services:
     profiles: [attack]
     depends_on:
       - sentinelx_lb
+      - backend01
     networks:
       sentinelx_public:
         ipv4_address: 172.28.1.200
+      sentinelx_internal:
+        ipv4_address: 172.28.2.200

@@ -110,6 +110,14 @@ class ControllerSettings(BaseSettings):
             "without specifying a custom override URL"
         ),
     )
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["*"],
+        description="Allowed CORS origins for Dashboard browser requests",
+    )
+    agent_bundle_dir: Path = Field(
+        default=Path("dist/agent"),
+        description="Directory containing built standalone Agent release tarballs",
+    )
 
     server: ServerSettings = Field(default_factory=ServerSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)

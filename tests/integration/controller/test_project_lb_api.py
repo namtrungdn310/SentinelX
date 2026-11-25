@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 
+import aiohttp
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
@@ -241,3 +242,21 @@ async def test_controller_uses_system_default_lb_url_when_project_url_is_null(
         assert body["sync_status"] == "synced"
         assert body["lb_url"] == live_lb_server
         assert body["algorithm"] == "least_in_flight"
+
+        # Disabling LB must clear pool on live sentinelx_lb too
+        disable_res = await client.put(
+            f"/api/v1/projects/{project_id}/load-balancer",
+            json={
+                "enabled": False,
+                "lb_url": live_lb_server,
+                "algorithm": "least_in_flight",
+            },
+        )
+        assert disable_res.status_code == 200
+        assert disable_res.json()["sync_status"] == "disabled"
+
+        async with aiohttp.ClientSession() as http_client:
+            async with http_client.get(f"{live_lb_server}/lb/status") as lb_resp:
+                lb_body = await lb_resp.json()
+                assert lb_body["pool"]["total_backends"] == 0
+                assert lb_body["health_check"]["enabled"] is False

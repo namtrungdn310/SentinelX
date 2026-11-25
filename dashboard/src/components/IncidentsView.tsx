@@ -19,7 +19,6 @@ import type {
   Node,
 } from "../types";
 import { deleteIncident, fetchDefenseActions, fetchIncidents, fetchPolicies } from "../api";
-import { MOCK_DEFENSE_ACTIONS, MOCK_INCIDENTS, MOCK_POLICIES } from "../mockData";
 import {
   classifyIncidentHandling,
   getPortSummary,
@@ -35,36 +34,29 @@ type IncidentsTab = IncidentHandlingMode | "resolved";
 interface Props {
   selectedProjectId: string | null;
   nodes?: Node[];
-  isDemoMode: boolean;
   incidentRevision?: number;
   onIncidentsSynced?: (items: Incident[]) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
   initialTab?: IncidentsTab;
+  initialIncidents?: Incident[];
+  initialPolicies?: DefensePolicy[];
+  initialDefenseActions?: DefenseAction[];
 }
 
 export function IncidentsView({
   selectedProjectId,
   nodes,
-  isDemoMode,
   incidentRevision = 0,
   onIncidentsSynced,
   onNotify,
   initialTab = "auto",
+  initialIncidents = [],
+  initialPolicies = [],
+  initialDefenseActions = [],
 }: Props) {
-  const [incidents, setIncidents] = useState<Incident[]>(() => {
-    if (isDemoMode) {
-      return selectedProjectId
-        ? MOCK_INCIDENTS.filter((i) => i.project_id === selectedProjectId)
-        : MOCK_INCIDENTS;
-    }
-    return [];
-  });
-  const [policies, setPolicies] = useState<DefensePolicy[]>(() =>
-    isDemoMode ? MOCK_POLICIES : []
-  );
-  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>(() =>
-    isDemoMode ? MOCK_DEFENSE_ACTIONS : []
-  );
+  const [incidents, setIncidents] = useState<Incident[]>(initialIncidents);
+  const [policies, setPolicies] = useState<DefensePolicy[]>(initialPolicies);
+  const [defenseActions, setDefenseActions] = useState<DefenseAction[]>(initialDefenseActions);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,23 +70,16 @@ export function IncidentsView({
     if (!quiet) setIsLoading(true);
     setError(null);
     try {
-      if (isDemoMode) {
-        let items = MOCK_INCIDENTS;
-        if (selectedProjectId) {
-          items = items.filter((i) => i.project_id === selectedProjectId);
-        }
-        setIncidents(items);
-        setPolicies(MOCK_POLICIES);
-        setDefenseActions(MOCK_DEFENSE_ACTIONS);
-        return;
-      }
       const [incidentList, policyList, actionList] = await Promise.all([
         fetchIncidents({
           projectId: selectedProjectId ?? undefined,
           limit: 100,
         }),
         fetchPolicies(selectedProjectId ?? undefined).catch(() => []),
-        fetchDefenseActions({ limit: 100 }).catch(() => []),
+        fetchDefenseActions({
+          projectId: selectedProjectId ?? undefined,
+          limit: 100,
+        }).catch(() => []),
       ]);
       setIncidents(incidentList);
       setPolicies(policyList);
@@ -107,7 +92,7 @@ export function IncidentsView({
     } finally {
       if (!quiet) setIsLoading(false);
     }
-  }, [selectedProjectId, isDemoMode, onIncidentsSynced]);
+  }, [selectedProjectId, onIncidentsSynced]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -117,12 +102,12 @@ export function IncidentsView({
   }, [loadIncidents]);
 
   useEffect(() => {
-    if (isDemoMode || incidentRevision <= 0) return;
+    if (incidentRevision <= 0) return;
     const timer = window.setTimeout(() => {
       void loadIncidents(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [incidentRevision, isDemoMode, loadIncidents]);
+  }, [incidentRevision, loadIncidents]);
 
   const filteredIncidents = useMemo(() => {
     return incidents.filter((inc) => {
@@ -190,9 +175,7 @@ export function IncidentsView({
     try {
       setDeletingId(inc.id);
       setError(null);
-      if (!isDemoMode) {
-        await deleteIncident(inc.id);
-      }
+      await deleteIncident(inc.id);
       const next = incidents.filter((item) => item.id !== inc.id);
       setIncidents(next);
       onIncidentsSynced?.(next);
@@ -221,8 +204,19 @@ export function IncidentsView({
     [incidents]
   );
   const countResolved = useMemo(
-    () => incidents.filter((i) => i.status === "RESOLVED").length,
-    [incidents]
+    () =>
+      incidents.filter(
+        (i) => i.status === "RESOLVED" || i.status === "FALSE_POSITIVE",
+      ).length,
+    [incidents],
+  );
+
+  const activeModalIncident = useMemo(
+    () =>
+      selectedIncident
+        ? incidents.find((i) => i.id === selectedIncident.id) ?? selectedIncident
+        : null,
+    [selectedIncident, incidents],
   );
 
   const handleIncidentUpdated = (updated: Incident) => {
@@ -498,26 +492,24 @@ export function IncidentsView({
                 <tr>
                   <td
                     colSpan={handlingTab === "resolved" ? 8 : 7}
-                    style={{ textAlign: "center", padding: "48px 20px" }}
+                    style={{ padding: 0 }}
                   >
-                    <div className="attention-empty" style={{ justifyContent: "center" }}>
-                      <ShieldCheck size={28} style={{ color: "var(--status-ok)" }} />
-                      <div>
-                        <strong>
-                          {handlingTab === "resolved"
-                            ? "Chưa có sự cố đã giải quyết"
-                            : "Hạ tầng an toàn"}
-                        </strong>
-                        <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
-                          {searchQuery || statusFilter !== "all" || severityFilter !== "all"
-                            ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
-                            : handlingTab === "auto"
-                              ? "Không có sự cố đang mở nào thuộc nhóm xử lý tự động."
-                              : handlingTab === "manual"
-                                ? "Không có sự cố đang mở nào thuộc nhóm xử lý thủ công."
-                                : "Không còn sự cố nào trong lịch sử đã giải quyết."}
-                        </p>
-                      </div>
+                    <div className="empty-state-card">
+                      <ShieldCheck size={36} style={{ color: "var(--status-ok)" }} />
+                      <h3>
+                        {handlingTab === "resolved"
+                          ? "Chưa có sự cố đã giải quyết"
+                          : "Hạ tầng an toàn"}
+                      </h3>
+                      <p>
+                        {searchQuery || statusFilter !== "all" || severityFilter !== "all"
+                          ? "Không tìm thấy sự cố nào khớp với bộ lọc hiện tại."
+                          : handlingTab === "auto"
+                            ? "Không có sự cố đang mở nào thuộc nhóm xử lý tự động."
+                            : handlingTab === "manual"
+                              ? "Không có sự cố đang mở nào thuộc nhóm xử lý thủ công."
+                              : "Không còn sự cố nào trong lịch sử đã giải quyết."}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -604,18 +596,17 @@ export function IncidentsView({
       </div>
 
       {/* 4. Incident Detail Modal */}
-      {selectedIncident && (
+      {activeModalIncident && (
         <IncidentDetailModal
-          key={selectedIncident.id}
-          incident={selectedIncident}
+          key={activeModalIncident.id}
+          incident={activeModalIncident}
           nodes={nodes}
           policies={policies}
           defenseActions={defenseActions}
-          isOpen={Boolean(selectedIncident)}
+          isOpen={Boolean(activeModalIncident)}
           onClose={() => setSelectedIncident(null)}
           onIncidentUpdated={handleIncidentUpdated}
           onNotify={onNotify}
-          isDemoMode={isDemoMode}
         />
       )}
     </div>

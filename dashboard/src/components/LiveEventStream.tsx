@@ -15,7 +15,6 @@ interface Props {
   events: RealtimeMessage[];
   nodes: Node[];
   isConnected: boolean;
-  isDemoMode: boolean;
   preview?: boolean;
   onOpenAll?: () => void;
 }
@@ -24,7 +23,6 @@ export function LiveEventStream({
   events,
   nodes,
   isConnected,
-  isDemoMode,
   preview = false,
   onOpenAll,
 }: Props) {
@@ -40,7 +38,7 @@ export function LiveEventStream({
 
   const visible = filterEvents(events, nodes, category, filter);
   const limit = preview ? 5 : 40;
-  const stateTone = isConnected || isDemoMode ? "ok" : "crit";
+  const stateTone = isConnected ? "ok" : "crit";
   return (
     <section className={`panel event-panel ${preview ? "event-preview" : "event-full"}`} aria-label="Nhật ký sự kiện">
       <div className="event-controls" onWheel={handleControlsWheel}>
@@ -170,11 +168,9 @@ export function LiveEventStream({
           className={`health-dot ${stateTone}`}
           aria-hidden="true"
         />
-        {isDemoMode
-          ? "Bộ đệm phiên · Mô phỏng"
-          : isConnected
-            ? "Lịch sử gần đây và sự kiện trực tiếp · Đã kết nối"
-            : "Đang chờ kết nối Controller"}
+        {isConnected
+          ? "Lịch sử gần đây và sự kiện trực tiếp · Đã kết nối"
+          : "Đang chờ kết nối Controller"}
         <span>
           {Math.min(limit, visible.length)} / {visible.length}{" "}
           sự kiện

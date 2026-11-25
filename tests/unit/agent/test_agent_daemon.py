@@ -241,3 +241,58 @@ async def test_collection_failure_and_send_retry_preserve_batch_order(tmp_path: 
     assert [sample.cpu_percent for sample in sent[1].samples] == [2, 3]
     assert client.send_heartbeat.await_count >= 1
     assert collection_threads and all(thread != loop_thread for thread in collection_threads)
+
+
+@pytest.mark.asyncio
+async def test_daemon_drops_poisoned_4xx_batch_and_continues_delivery(tmp_path: Path) -> None:
+    """Permanent HTTP 422 batch errors must not deadlock subsequent metric batches."""
+    from sentinelx_agent.client import ControllerClientError
+
+    identity = AgentIdentity(
+        node_id="11111111-2222-3333-4444-555555555555",
+        agent_id="22222222-3333-4444-5555-666666666666",
+        status="enrolled",
+        enrolled_at=datetime.now(UTC),
+    )
+    path = tmp_path / "identity.json"
+    AgentIdentityManager.save(path, identity)
+    settings = AgentSettings(
+        identity_path=path,
+        telemetry_interval_seconds=0.01,
+        telemetry_batch_size=1,
+    )
+    collector = MagicMock()
+    count = 0
+
+    def collect() -> MetricSample:
+        nonlocal count
+        count += 1
+        return MetricSample(
+            observed_at=datetime.now(UTC),
+            cpu_percent=float(count * 10),
+            memory_percent=40.0,
+        )
+
+    collector.collect.side_effect = collect
+    stop = asyncio.Event()
+    client = AsyncMock(spec=ControllerClient)
+    client.send_heartbeat.return_value = HeartbeatResponse(
+        status="ok",
+        received_at=datetime.now(UTC),
+        next_interval_seconds=1,
+    )
+    sent: list[MetricBatchRequest] = []
+
+    async def send(request: MetricBatchRequest) -> MetricBatchResponse:
+        sent.append(request)
+        if len(sent) == 1:
+            raise ControllerClientError(422, "Validation error in sample")
+        stop.set()
+        return MetricBatchResponse(processed_count=1, received_at=datetime.now(UTC))
+
+    client.send_metrics.side_effect = send
+    daemon = AgentDaemon(settings, client=client, collector=collector)
+    await asyncio.wait_for(daemon.run(stop), timeout=3)
+    assert len(sent) == 2
+    assert sent[0].samples[0].cpu_percent == 10.0
+    assert sent[1].samples[0].cpu_percent == 20.0

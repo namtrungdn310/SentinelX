@@ -4,7 +4,7 @@ import logging
 import secrets
 from typing import Any
 
-from aiohttp import ClientSession, web
+from aiohttp import ClientSession, DummyCookieJar, web
 from pydantic import ValidationError
 
 from sentinelx_lb.balancer import LoadBalancer
@@ -129,6 +129,8 @@ async def update_lb_config(request: web.Request) -> web.Response:
         balancer.algorithm.value,
         len(pool.backends),
     )
+    if health_checker.config.enabled and ("backends" in payload or "health_check" in payload):
+        health_checker.trigger_probe_now()
     return await lb_status(request)
 
 
@@ -205,7 +207,10 @@ def create_app(settings: LBSettings | None = None) -> web.Application:
     app[HEALTH_CHECKER_KEY] = health_checker
 
     async def on_startup(application: web.Application) -> None:
-        session = ClientSession()
+        session = ClientSession(
+            cookie_jar=DummyCookieJar(),
+            auto_decompress=False,
+        )
         handler = ReverseProxyHandler(
             balancer=balancer,
             session=session,

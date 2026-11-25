@@ -55,6 +55,16 @@ def normalize_command(
         return None, normalized
     if action_type == "CLEAR_OS_CACHE":
         return "os-cache", normalized
+    if action_type == "ADAPTIVE":
+        raw_svc = normalized.get("service_name") or normalized.get("target")
+        if isinstance(raw_svc, str) and raw_svc.strip() and raw_svc.strip() != "adaptive":
+            clean_name = raw_svc.strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_\-\.]{1,64}", clean_name):
+                raise ValueError(f"Invalid service identifier: {clean_name}")
+            normalized["service_name"] = clean_name
+            normalized["target"] = clean_name
+            return clean_name, normalized
+        return (target_ip or "adaptive"), normalized
     if action_type == "RESTART_SERVICE":
         service_name = normalized.get("service_name") or normalized.get("target") or target_ip
         if not service_name or not isinstance(service_name, str):

@@ -128,7 +128,11 @@ class CommandProcessor:
                         metadata["alert_only"] = True
                     else:
                         active_executor: BaseDefenseExecutor
-                        if stored.action_type in ("RESTART_SERVICE", "CLEAR_OS_CACHE"):
+                        if stored.action_type in (
+                            "RESTART_SERVICE",
+                            "CLEAR_OS_CACHE",
+                            "ADAPTIVE",
+                        ):
                             active_executor = (
                                 self.executor
                                 if isinstance(
@@ -142,7 +146,9 @@ class CommandProcessor:
                         metadata.update(outcome.metadata)
                         reason = outcome.error_message
                         if outcome.success:
-                            if outcome.metadata.get("simulated"):
+                            if outcome.metadata.get("simulated") or outcome.metadata.get(
+                                "simulated_platform"
+                            ):
                                 state = DefenseActionStatus.SIMULATED
                             elif outcome.metadata.get("noop"):
                                 state = DefenseActionStatus.SKIPPED

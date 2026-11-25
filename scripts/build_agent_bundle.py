@@ -12,7 +12,45 @@ from pathlib import Path
 PRUNED = ("fastapi", "uvicorn", "sqlalchemy", "asyncpg", "alembic")
 
 
-def build(source: Path, output: Path, uv: str = "uv") -> Path:
+def _sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _write_release_metadata(output: Path, archive: Path, release: str) -> None:
+    archive_sha256 = _sha256_file(archive)
+    archive_size = archive.stat().st_size
+    (output / f"{archive.name}.sha256").write_text(
+        f"{archive_sha256}  {archive.name}\n",
+        encoding="utf-8",
+    )
+    (output / "latest.json").write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "release": release,
+                "filename": archive.name,
+                "sha256": archive_sha256,
+                "size_bytes": archive_size,
+            },
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def build(
+    source: Path,
+    output: Path,
+    uv: str = "uv",
+    *,
+    allow_existing: bool = False,
+) -> Path:
     source = source.resolve()
     command = [
         uv,
@@ -53,7 +91,10 @@ def build(source: Path, output: Path, uv: str = "uv") -> Path:
     output.mkdir(parents=True, exist_ok=True)
     archive = output / f"sentinelx-agent-{release}.tar.gz"
     if archive.exists():
-        raise FileExistsError(f"Bundle already exists: {archive}")
+        if not allow_existing:
+            raise FileExistsError(f"Bundle already exists: {archive}")
+        _write_release_metadata(output, archive, release)
+        return archive
     with tarfile.open(archive, "w:gz") as tar:
         for name, content in sorted(files.items()):
             entry = tarfile.TarInfo(f"sentinelx-agent-{release}/{name}")
@@ -61,6 +102,7 @@ def build(source: Path, output: Path, uv: str = "uv") -> Path:
             entry.mode = 0o644
             entry.mtime = 0
             tar.addfile(entry, io.BytesIO(content))
+    _write_release_metadata(output, archive, release)
     return archive
 
 
@@ -69,8 +111,13 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--output", type=Path, default=Path("dist/agent"))
     parser.add_argument("--uv", default="uv")
+    parser.add_argument(
+        "--allow-existing",
+        action="store_true",
+        help="Refresh checksum/latest metadata if this deterministic archive already exists.",
+    )
     args = parser.parse_args()
-    print(build(args.source, args.output, args.uv))
+    print(build(args.source, args.output, args.uv, allow_existing=args.allow_existing))
 
 
 if __name__ == "__main__":

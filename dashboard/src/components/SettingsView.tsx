@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Activity,
   Check,
@@ -14,16 +14,21 @@ import type {
   Project,
   Node,
   PresetProfileType,
+  ProjectSettings,
 } from "../types";
 import type { SecurityToastPayload } from "./SecurityToast";
-import { TELEMETRY_PRESETS, MOCK_PROJECT_SETTINGS } from "../mockData";
-import { updateNodeSettings, updateProjectSettings } from "../api";
+import { TELEMETRY_PRESETS } from "../presets";
+import {
+  fetchProjectSettings,
+  updateNodeSettings,
+  updateProjectSettings,
+} from "../api";
+import { authService } from "../auth";
 
 interface Props {
   selectedProjectId: string | null;
   projects: Project[];
   nodes: Node[];
-  isDemoMode: boolean;
   onProfileApplied?: (newProfile: PresetProfileType) => void;
   onSettingsPersisted?: (nodeIds: string[], profile: PresetProfileType, updatedAt: string) => void;
   onNotify?: (toast: SecurityToastPayload) => void;
@@ -31,7 +36,7 @@ interface Props {
 
 function resolveNodeConfig(
   node: Node,
-  projectId: string
+  projectSettings: ProjectSettings | null,
 ): { profile: PresetProfileType; updatedAt: string } {
   const capSettings = (
     node.agent_capabilities as
@@ -47,62 +52,55 @@ function resolveNodeConfig(
       updatedAt: capSettings.updated_at || node.last_seen || node.created_at,
     };
   }
-  try {
-    // 1. Try node-specific local setting
-    const nodeSaved = localStorage.getItem(`sentinelx_node_settings_${node.id}`);
-    if (nodeSaved) {
-      const parsed = JSON.parse(nodeSaved);
-      if (parsed.active_profile) {
-        return {
-          profile: parsed.active_profile as PresetProfileType,
-          updatedAt: parsed.updated_at || new Date().toISOString(),
-        };
-      }
-    }
-    // 2. Try project local setting
-    const projSaved = localStorage.getItem(`sentinelx_settings_${node.project_id || projectId}`);
-    if (projSaved) {
-      const parsed = JSON.parse(projSaved);
-      if (parsed.active_profile) {
-        return {
-          profile: parsed.active_profile as PresetProfileType,
-          updatedAt: parsed.updated_at || new Date().toISOString(),
-        };
-      }
-    }
-    // 3. Fallback to mock project setting or default balanced
-    const mockProj = MOCK_PROJECT_SETTINGS[node.project_id || projectId];
+  if (
+    projectSettings?.active_profile &&
+    Object.hasOwn(TELEMETRY_PRESETS, projectSettings.active_profile)
+  ) {
     return {
-      profile: (mockProj?.active_profile || "balanced") as PresetProfileType,
-      updatedAt: mockProj?.updated_at || new Date().toISOString(),
-    };
-  } catch {
-    return {
-      profile: "balanced",
-      updatedAt: new Date().toISOString(),
+      profile: projectSettings.active_profile,
+      updatedAt: projectSettings.updated_at,
     };
   }
+  return {
+    profile: "balanced",
+    updatedAt: node.last_seen || node.created_at || new Date().toISOString(),
+  };
 }
 
 export function SettingsView({
   selectedProjectId,
   projects,
   nodes,
-  isDemoMode,
   onProfileApplied,
   onSettingsPersisted,
   onNotify,
 }: Props) {
   const effectiveProjectId = selectedProjectId || projects[0]?.id || "";
   const currentProject = projects.find((p) => p.id === effectiveProjectId);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings | null>(null);
 
-  // Filter nodes belonging to the current project, or all nodes if none filtered
-  const availableNodes = useMemo(() => {
-    const filtered = nodes.filter(
-      (n) => !effectiveProjectId || n.project_id === effectiveProjectId
-    );
-    return filtered.length > 0 ? filtered : nodes;
-  }, [nodes, effectiveProjectId]);
+  useEffect(() => {
+    if (!effectiveProjectId) {
+      return;
+    }
+    let cancelled = false;
+    void fetchProjectSettings(effectiveProjectId)
+      .then((res) => {
+        if (!cancelled) setProjectSettings(res);
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveProjectId]);
+
+  const availableNodes = useMemo(
+    () =>
+      nodes.filter(
+        (n) => !effectiveProjectId || n.project_id === effectiveProjectId,
+      ),
+    [nodes, effectiveProjectId],
+  );
 
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
 
@@ -117,39 +115,55 @@ export function SettingsView({
     return availableNodes.find((n) => n.id === effectiveNodeId) || null;
   }, [availableNodes, effectiveNodeId]);
 
-  // Read active profile for this specific node (with fallback to project setting)
   const [activeProfile, setActiveProfile] = useState<PresetProfileType>(() => {
-    return selectedNode ? resolveNodeConfig(selectedNode, effectiveProjectId).profile : "balanced";
+    return selectedNode
+      ? resolveNodeConfig(selectedNode, projectSettings).profile
+      : "balanced";
   });
   const [lastUpdated, setLastUpdated] = useState<string>(() => {
-    return selectedNode ? resolveNodeConfig(selectedNode, effectiveProjectId).updatedAt : new Date().toISOString();
+    return selectedNode
+      ? resolveNodeConfig(selectedNode, projectSettings).updatedAt
+      : new Date().toISOString();
   });
   const [applyToAllInProject, setApplyToAllInProject] = useState(() => {
     if (availableNodes.length <= 1) return false;
-    const firstProfile = resolveNodeConfig(availableNodes[0], effectiveProjectId).profile;
+    const firstProfile = resolveNodeConfig(availableNodes[0], null).profile;
     return availableNodes.every(
-      (n) => resolveNodeConfig(n, effectiveProjectId).profile === firstProfile
+      (n) => resolveNodeConfig(n, null).profile === firstProfile,
     );
   });
 
-  // Synchronously adjust state when selected node or project changes (React pattern: adjusting state during render)
+  // Synchronously adjust state when selected node or project changes
   const [prevNodeId, setPrevNodeId] = useState(effectiveNodeId);
   const [prevProjectId, setPrevProjectId] = useState(effectiveProjectId);
+  const [prevProjSettingsAt, setPrevProjSettingsAt] = useState(
+    projectSettings?.updated_at ?? "",
+  );
 
-  if (prevNodeId !== effectiveNodeId || prevProjectId !== effectiveProjectId) {
+  if (
+    prevNodeId !== effectiveNodeId ||
+    prevProjectId !== effectiveProjectId ||
+    prevProjSettingsAt !== (projectSettings?.updated_at ?? "")
+  ) {
     setPrevNodeId(effectiveNodeId);
     setPrevProjectId(effectiveProjectId);
+    setPrevProjSettingsAt(projectSettings?.updated_at ?? "");
     if (selectedNode) {
-      const { profile, updatedAt } = resolveNodeConfig(selectedNode, effectiveProjectId);
+      const { profile, updatedAt } = resolveNodeConfig(selectedNode, projectSettings);
       setActiveProfile(profile);
       setLastUpdated(updatedAt);
+    } else if (projectSettings) {
+      setActiveProfile(projectSettings.active_profile);
+      setLastUpdated(projectSettings.updated_at);
     }
-    // Only re-evaluate applyToAllInProject default when switching to a different project
     if (prevProjectId !== effectiveProjectId) {
       if (availableNodes.length > 1) {
-        const firstProfile = resolveNodeConfig(availableNodes[0], effectiveProjectId).profile;
+        const firstProfile = resolveNodeConfig(
+          availableNodes[0],
+          projectSettings,
+        ).profile;
         const allSame = availableNodes.every(
-          (n) => resolveNodeConfig(n, effectiveProjectId).profile === firstProfile
+          (n) => resolveNodeConfig(n, projectSettings).profile === firstProfile,
         );
         setApplyToAllInProject(allSame);
       } else {
@@ -170,75 +184,31 @@ export function SettingsView({
     try {
       setApplyingProfile(profileId);
       setSettingsError(null);
-      let now = new Date().toISOString();
+      const operatorEmail =
+        authService.getCurrentUser()?.email || "operator@sentinelx.local";
       const targetProjectId = selectedNode.project_id || effectiveProjectId;
 
-      if (!isDemoMode) {
-        if (applyToAllInProject) {
-          const saved = await updateProjectSettings(
-            targetProjectId,
-            profileId,
-            "admin@sentinelx.com",
-            true,
-          );
-          now = saved.updated_at || now;
-        } else {
-          const saved = await updateNodeSettings(
-            selectedNode.id,
-            profileId,
-            "admin@sentinelx.com",
-          );
-          now = saved.updated_at || now;
-        }
-      } else if (applyToAllInProject) {
-        void updateProjectSettings(targetProjectId, profileId);
+      const saved = applyToAllInProject
+        ? await updateProjectSettings(targetProjectId, profileId, operatorEmail)
+        : await updateNodeSettings(selectedNode.id, profileId, operatorEmail);
+
+      const now = saved.updated_at || new Date().toISOString();
+      if (applyToAllInProject) {
+        setProjectSettings(saved);
+        setApplyToAllInProject(true);
+      } else {
+        const allSame =
+          availableNodes.length > 1 &&
+          availableNodes.every((n) => {
+            if (n.id === selectedNode.id) return true;
+            return resolveNodeConfig(n, projectSettings).profile === profileId;
+          });
+        setApplyToAllInProject(allSame);
       }
 
-      // 1. Save local node setting
-      localStorage.setItem(
-        `sentinelx_node_settings_${selectedNode.id}`,
-        JSON.stringify({
-          node_id: selectedNode.id,
-          active_profile: profileId,
-          updated_at: now,
-          updated_by: "admin@sentinelx.com",
-        })
-      );
-
-      // 2. If apply to all or updating project level
       const updatedNodeIds = applyToAllInProject
         ? availableNodes.map((n) => n.id)
         : [selectedNode.id];
-      if (applyToAllInProject) {
-        availableNodes.forEach((n) => {
-          localStorage.setItem(
-            `sentinelx_node_settings_${n.id}`,
-            JSON.stringify({
-              node_id: n.id,
-              active_profile: profileId,
-              updated_at: now,
-              updated_by: "admin@sentinelx.com",
-            })
-          );
-        });
-        localStorage.setItem(
-          `sentinelx_settings_${targetProjectId}`,
-          JSON.stringify({
-            project_id: targetProjectId,
-            active_profile: profileId,
-            updated_at: now,
-            updated_by: "admin@sentinelx.com",
-          })
-        );
-        setApplyToAllInProject(true);
-      } else {
-        // Updated only selectedNode: recheck if all nodes now share the same profile
-        const allSame = availableNodes.length > 1 && availableNodes.every((n) => {
-          if (n.id === selectedNode.id) return true;
-          return resolveNodeConfig(n, effectiveProjectId).profile === profileId;
-        });
-        setApplyToAllInProject(allSame);
-      }
 
       onSettingsPersisted?.(updatedNodeIds, profileId, now);
       setActiveProfile(profileId);
@@ -256,7 +226,7 @@ export function SettingsView({
       });
     } catch (err: unknown) {
       setSettingsError(
-        err instanceof Error ? err.message : "Không lưu được cấu hình xuống Controller"
+        err instanceof Error ? err.message : "Không lưu được cấu hình xuống Controller",
       );
     } finally {
       setApplyingProfile(null);
@@ -404,7 +374,7 @@ export function SettingsView({
                   type="button"
                   className={`btn ${isActive ? "btn-outline active-btn" : "btn-primary"}`}
                   onClick={() => handleApplyPreset("balanced")}
-                  disabled={isActive || Boolean(applyingProfile)}
+                  disabled={isActive || Boolean(applyingProfile) || !selectedNode}
                 >
                   {isApplying ? (
                     <>
@@ -452,7 +422,7 @@ export function SettingsView({
                   type="button"
                   className={`btn ${isActive ? "btn-outline active-btn" : "btn-primary"}`}
                   onClick={() => handleApplyPreset("high_sensitivity")}
-                  disabled={isActive || Boolean(applyingProfile)}
+                  disabled={isActive || Boolean(applyingProfile) || !selectedNode}
                 >
                   {isApplying ? (
                     <>
@@ -500,7 +470,7 @@ export function SettingsView({
                   type="button"
                   className={`btn ${isActive ? "btn-outline active-btn" : "btn-primary"}`}
                   onClick={() => handleApplyPreset("resource_saving")}
-                  disabled={isActive || Boolean(applyingProfile)}
+                  disabled={isActive || Boolean(applyingProfile) || !selectedNode}
                 >
                   {isApplying ? (
                     <>

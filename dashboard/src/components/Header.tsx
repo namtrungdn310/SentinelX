@@ -11,8 +11,6 @@ interface HeaderProps {
   onSearchSubmit?: () => void;
   isConnected: boolean;
   latencyMs: number | null;
-  isDemoMode: boolean;
-  onToggleDemoMode: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
@@ -67,28 +65,19 @@ export function Header(props: HeaderProps) {
         <div className="topbar-actions">
           <span
             className={`connection-state ${
-              !props.isDemoMode && props.isConnected
-                ? "connected"
-                : !props.isDemoMode
-                  ? "reconnecting"
-                  : "offline"
+              props.isConnected ? "connected" : "reconnecting"
             }`}
             role="status"
           >
             <Radio
               size={14}
-              className={!props.isDemoMode && !props.isConnected ? "spin-animation" : ""}
+              className={!props.isConnected ? "spin-animation" : ""}
             />
             <span>
-              {props.isDemoMode
-                ? "Dữ liệu mô phỏng"
-                : props.isConnected
-                  ? "Đã kết nối"
-                  : "Đang kết nối lại"}
-              {props.isDemoMode && <small>Chưa kết nối Controller</small>}
-              {!props.isDemoMode &&
-                props.isConnected &&
-                props.latencyMs !== null && <small>{props.latencyMs} ms</small>}
+              {props.isConnected ? "Đã kết nối" : "Đang kết nối lại"}
+              {props.isConnected && props.latencyMs !== null && (
+                <small>{props.latencyMs} ms</small>
+              )}
             </span>
           </span>
 
@@ -97,37 +86,14 @@ export function Header(props: HeaderProps) {
             className="btn btn-outline btn-sm"
             onClick={props.onRefresh}
             disabled={props.isRefreshing}
-            aria-label={
-              props.isDemoMode
-                ? "Thử lại kết nối Controller"
-                : "Làm mới dữ liệu từ Controller"
-            }
+            aria-label="Làm mới dữ liệu từ Controller"
           >
             <RefreshCw
               size={13}
               className={props.isRefreshing ? "spin-animation" : ""}
             />
-            <span>
-              {props.isRefreshing
-                ? "Đang kết nối..."
-                : props.isDemoMode
-                  ? "Thử lại"
-                  : "Làm mới"}
-            </span>
+            <span>{props.isRefreshing ? "Đang kết nối..." : "Làm mới"}</span>
           </button>
-
-          {props.isDemoMode && (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm source-action"
-              aria-label="Kết nối Controller"
-              title="Kết nối trực tiếp đến Controller"
-              onClick={props.onToggleDemoMode}
-              disabled={props.isRefreshing}
-            >
-              Kết nối Controller
-            </button>
-          )}
         </div>
       )}
     </header>

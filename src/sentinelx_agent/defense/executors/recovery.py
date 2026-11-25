@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import platform
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+import psutil
+
+from sentinelx_agent.collectors.real import RealResourceCollector
 from sentinelx_agent.defense.executors.base import BaseDefenseExecutor, ExecutionResult
+from sentinelx_common.contracts.command_parameters import is_protected_system_service
 from sentinelx_common.contracts.defense import AgentCommandContract
 from sentinelx_common.contracts.policy import PolicyActionType
 
@@ -73,6 +76,8 @@ class ServiceRecoveryExecutor(BaseDefenseExecutor):
             return await self._restart_service(command)
         if command.action_type == PolicyActionType.CLEAR_OS_CACHE.value:
             return await self._clear_os_cache(command)
+        if command.action_type == PolicyActionType.ADAPTIVE.value:
+            return await self._execute_adaptive(command)
 
         return ExecutionResult(
             success=False,
@@ -80,6 +85,46 @@ class ServiceRecoveryExecutor(BaseDefenseExecutor):
                 f"Action '{command.action_type}' is not supported by ServiceRecoveryExecutor"
             ),
         )
+
+    async def _execute_adaptive(self, command: AgentCommandContract) -> ExecutionResult:
+        """Resolve ADAPTIVE locally: restart dominant >=40% app service, else clear OS cache."""
+        payload = command.command_payload
+        explicit_svc = payload.get("service_name") or payload.get("target")
+        if (
+            isinstance(explicit_svc, str)
+            and explicit_svc.strip()
+            and explicit_svc.strip().lower() not in {"adaptive", "os-cache"}
+            and not is_protected_system_service(explicit_svc)
+        ):
+            return await self._restart_service(command)
+
+        top_name, _, _, top_mem, _, top_cgroup = await asyncio.to_thread(
+            RealResourceCollector._find_top_process,
+            "memory",
+            normalize_cpu=False,
+        )
+        host_mem = float(psutil.virtual_memory().percent or 0.0)
+        if (
+            top_name
+            and top_mem is not None
+            and host_mem > 0
+            and (float(top_mem) / host_mem) >= 0.40
+            and not is_protected_system_service(top_name)
+        ):
+            target_svc = top_cgroup or top_name
+            resolved_cmd = command.model_copy(
+                update={
+                    "action_type": PolicyActionType.RESTART_SERVICE.value,
+                    "command_payload": {**payload, "service_name": target_svc},
+                }
+            )
+            result = await self._restart_service(resolved_cmd)
+            result.metadata["adaptive_decision"] = "restart_service"
+            return result
+
+        result = await self._clear_os_cache(command)
+        result.metadata["adaptive_decision"] = "clear_os_cache"
+        return result
 
     async def _restart_service(self, command: AgentCommandContract) -> ExecutionResult:
         payload = command.command_payload
@@ -115,13 +160,10 @@ class ServiceRecoveryExecutor(BaseDefenseExecutor):
         code, stdout, stderr = await self._command_runner(cmd, None)
         if code != 0:
             logger.warning("systemctl restart %s failed: %s", service_name, stderr)
-            # If systemd is not present (e.g. lightweight docker container), fallback gracefully
-            if "Cannot execute" in stderr or "not found" in stderr.lower():
-                metadata["fallback_reason"] = stderr.strip()
-                return ExecutionResult(success=True, metadata=metadata)
+            detail = stderr.strip() or f"exit code {code}"
             return ExecutionResult(
                 success=False,
-                error_message=f"Failed to restart service {service_name}: {stderr.strip()}",
+                error_message=f"Failed to restart service {service_name}: {detail}",
                 metadata=metadata,
             )
 
@@ -140,21 +182,19 @@ class ServiceRecoveryExecutor(BaseDefenseExecutor):
             metadata["simulated_platform"] = platform.system()
             return ExecutionResult(success=True, metadata=metadata)
 
-        # Call sync
-        await self._command_runner(["sync"], None)
+        code, _stdout, stderr = await self._command_runner(
+            ["sh", "-c", "sync && printf '3\\n' > /proc/sys/vm/drop_caches"],
+            None,
+        )
+        if code != 0:
+            detail = stderr.strip() or f"exit code {code}"
+            logger.warning("OS cache clearing failed: %s", detail)
+            metadata["drop_caches_applied"] = False
+            return ExecutionResult(
+                success=False,
+                error_message=f"Failed to clear OS cache: {detail}",
+                metadata=metadata,
+            )
 
-        # Drop pagecache, dentries, and inodes via /proc/sys/vm/drop_caches if writable
-        try:
-            drop_path = "/proc/sys/vm/drop_caches"
-            if os.path.exists(drop_path) and os.access(drop_path, os.W_OK):
-                with open(drop_path, "w", encoding="utf-8") as f:
-                    f.write("3\n")
-                metadata["drop_caches_applied"] = True
-            else:
-                metadata["drop_caches_applied"] = False
-                metadata["note"] = "Insufficient privileges or /proc/sys/vm/drop_caches unwriteable"
-        except Exception as err:
-            logger.warning("Could not write to drop_caches: %s", err)
-            metadata["drop_caches_error"] = str(err)
-
+        metadata["drop_caches_applied"] = True
         return ExecutionResult(success=True, metadata=metadata)

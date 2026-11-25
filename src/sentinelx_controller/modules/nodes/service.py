@@ -29,7 +29,10 @@ from sentinelx_common.contracts.projects import (
     ProjectSettingsUpdateRequest,
     TelemetryProfileType,
 )
+from sentinelx_common.contracts.realtime import RealtimeEventType, RealtimeMessage
 from sentinelx_common.utils.time import ensure_utc
+from sentinelx_controller.infrastructure.realtime.hub import RealtimeHub
+from sentinelx_controller.infrastructure.realtime.publisher import CommittedPublisher
 from sentinelx_controller.modules.nodes.models import AgentEnrollmentModel, NodeModel
 from sentinelx_controller.modules.nodes.repository import (
     AgentEnrollmentRepository,
@@ -54,10 +57,51 @@ class NodeService:
         node_repo: NodeRepository,
         project_service: ProjectService,
         enrollment_repo: AgentEnrollmentRepository | None = None,
+        *,
+        realtime_hub: RealtimeHub | None = None,
+        publisher: CommittedPublisher | None = None,
     ) -> None:
         self._node_repo = node_repo
         self._project_service = project_service
         self._enrollment_repo = enrollment_repo
+        self._realtime_hub = realtime_hub
+        self._publisher = publisher
+
+    @staticmethod
+    def _sanitize_hardware(raw: dict[str, int] | None) -> dict[str, int] | None:
+        if not isinstance(raw, dict):
+            return None
+        cleaned: dict[str, int] = {}
+        for key in ("cpu_cores", "total_memory_bytes", "total_disk_bytes"):
+            val = raw.get(key)
+            if isinstance(val, int) and not isinstance(val, bool) and val > 0:
+                cleaned[key] = val
+        return cleaned or None
+
+    async def _broadcast_node_status(
+        self,
+        node: NodeModel,
+        node_status: NodeStatus,
+        *,
+        timestamp: datetime,
+    ) -> None:
+        msg = RealtimeMessage(
+            event=RealtimeEventType.NODE_STATUS.value,
+            data={
+                "node_id": str(node.id),
+                "project_id": str(node.project_id),
+                "hostname": node.hostname,
+                "status": node_status.value,
+                "last_seen": ensure_utc(node.last_seen_at).isoformat()
+                if node.last_seen_at
+                else timestamp.isoformat(),
+            },
+            timestamp=timestamp,
+        )
+        if self._publisher is not None:
+            self._publisher.enqueue(msg)
+        elif self._realtime_hub is not None:
+            await self._realtime_hub.broadcast(msg)
 
     async def register_node(self, request: NodeRegisterRequest) -> NodeResponse:
         """Register a new node into an existing project."""
@@ -307,6 +351,14 @@ class NodeService:
             hostname=request.hostname,
             os_info=request.os_info,
         )
+        hw = self._sanitize_hardware(request.hardware_info)
+        if hw is not None:
+            caps = dict(node.agent_capabilities or {})
+            caps["hardware"] = hw
+            node.agent_capabilities = caps
+            await self._node_repo.save(node)
+
+        await self._broadcast_node_status(node, NodeStatus.ONLINE, timestamp=now)
 
         return AgentEnrollResponse(
             agent_id=str(agent_id),
@@ -346,6 +398,7 @@ class NodeService:
                 detail="Agent credentials invalid or not enrolled for this node",
             )
 
+        prev_effective = self._effective_status(node)
         now = datetime.now(UTC)
         await self._node_repo.record_heartbeat(node_id=n_uuid, last_seen_at=now)
         existing_caps = dict(node.agent_capabilities or {})
@@ -357,8 +410,14 @@ class NodeService:
         saved_settings = existing_caps.get("settings")
         if isinstance(saved_settings, dict):
             new_caps["settings"] = saved_settings
+        hw = self._sanitize_hardware(request.hardware_info) or existing_caps.get("hardware")
+        if isinstance(hw, dict):
+            new_caps["hardware"] = hw
         node.agent_capabilities = new_caps
         await self._node_repo.save(node)
+
+        if prev_effective != NodeStatus.ONLINE:
+            await self._broadcast_node_status(node, NodeStatus.ONLINE, timestamp=now)
 
         profile = saved_settings.get("active_profile") if isinstance(saved_settings, dict) else None
         next_hb, telemetry_iv = _PROFILE_CADENCE.get(str(profile), (7, None))
@@ -508,15 +567,41 @@ class NodeService:
         return self._enrollment_repo
 
     @staticmethod
-    def _to_response(model: NodeModel) -> NodeResponse:
+    def _effective_status(model: NodeModel, now: datetime | None = None) -> NodeStatus:
         effective_status = NodeStatus(model.status)
+        current_time = now or datetime.now(UTC)
         if (
             effective_status == NodeStatus.ONLINE
             and model.last_seen_at is not None
-            and (datetime.now(UTC) - ensure_utc(model.last_seen_at)).total_seconds()
+            and (current_time - ensure_utc(model.last_seen_at)).total_seconds()
             > _STALE_HEARTBEAT_SECONDS
         ):
-            effective_status = NodeStatus.OFFLINE
+            return NodeStatus.OFFLINE
+        return effective_status
+
+    async def sweep_stale_offline_nodes(
+        self,
+        *,
+        now: datetime | None = None,
+    ) -> list[str]:
+        """Mark nodes whose heartbeat timed out as OFFLINE and emit realtime status updates."""
+        current_time = now or datetime.now(UTC)
+        transitioned: list[str] = []
+        nodes = await self._node_repo.list_all()
+        for node in nodes:
+            if (
+                node.status == NodeStatus.ONLINE.value
+                and self._effective_status(node, now=current_time) == NodeStatus.OFFLINE
+            ):
+                node.status = NodeStatus.OFFLINE.value
+                await self._node_repo.save(node)
+                await self._broadcast_node_status(node, NodeStatus.OFFLINE, timestamp=current_time)
+                transitioned.append(str(node.id))
+        return transitioned
+
+    @classmethod
+    def _to_response(cls, model: NodeModel) -> NodeResponse:
+        effective_status = cls._effective_status(model)
         raw_role = getattr(model, "lb_role", "standalone")
         lb_role: NodeLBRoleType = "lb_backend" if raw_role == "lb_backend" else "standalone"
         return NodeResponse(

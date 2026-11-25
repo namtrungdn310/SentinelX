@@ -74,6 +74,23 @@ class ControllerClient:
     ) -> None:
         await self.close()
 
+    async def _parse_payload(self, resp: aiohttp.ClientResponse) -> tuple[Any, str]:
+        try:
+            data = await resp.json()
+            if isinstance(data, dict):
+                detail = str(data.get("detail", data))
+            else:
+                detail = str(data)
+            return data, detail
+        except (aiohttp.ContentTypeError, ValueError):
+            raw_text = ""
+            if hasattr(resp, "text"):
+                try:
+                    raw_text = (await resp.text()).strip()
+                except Exception:
+                    raw_text = ""
+            return None, raw_text[:200] or f"HTTP {resp.status}"
+
     async def enroll(self, request: AgentEnrollRequest) -> AgentEnrollResponse:
         """Send enrollment request to Controller."""
         url = f"{self._base_url}/api/v1/nodes/enroll"
@@ -83,9 +100,8 @@ class ControllerClient:
         logger.info("Enrolling node with Controller at: %s", url)
 
         async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            if resp.status != 200:
-                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+            data, detail = await self._parse_payload(resp)
+            if resp.status != 200 or data is None:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return AgentEnrollResponse.model_validate(data)
@@ -99,9 +115,8 @@ class ControllerClient:
         logger.debug("Sending heartbeat to %s (sequence=%d)", url, request.sequence)
 
         async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            if resp.status != 200:
-                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+            data, detail = await self._parse_payload(resp)
+            if resp.status != 200 or data is None:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return HeartbeatResponse.model_validate(data)
@@ -120,9 +135,8 @@ class ControllerClient:
         )
 
         async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            if resp.status != 200:
-                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+            data, detail = await self._parse_payload(resp)
+            if resp.status != 200 or data is None:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return MetricBatchResponse.model_validate(data)
@@ -134,9 +148,13 @@ class ControllerClient:
             f"{self._base_url}/api/v1/telemetry/network-features",
             json=request.model_dump(mode="json"),
         ) as response:
-            if response.status != 200:
-                raise ControllerClientError(response.status, "Network ingestion rejected")
-            return NetworkBatchResponse.model_validate(await response.json())
+            data, detail = await self._parse_payload(response)
+            if response.status != 200 or data is None:
+                raise ControllerClientError(
+                    response.status,
+                    detail or "Network ingestion rejected",
+                )
+            return NetworkBatchResponse.model_validate(data)
 
     async def ack_defense_action(
         self,
@@ -151,9 +169,8 @@ class ControllerClient:
         logger.debug("Sending command ACK to %s: status=%s", url, request.status)
 
         async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            if resp.status != 200:
-                detail = data.get("detail", str(data)) if isinstance(data, dict) else str(data)
+            data, detail = await self._parse_payload(resp)
+            if resp.status != 200 or data is None:
                 raise ControllerClientError(status_code=resp.status, message=detail)
 
             return CommandAckResponse.model_validate(data)

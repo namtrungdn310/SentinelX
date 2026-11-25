@@ -53,6 +53,31 @@ class AgentDaemon:
         self._stop_event = asyncio.Event()
         self._telemetry_sequence: int = 1
         self._runtime_telemetry_interval: float = float(settings.telemetry_interval_seconds)
+        self._hardware_info = self._collect_hardware_info()
+
+    def _collect_hardware_info(self) -> dict[str, int] | None:
+        """Read static host CPU, RAM, and disk capacities cleanly."""
+        info: dict[str, int] = {}
+        try:
+            cores = psutil.cpu_count(logical=True)
+            if cores is not None and cores > 0:
+                info["cpu_cores"] = int(cores)
+        except Exception:
+            pass
+        try:
+            mem_total = int(psutil.virtual_memory().total)
+            if mem_total > 0:
+                info["total_memory_bytes"] = mem_total
+        except Exception:
+            pass
+        try:
+            disk_path = self.settings.telemetry_disk_path or "/"
+            disk_total = int(psutil.disk_usage(disk_path).total)
+            if disk_total > 0:
+                info["total_disk_bytes"] = disk_total
+        except Exception:
+            pass
+        return info or None
 
     @property
     def identity(self) -> AgentIdentity | None:
@@ -98,6 +123,7 @@ class AgentDaemon:
             agent_version=self.settings.agent_version,
             hostname=self.settings.hostname,
             os_info=self.settings.os_info,
+            hardware_info=self._hardware_info,
         )
 
         resp = await self._client.enroll(enroll_request)
@@ -195,6 +221,7 @@ class AgentDaemon:
                 command_protocol_version=2,
                 executor_mode=self.settings.defense_executor_type,
                 supported_actions=self._command_processor.supported_actions,
+                hardware_info=self._hardware_info,
             )
 
             try:
@@ -285,7 +312,32 @@ class AgentDaemon:
                         self._telemetry_sequence - 1,
                         resp.processed_count,
                     )
-                except (ControllerClientError, aiohttp.ClientError, TimeoutError) as err:
+                except ControllerClientError as err:
+                    if 400 <= err.status_code < 500 and err.status_code != 429:
+                        logger.error(
+                            "Telemetry batch rejected permanently [seq=%d, HTTP %d]: %s. "
+                            "Dropping rejected batch.",
+                            self._telemetry_sequence,
+                            err.status_code,
+                            err.message,
+                        )
+                        continue
+                    logger.warning(
+                        "Telemetry batch dispatch failed [seq=%d, HTTP %d]: %s. Re-buffering...",
+                        self._telemetry_sequence,
+                        err.status_code,
+                        type(err).__name__,
+                    )
+                    self._batcher.requeue(samples_to_send)
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=current_delay)
+                    except TimeoutError:
+                        pass
+                    current_delay = min(
+                        current_delay * self.settings.retry_backoff_factor,
+                        self.settings.retry_max_delay_seconds,
+                    )
+                except (aiohttp.ClientError, TimeoutError) as err:
                     logger.warning(
                         "Telemetry batch dispatch failed [seq=%d]: %s. Re-buffering...",
                         self._telemetry_sequence,

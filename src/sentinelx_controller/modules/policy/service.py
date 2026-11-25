@@ -226,22 +226,132 @@ class PolicyService:
                 detail="Invalid project UUID format",
             ) from err
 
-        # Validate CIDR/IP syntax
+        # Validate and canonicalize CIDR/IP syntax
         try:
-            ipaddress.ip_network(request.ip_or_cidr, strict=False)
+            network = ipaddress.ip_network(request.ip_or_cidr.strip(), strict=False)
         except ValueError as err:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Invalid IP or CIDR network format: {request.ip_or_cidr}",
             ) from err
 
+        canonical_cidr = str(network)
+        existing_entries = await self._repo.list_whitelist(project_uuid)
+        for entry in existing_entries:
+            try:
+                if str(ipaddress.ip_network(entry.ip_or_cidr, strict=False)) == canonical_cidr:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"IP/CIDR '{canonical_cidr}' already exists in project whitelist",
+                    )
+            except ValueError:
+                if entry.ip_or_cidr.strip() == canonical_cidr:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"IP/CIDR '{canonical_cidr}' already exists in project whitelist",
+                    ) from None
+
         model = IPWhitelistModel(
             project_id=project_uuid,
-            ip_or_cidr=request.ip_or_cidr,
-            description=request.description,
+            ip_or_cidr=canonical_cidr,
+            description=request.description.strip() or None if request.description else None,
         )
         saved = await self._repo.create_whitelist(model)
         return self._to_whitelist_response(saved)
+
+    async def seed_default_policies(self, project_id_str: str) -> DefensePolicyListResponse:
+        """Idempotently ensure core system defense policies exist for a project."""
+        try:
+            project_uuid = uuid.UUID(project_id_str)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid project UUID format",
+            ) from err
+
+        existing = await self._repo.list_policies(project_id=project_uuid)
+        existing_types = {p.event_type for p in existing}
+
+        default_specs: list[tuple[str, str, PolicyActionType, int, int, int, bool]] = [
+            (
+                "Chống SYN Flood",
+                "syn_flood_detector",
+                PolicyActionType.BLOCK_IP_NFTABLES,
+                60,
+                300,
+                10,
+                True,
+            ),
+            (
+                "Chống dò quét cổng (Port Scan)",
+                "port_scan_detector",
+                PolicyActionType.BLOCK_IP_NFTABLES,
+                120,
+                600,
+                20,
+                True,
+            ),
+            (
+                "Chống UDP Flood / Đột biến băng thông",
+                "traffic_spike_detector",
+                PolicyActionType.BLOCK_IP_NFTABLES,
+                60,
+                300,
+                30,
+                True,
+            ),
+            (
+                "Quá tải CPU kéo dài",
+                "cpu_threshold_detector",
+                PolicyActionType.ALERT_ONLY,
+                300,
+                0,
+                40,
+                True,
+            ),
+            (
+                "Cạn kiệt RAM hệ thống",
+                "memory_exhaustion_detector",
+                PolicyActionType.CLEAR_OS_CACHE,
+                180,
+                0,
+                50,
+                True,
+            ),
+            (
+                "Tràn dung lượng ổ đĩa",
+                "disk_saturation_detector",
+                PolicyActionType.ALERT_ONLY,
+                300,
+                0,
+                60,
+                True,
+            ),
+        ]
+
+        for name, ev_type, action_type, cooldown, block_sec, priority, is_auto in default_specs:
+            if ev_type in existing_types:
+                continue
+            await self._repo.create_policy(
+                DefensePolicyModel(
+                    project_id=project_uuid,
+                    name=name,
+                    event_type=ev_type,
+                    action_type=action_type.value,
+                    target_params={},
+                    is_auto_execute=is_auto,
+                    cooldown_seconds=cooldown,
+                    block_duration_seconds=block_sec,
+                    enabled=True,
+                    priority=priority,
+                )
+            )
+
+        updated = await self._repo.list_policies(project_id=project_uuid)
+        return DefensePolicyListResponse(
+            total=len(updated),
+            items=[self._to_policy_response(m) for m in updated],
+        )
 
     async def list_whitelist(self, project_id_str: str) -> IPWhitelistListResponse:
         """Liệt kê toàn bộ whitelist của project."""

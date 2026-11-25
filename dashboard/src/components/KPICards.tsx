@@ -23,9 +23,7 @@ export function KPICards({
   isLoading: boolean;
   onOpenLoadBalancer?: () => void;
 }) {
-  const online = nodes.filter(
-    (node) => node.status === "online" || node.status === "degraded",
-  );
+  const online = nodes.filter((node) => node.status === "online");
   const cpu = online.filter((node) => validMetric(node.latestCpu));
   const mem = online.filter((node) => validMetric(node.latestMemory));
   const avgCpu = cpu.length
@@ -34,14 +32,25 @@ export function KPICards({
   const avgMem = mem.length
     ? mem.reduce((sum, node) => sum + node.latestMemory!, 0) / mem.length
     : null;
-  const totalCpuCores = cpu.reduce((sum, node) => sum + getNodeHardware(node).cpuCores, 0);
-  const usedCpuCores = cpu.reduce(
-    (sum, node) => sum + (node.latestCpu! / 100) * getNodeHardware(node).cpuCores,
+  const cpuWithCapacity = cpu.filter((node) => getNodeHardware(node).cpuCores !== undefined);
+  const totalCpuCores = cpuWithCapacity.reduce(
+    (sum, node) => sum + (getNodeHardware(node).cpuCores ?? 0),
     0,
   );
-  const totalMemBytes = mem.reduce((sum, node) => sum + getNodeHardware(node).totalMemoryBytes, 0);
-  const usedMemBytes = mem.reduce(
-    (sum, node) => sum + (node.latestMemory! / 100) * getNodeHardware(node).totalMemoryBytes,
+  const usedCpuCores = cpuWithCapacity.reduce(
+    (sum, node) => sum + (node.latestCpu! / 100) * (getNodeHardware(node).cpuCores ?? 0),
+    0,
+  );
+  const memWithCapacity = mem.filter(
+    (node) => getNodeHardware(node).totalMemoryBytes !== undefined,
+  );
+  const totalMemBytes = memWithCapacity.reduce(
+    (sum, node) => sum + (getNodeHardware(node).totalMemoryBytes ?? 0),
+    0,
+  );
+  const usedMemBytes = memWithCapacity.reduce(
+    (sum, node) =>
+      sum + (node.latestMemory! / 100) * (getNodeHardware(node).totalMemoryBytes ?? 0),
     0,
   );
   const rxNodes = online.filter((node) => validMetric(node.latestRxBytes));
@@ -60,7 +69,7 @@ export function KPICards({
   const lbNodes = nodes.filter((node) => node.lb_role === "lb_backend");
   const lbBackends = lbNodes.length;
   const lbReadyBackends = lbNodes.filter(
-    (node) => node.status === "online" || node.status === "degraded",
+    (node) => node.status === "online",
   ).length;
   const lbAvailabilityPct = lbBackends > 0 ? (lbReadyBackends / lbBackends) * 100 : 0;
   const lbEndpointLabel = lb?.lb_url
@@ -114,7 +123,9 @@ export function KPICards({
         <div className="stat-bottom">
           <span>
             {cpu.length
-              ? `${usedCpuCores.toFixed(1)} / ${totalCpuCores} vCPU`
+              ? cpuWithCapacity.length > 0
+                ? `${usedCpuCores.toFixed(1)} / ${totalCpuCores} vCPU`
+                : `${cpu.length} máy chủ báo cáo`
               : "Chưa có dữ liệu CPU"}
           </span>
           <span>{cpu.length ? "> 75%" : ""}</span>
@@ -139,7 +150,9 @@ export function KPICards({
         <div className="stat-bottom">
           <span>
             {mem.length
-              ? `${formatBytes(usedMemBytes)} / ${formatBytes(totalMemBytes)}`
+              ? memWithCapacity.length > 0
+                ? `${formatBytes(usedMemBytes)} / ${formatBytes(totalMemBytes)}`
+                : `${mem.length} máy chủ báo cáo`
               : "Chưa có dữ liệu RAM"}
           </span>
           <span>{mem.length ? "> 85%" : ""}</span>

@@ -133,3 +133,38 @@ async def test_client_send_metrics_error_raises_exception() -> None:
     assert exc_info.value.status_code == 403
     assert "Agent not enrolled" in exc_info.value.message
 
+
+@pytest.mark.asyncio
+async def test_client_handles_non_json_error_body() -> None:
+    """Non-JSON error responses (e.g. HTML 502) raise ControllerClientError cleanly."""
+    import aiohttp
+
+    mock_session = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status = 502
+    mock_response.json = AsyncMock(
+        side_effect=aiohttp.ContentTypeError(
+            request_info=MagicMock(),
+            history=(),
+            message="Attempt to decode JSON with unexpected mimetype",
+        )
+    )
+    mock_response.text = AsyncMock(return_value="<html>502 Bad Gateway</html>")
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__.return_value = mock_response
+    mock_session.post.return_value = mock_ctx
+
+    client = ControllerClient(controller_url="http://test-controller:8000", session=mock_session)
+    req = HeartbeatRequest(
+        node_id="11111111-2222-3333-4444-555555555555",
+        agent_id="22222222-3333-4444-5555-666666666666",
+        sequence=1,
+        sent_at=datetime.now(UTC),
+    )
+
+    with pytest.raises(ControllerClientError) as exc_info:
+        await client.send_heartbeat(req)
+
+    assert exc_info.value.status_code == 502
+    assert "502 Bad Gateway" in exc_info.value.message
+

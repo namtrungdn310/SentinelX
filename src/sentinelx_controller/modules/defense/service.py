@@ -335,6 +335,7 @@ class DefenseService:
     async def list_actions(
         self,
         node_id_str: str | None = None,
+        project_id_str: str | None = None,
         incident_id_str: str | None = None,
         status_filter: str | None = None,
         limit: int = 50,
@@ -351,6 +352,14 @@ class DefenseService:
                     detail="Invalid node UUID format",
                 ) from err
 
+        project_node_uuids: list[uuid.UUID] | None = None
+        if node_uuid is None and project_id_str:
+            if self._nodes is None:
+                project_node_uuids = []
+            else:
+                project_nodes = await self._nodes.list_nodes(project_id_str=project_id_str)
+                project_node_uuids = [uuid.UUID(n.node_id) for n in project_nodes]
+
         inc_uuid: uuid.UUID | None = None
         if incident_id_str:
             try:
@@ -363,6 +372,7 @@ class DefenseService:
 
         total, items = await self._repo.list_actions(
             node_id=node_uuid,
+            node_ids=project_node_uuids,
             incident_id=inc_uuid,
             status=status_filter,
             limit=limit,
@@ -492,7 +502,7 @@ class DefenseService:
                 raise HTTPException(409, "Command was executed after expiry")
             expected_executors = (
                 {"service_recovery"}
-                if action.action_type in {"RESTART_SERVICE", "CLEAR_OS_CACHE"}
+                if action.action_type in {"RESTART_SERVICE", "CLEAR_OS_CACHE", "ADAPTIVE"}
                 else {"nftables"}
             )
             if request.execution_metadata.get("executor") not in expected_executors:
@@ -541,6 +551,13 @@ class DefenseService:
                 action_note = f"service: RESTART {svc}"
             elif action.action_type == "CLEAR_OS_CACHE":
                 action_note = "os-cache: CLEAR"
+            elif action.action_type == "ADAPTIVE":
+                decision = str(request.execution_metadata.get("adaptive_decision") or "")
+                svc = request.execution_metadata.get("service_name")
+                if decision == "restart_service" and svc:
+                    action_note = f"service: RESTART {svc}"
+                else:
+                    action_note = "os-cache: CLEAR"
             await self._incidents.mark_mitigating(action.incident_id, action_note=action_note)
         elif (
             action.incident_id is not None
